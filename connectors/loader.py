@@ -31,6 +31,19 @@ VALID_AUTH = {
 }
 VALID_TRUST = {"unknown", "probed", "attested", "contracted"}
 VALID_TRANSPORT = {"streamable_http", "stdio", "websocket", "http_sse"}
+VALID_VERIFICATION = {"confirmed", "community", "unconfirmed", "self_hosted"}
+
+# Verification status CAPS the trust class. In a catalog that agents route
+# traffic from, an unverified URL is worse than a missing one — so an endpoint
+# nobody has confirmed can never be promoted past `unknown`, which the Trust
+# Firewall treats as observe-only, sandboxed, and never binding.
+MAX_TRUST_FOR_STATUS = {
+    "confirmed":   "contracted",   # a verified vendor endpoint may be promoted
+    "community":   "probed",       # community-run: probe it, never contract it
+    "unconfirmed": "unknown",      # URL unverified: observe only
+    "self_hosted": "unknown",      # operator must supply and verify the host
+}
+_TRUST_ORDER = ["unknown", "probed", "attested", "contracted"]
 
 
 class CatalogError(Exception):
@@ -56,6 +69,9 @@ class ConnectorEntry:
     authorize_url: str = ""
     resource_indicator: str = ""
     refresh: bool = False
+    verification_status: str = "unconfirmed"
+    verification_source: str = ""
+    verification_checked: str = ""
     min_tier: str = "A0xH0"
     min_write_tier: str = "A1xH1"
     scopes_exposed: list[str] = field(default_factory=list)
@@ -99,6 +115,23 @@ class ConnectorEntry:
         for found in scan_for_secrets(blob):
             p.append(f"entry text contains what looks like a {found}")
 
+        # verification: the rule that makes this catalog safe to route from
+        if self.verification_status not in VALID_VERIFICATION:
+            p.append(f"unknown verification status '{self.verification_status}'")
+        else:
+            cap = MAX_TRUST_FOR_STATUS[self.verification_status]
+            if (_TRUST_ORDER.index(self.trust_class)
+                    > _TRUST_ORDER.index(cap)):
+                p.append(
+                    f"trust class '{self.trust_class}' exceeds what a "
+                    f"'{self.verification_status}' endpoint may claim (max '{cap}') — "
+                    "verify the endpoint before promoting it")
+            if self.verification_status == "confirmed" and not self.verification_source:
+                p.append("a 'confirmed' endpoint must cite a source")
+            if self.verification_status == "self_hosted" and "<" not in self.endpoint_url:
+                p.append("a 'self_hosted' endpoint should use a <placeholder> host "
+                         "so it cannot be routed to by accident")
+
         # money-moving connectors must not be reachable from a weak tier
         if any(t in ("payments", "financial") for t in self.tags):
             if not self.min_write_tier.startswith("A2"):
@@ -110,6 +143,9 @@ class ConnectorEntry:
             "id": self.id, "name": self.name, "vendor": self.vendor,
             "endpoint": self.endpoint_url, "transport": self.transport,
             "auth": self.auth_method, "trustClass": self.trust_class,
+            "verification": {"status": self.verification_status,
+                             "source": self.verification_source,
+                             "checked": self.verification_checked},
             "minTier": self.min_tier, "minWriteTier": self.min_write_tier,
             "scopesExposed": list(self.scopes_exposed),
             "secretRefs": dict(self.secret_refs),
@@ -152,6 +188,9 @@ def parse_entry(data: dict, source: str = "") -> ConnectorEntry:
         authorize_url=str(auth.get("authorize_url", "")),
         resource_indicator=str(auth.get("resource_indicator", "")),
         refresh=bool(auth.get("refresh", False)),
+        verification_status=str((data.get("verification") or {}).get("status", "unconfirmed")),
+        verification_source=str((data.get("verification") or {}).get("source", "") or ""),
+        verification_checked=str((data.get("verification") or {}).get("checked", "")),
         trust_class=str(trust.get("class", "unknown")),
         min_tier=str(trust.get("min_tier", "A0xH0")),
         min_write_tier=str(trust.get("min_write_tier", "A1xH1")),
@@ -227,4 +266,5 @@ def required_secrets(entries: Optional[Iterable[ConnectorEntry]] = None
 
 __all__ = ["ConnectorEntry", "load_catalog", "parse_entry", "register_all",
            "required_secrets", "CatalogError", "CATALOG_DIR",
-           "VALID_AUTH", "VALID_TRUST", "VALID_TRANSPORT"]
+           "VALID_AUTH", "VALID_TRUST", "VALID_TRANSPORT",
+           "VALID_VERIFICATION", "MAX_TRUST_FOR_STATUS"]

@@ -1,4 +1,58 @@
-# Connectors — one MCP endpoint per external SaaS
+# Connectors — the global MCP catalog
+
+Two halves, because a global catalog cannot be a folder of hand-written YAML:
+
+| | what it is | size |
+|---|---|---|
+| `catalog/*.yaml` | curated, verified, promotable | dozens |
+| `sources.py` | crawled from upstream registries and peer nodes | thousands |
+
+Ingested entries arrive `unconfirmed` / `unknown`, which the
+[Trust Firewall](../docs/trust-firewall.md) treats as observe-only, read-only,
+sandboxed, output quarantined, nothing binding. **That is what makes it safe to
+index a corpus nobody has vetted — discovery is not endorsement.**
+
+## Verification status caps trust
+
+In a catalog agents route traffic from, an unverified URL is worse than a missing
+one. So status caps how far an entry can be promoted:
+
+| status | meaning | max trust |
+|---|---|---|
+| `confirmed` | vendor-documented, source cited | `contracted` |
+| `community` | third-party, not vendor-official | `probed` |
+| `unconfirmed` | vendor hosts one; this URL unverified | `unknown` |
+| `self_hosted` | no official remote; you supply the host | `unknown` |
+
+**The shipped catalog never claims `attested` or `contracted`.** Those describe an
+operator's relationship with a vendor — a signed manifest they pinned, a contract
+they hold — not a property of the vendor. Promotion is always local.
+
+## Ingestion at scale
+
+```python
+from connectors import GlobalCatalog, Source, SourceKind
+
+cat = GlobalCatalog()
+cat.load_curated()                                    # verified core
+cat.ingest_url(Source(id="mcp-registry", kind=SourceKind.OFFICIAL,
+                      url="https://registry.modelcontextprotocol.io/v0/servers"))
+cat.apply_to_firewall(fw)                             # graded, no per-server code
+cat.route("mcp:tools/search")                         # verified endpoints first
+peer_doc = cat.export()                               # publish for peers
+```
+
+Sources: the official MCP Registry, any domain's `/.well-known/ai-catalog.json`,
+community aggregators, other XCP nodes via [federation](../docs/agentic-internet.md),
+and imported scan output. **None is required and none is operated by this
+project** — a node that crawls nothing still works with what it curated.
+
+Safety: every fetch passes `xcpsec.argfirewall.ssrf_guard`, documents are
+size-capped at 5 MB, curated entries always win over crawled ones, and **nothing
+ingested can set its own trust class** — a remote document asserting it is
+trusted is ignored.
+
+# Per-service entries
 
 Each external service gets a declarative file in [`catalog/`](catalog/). The file
 says where the MCP endpoint is, how to authenticate, which trust class it sits

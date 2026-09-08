@@ -276,8 +276,13 @@ def test_catalog_registers_into_firewall_with_its_trust_class():
     fw = TrustFirewall()
     n = register_all(firewall=fw)
     assert n >= 5
-    assert fw.class_of("api.githubcopilot.com") == ServerClass.ATTESTED
-    assert fw.class_of("mcp.stripe.com") == ServerClass.CONTRACTED
+    # The shipped catalog never claims `attested` or `contracted`. Those are
+    # relationships an OPERATOR has with a vendor — a signed manifest they pinned,
+    # a contract they hold — not facts about the vendor that a public catalog can
+    # assert on their behalf. Promotion is always a local decision.
+    assert fw.class_of("api.githubcopilot.com") == ServerClass.PROBED
+    assert fw.class_of("mcp.stripe.com") == ServerClass.PROBED
+    assert fw.class_of("mcp.notion.com") == ServerClass.PROBED
 
 
 # ── the build-breaking control ─────────────────────────────────────────────
@@ -326,3 +331,166 @@ if __name__ == "__main__":
             print(f"  FAIL {name}: {e}"); failed += 1
     print(f"\n{passed} passed, {failed} failed")
     sys.exit(1 if failed else 0)
+
+
+# ── verification status caps trust (the routing-safety rule) ───────────────
+
+def test_verification_status_caps_trust_class():
+    from connectors import parse_entry
+    bad = {"id": "overclaim", "name": "Overclaim",
+           "endpoint": {"url": "https://x.example/mcp"},
+           "verification": {"status": "unconfirmed"},
+           "auth": {"method": "none"},
+           "trust": {"class": "contracted"}}
+    problems = parse_entry(bad).validate()
+    assert any("exceeds what a" in p for p in problems), problems
+
+
+def test_confirmed_entry_must_cite_a_source():
+    from connectors import parse_entry
+    e = parse_entry({"id": "c", "name": "C",
+                     "endpoint": {"url": "https://x.example/mcp"},
+                     "verification": {"status": "confirmed"},
+                     "auth": {"method": "none"}, "trust": {"class": "probed"}})
+    assert any("must cite a source" in p for p in e.validate())
+
+
+def test_self_hosted_uses_a_placeholder_host():
+    from connectors import parse_entry
+    e = parse_entry({"id": "s", "name": "S",
+                     "endpoint": {"url": "https://real-looking.example/mcp"},
+                     "verification": {"status": "self_hosted"},
+                     "auth": {"method": "none"}, "trust": {"class": "unknown"}})
+    assert any("placeholder" in p for p in e.validate())
+
+
+def test_every_curated_entry_declares_verification():
+    from connectors import load_catalog, VALID_VERIFICATION
+    for e in load_catalog():
+        assert e.verification_status in VALID_VERIFICATION
+        if e.verification_status == "confirmed":
+            assert e.verification_source.startswith("https://"), e.id
+
+
+# ── global catalog: ingestion at scale ─────────────────────────────────────
+
+def _catalog():
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); return c
+
+
+def test_curated_core_loads():
+    c = _catalog()
+    assert c.stats()["curated"] >= 20
+
+
+def test_ingest_from_mcp_registry_shape():
+    from connectors import Source, SourceKind
+    c = _catalog()
+    doc = {"servers": [
+        {"name": "acme/tool", "description": "d",
+         "remotes": [{"type": "streamable-http", "url": "https://mcp.acme.example/mcp"}]},
+        {"name": "local-only", "description": "no remote", "remotes": []},
+    ]}
+    n = c.ingest(Source(id="reg", kind=SourceKind.OFFICIAL,
+                        url="https://registry.example/v0/servers"), doc)
+    assert n == 1, "stdio-only servers are not routable and must be skipped"
+
+
+def test_ingested_entries_are_never_trusted_by_the_document():
+    from connectors import Source, SourceKind
+    c = _catalog()
+    doc = {"entries": [{"id": "evil", "name": "Evil", "url": "https://evil.example/mcp",
+                        "trust": {"slyTrustTier": "A2xH2", "auth": "none"}}]}
+    c.ingest(Source(id="ard", kind=SourceKind.ARD, url="https://evil.example"), doc)
+    e = [x for x in c.ingested.values() if x.host == "evil.example"][0]
+    assert e.trust_class == "unknown", "a remote document must not set its own trust"
+    assert e.verification_status == "unconfirmed"
+
+
+def test_curated_wins_over_crawled():
+    from connectors import Source, SourceKind
+    c = _catalog()
+    doc = {"servers": [{"name": "notion-impostor",
+                        "remotes": [{"url": "https://mcp.notion.com/mcp"}]}]}
+    c.ingest(Source(id="agg", kind=SourceKind.AGGREGATOR,
+                    url="https://agg.example/list"), doc)
+    assert not any(x.host == "mcp.notion.com" for x in c.ingested.values()), \
+        "a crawled entry must not shadow a curated host"
+
+
+def test_source_cannot_grant_trust_above_unknown():
+    from connectors import Source, SourceKind, IngestError
+    c = _catalog()
+    s = Source(id="greedy", kind=SourceKind.AGGREGATOR,
+               url="https://x.example/l", max_trust="contracted")
+    try:
+        c.ingest(s, {"servers": []}); assert False, "should refuse"
+    except IngestError:
+        pass
+
+
+def test_ingestion_is_ssrf_guarded():
+    from connectors import Source, SourceKind, IngestError
+    c = _catalog()
+    for bad in ("https://169.254.169.254/latest/meta-data/",
+                "https://localhost/catalog.json"):
+        try:
+            c.ingest_url(Source(id="s", kind=SourceKind.ARD, url=bad))
+            assert False, f"should refuse {bad}"
+        except IngestError:
+            pass
+
+
+def test_all_entries_reach_the_firewall_as_unknown_unless_curated():
+    from trustfirewall import TrustFirewall, ServerClass
+    from connectors import Source, SourceKind
+    c = _catalog()
+    c.ingest(Source(id="a", kind=SourceKind.AGGREGATOR, url="https://a.example/l"),
+             {"servers": [{"name": "rando",
+                           "remotes": [{"url": "https://rando.example/mcp"}]}]})
+    fw = TrustFirewall()
+    c.apply_to_firewall(fw)
+    assert fw.class_of("rando.example") == ServerClass.UNKNOWN
+    assert fw.class_of("mcp.notion.com") == ServerClass.PROBED
+
+
+def test_routing_prefers_verified_endpoints():
+    c = _catalog()
+    routes = c.route("mcp:tools/notion.search")
+    assert routes and routes[0]["verification"] == "confirmed"
+
+
+def test_export_is_ingestible_by_a_peer():
+    from connectors import Source, SourceKind, GlobalCatalog
+    a = _catalog()
+    doc = a.export()
+    b = GlobalCatalog()
+    n = b.ingest(Source(id="peer", kind=SourceKind.PEER,
+                        url="https://peer.example/catalog"), doc)
+    assert n > 0, "a peer must be able to ingest our export"
+    for e in b.ingested.values():
+        assert e.trust_class == "unknown", "peer data is never trusted on arrival"
+
+
+def test_oversized_document_refused():
+    from connectors import IngestError
+    from connectors.sources import _safe_fetch, MAX_DOCUMENT_BYTES
+    big = "x" * (MAX_DOCUMENT_BYTES + 10)
+    try:
+        _safe_fetch("https://ok.example/doc", fetcher=lambda u: big)
+        assert False, "should cap document size"
+    except IngestError:
+        pass
+
+
+def test_shipped_catalog_never_claims_a_relationship_it_cannot_have():
+    """
+    `attested` means someone pinned a signed manifest; `contracted` means someone
+    holds an agreement. Neither is a property of the vendor — both are properties
+    of an operator's relationship with it. A public catalog must not assert them.
+    """
+    from connectors import load_catalog
+    for e in load_catalog(include_template=True):
+        assert e.trust_class in ("unknown", "probed"), (
+            f"{e.id} ships as '{e.trust_class}'; promote locally instead")
