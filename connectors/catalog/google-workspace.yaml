@@ -1,0 +1,37 @@
+id: google-workspace
+name: Google Workspace
+vendor: Google LLC
+homepage: https://workspace.google.com
+description: Drive, Gmail, Calendar and Docs.
+
+endpoint:
+  url: https://mcp.example-operator.com/google-workspace/mcp
+  transport: streamable_http
+  mcp_spec: "2026-07-28"
+
+auth:
+  method: oauth2_auth_code
+  scopes:
+    - https://www.googleapis.com/auth/drive.readonly
+    - https://www.googleapis.com/auth/calendar.events
+  secrets:
+    client_id:     vault://env/connectors/google-workspace#client_id
+    client_secret: vault://env/connectors/google-workspace#client_secret
+  authorize_url: https://accounts.google.com/o/oauth2/v2/auth
+  token_url: https://oauth2.googleapis.com/token
+  refresh: true
+
+trust:
+  class: probed
+  min_tier: A0xH1
+  min_write_tier: A1xH2
+
+scopes_exposed:
+  - mcp:tools/gworkspace.drive_search
+  - mcp:tools/gworkspace.calendar_create
+
+tags: [productivity, storage, email]
+maintainer: anonymous
+notes: >
+  Domain-wide delegation grants access to every user in the tenant. Prefer
+  per-user consent, and scope to readonly wherever the task allows.

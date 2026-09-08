@@ -1,0 +1,31 @@
+id: stripe
+name: Stripe
+vendor: Stripe, Inc.
+homepage: https://stripe.com
+description: Payments, customers and invoices.
+
+endpoint:
+  url: https://mcp.stripe.com
+  transport: streamable_http
+  mcp_spec: "2026-07-28"
+
+auth:
+  method: api_key
+  secrets:
+    api_key: vault://hashicorp/xcp/connectors/stripe#restricted_key
+  resource_indicator: https://mcp.stripe.com
+
+trust:
+  class: contracted
+  min_tier: A2xH2
+  min_write_tier: A2xH2
+
+scopes_exposed:
+  - mcp:tools/stripe.list_customers
+  - mcp:tools/stripe.create_refund
+
+tags: [payments, financial]
+maintainer: anonymous
+notes: >
+  Money-moving connector: require A2xH2 for every call, use a restricted key
+  scoped to the minimum resources, and pair with a receipt obligation.

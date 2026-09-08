@@ -1,0 +1,33 @@
+id: salesforce
+name: Salesforce
+vendor: Salesforce, Inc.
+homepage: https://salesforce.com
+description: CRM objects, reports and queries.
+
+endpoint:
+  url: https://mcp.example-operator.com/salesforce/mcp
+  transport: streamable_http
+  mcp_spec: "2026-07-28"
+
+auth:
+  method: jwt_bearer
+  scopes: [api, refresh_token]
+  secrets:
+    consumer_key: vault://env/connectors/salesforce#consumer_key
+    private_key:  vault://hashicorp/xcp/connectors/salesforce#jwt_private_key
+  token_url: https://login.salesforce.com/services/oauth2/token
+
+trust:
+  class: contracted
+  min_tier: A1xH2
+  min_write_tier: A2xH2
+
+scopes_exposed:
+  - mcp:tools/salesforce.soql
+  - mcp:tools/salesforce.update_record
+
+tags: [crm, enterprise]
+maintainer: anonymous
+notes: >
+  RFC 7523 JWT bearer flow — no user interaction, so the signing key is
+  high-value. Keep it in a managed backend, never the env backend.

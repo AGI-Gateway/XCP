@@ -1,0 +1,38 @@
+id: github
+name: GitHub
+vendor: GitHub, Inc.
+homepage: https://github.com
+description: Repositories, issues, pull requests and actions.
+
+endpoint:
+  url: https://api.githubcopilot.com/mcp/
+  transport: streamable_http
+  mcp_spec: "2026-07-28"
+
+auth:
+  method: oauth2_auth_code
+  scopes: [repo, read:org, workflow]
+  secrets:
+    client_id:     vault://env/connectors/github#client_id
+    client_secret: vault://env/connectors/github#client_secret
+  authorize_url: https://github.com/login/oauth/authorize
+  token_url: https://github.com/login/oauth/access_token
+  refresh: false
+  resource_indicator: https://api.githubcopilot.com/mcp/
+
+trust:
+  class: attested
+  min_tier: A0xH0
+  min_write_tier: A1xH1
+
+scopes_exposed:
+  - mcp:tools/github.search
+  - mcp:tools/github.read_file
+  - mcp:tools/github.create_issue
+  - mcp:tools/github.create_pull_request
+
+tags: [devtools, scm]
+maintainer: anonymous
+notes: >
+  GitHub OAuth tokens do not expire by default; prefer a GitHub App with
+  short-lived installation tokens, and never a classic PAT with broad scopes.

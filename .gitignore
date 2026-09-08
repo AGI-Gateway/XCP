@@ -32,3 +32,14 @@ deploy/certs/*.srl
 dist/
 xcp.toml.local
 site/
+
+# never commit resolved secrets or local vault material
+vault/local/
+vault/**/*.secret
+*.key
+*.pem
+*.p12
+*.pfx
+.secrets/
+secrets.yaml
+secrets.yml

@@ -58,6 +58,8 @@ nav:
       - Receipts & settlement: receipts.md
       - Discovery & publishing: discovery.md
       - Providers — extend XCP: providers.md
+      - SaaS connectors: connectors.md
+      - Vault & authentication: vault.md
   - Operate:
       - Security model: security.md
       - Deployment: deployment.md

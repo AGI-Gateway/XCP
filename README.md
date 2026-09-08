@@ -148,6 +148,8 @@ xcp/
 ├── cli/xcp/                CLI implementation
 ├── trust/                  the trust lattice — tiers → mandate templates
 ├── federation/             peer-to-peer node trust — the agentic internet
+├── connectors/             one MCP endpoint definition per external SaaS
+├── vault/                  secret *references* + SSO identity providers
 ├── providers/              open registries: add an MCP connection or a model
 ├── trustfirewall/          stateless MCP credentials + graded corpus reachability
 ├── receipts/               proof-of-delivery and evidence-conditioned escrow
@@ -197,6 +199,8 @@ against an in-process EVM.
 ## Documentation
 
 - **Docs site**: https://agi-gateway.github.io/XCP/
+- [SaaS connectors](docs/connectors.md) — one MCP endpoint per service
+- [Vault & authentication](docs/vault.md) — OAuth, OIDC, SAML, JWT, mTLS; SSO providers
 - [Run a node](docs/agentic-internet.md) — federate without central dependencies
 - [Self-serve guide](docs/self-serve.md) — run, position, publish
 - [Trust Firewall](docs/trust-firewall.md) — stateless MCP, graded corpus reachability

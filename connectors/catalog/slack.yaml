@@ -1,0 +1,35 @@
+id: slack
+name: Slack
+vendor: Slack Technologies
+homepage: https://slack.com
+description: Channels, messages and search.
+
+endpoint:
+  url: https://mcp.example-operator.com/slack/mcp
+  transport: streamable_http
+  mcp_spec: "2026-07-28"
+
+auth:
+  method: oauth2_auth_code
+  scopes: [channels:read, chat:write, search:read]
+  secrets:
+    client_id:     vault://env/connectors/slack#client_id
+    client_secret: vault://env/connectors/slack#client_secret
+    signing_secret: vault://env/connectors/slack#signing_secret
+  authorize_url: https://slack.com/oauth/v2/authorize
+  token_url: https://slack.com/api/oauth.v2.access
+
+trust:
+  class: probed
+  min_tier: A0xH1
+  min_write_tier: A1xH1
+
+scopes_exposed:
+  - mcp:tools/slack.search
+  - mcp:tools/slack.post_message
+
+tags: [communication]
+maintainer: anonymous
+notes: >
+  Verify inbound requests with the signing secret (HMAC over timestamp + body)
+  and reject anything older than five minutes to stop replay.
