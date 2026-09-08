@@ -1,0 +1,18 @@
+name: Feature request
+description: Suggest a capability
+labels: [enhancement]
+body:
+  - type: textarea
+    id: need
+    attributes:
+      label: What are you trying to do
+      description: "The underlying goal, not just the feature"
+    validations: {required: true}
+  - type: textarea
+    id: proposal
+    attributes: {label: What you'd like}
+  - type: input
+    id: org
+    attributes:
+      label: "Is another organisation blocked on this too?"
+      description: Items two or more adopters need get pulled forward (see ROADMAP.md).

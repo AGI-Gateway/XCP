@@ -1,0 +1,74 @@
+name: ci
+on:
+  push: {branches: [main]}
+  pull_request:
+
+jobs:
+  selfserve:
+    name: Self-serve layer (lattice + discovery + CLI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Lattice + discovery tests (no deps needed)
+        run: python tests/test_selfserve.py
+      - name: Trust firewall + receipts
+        run: |
+          pip install eth-account eth-utils
+          python tests/test_providers.py
+          python tests/test_federation.py
+          python tests/test_trustfirewall.py
+          python tests/test_receipts.py
+      - name: CLI smoke
+        run: |
+          ./xcp tier --table
+          mkdir -p /tmp/p && cd /tmp/p
+          $GITHUB_WORKSPACE/xcp init --domain ci.example --org CI
+          $GITHUB_WORKSPACE/xcp tier
+          $GITHUB_WORKSPACE/xcp publish
+          test -f dist/.well-known/ai-catalog.json
+
+  core:
+    name: Core protocol
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r requirements.txt
+      - name: Compile
+        run: find . -name '*.py' -not -path './.git/*' -exec python -m py_compile {} +
+      - name: End-to-end
+        run: python tests/test_e2e.py
+
+  security:
+    name: xcpsec
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install eth-account eth-utils cryptography
+      - run: python security/tests/test_xcpsec.py
+      - run: python security/tests/test_sandbox.py
+
+  proto:
+    name: Proto compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install grpcio-tools
+      - run: python -m grpc_tools.protoc -Icore/proto --python_out=/tmp --grpc_python_out=/tmp core/proto/xcp_streams.proto
+
+  chain:
+    name: On-chain verifier path
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install web3 eth-tester py-evm eth-account eth-utils fastapi
+      - run: python core/contracts/deploy_mock_registry.py

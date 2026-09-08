@@ -1,0 +1,33 @@
+{{- if .Values.verifier.enabled }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-verifier
+spec:
+  replicas: {{ .Values.verifier.replicas }}
+  selector: {matchLabels: {app: {{ .Release.Name }}-verifier}}
+  template:
+    metadata:
+      labels: {app: {{ .Release.Name }}-verifier}
+    spec:
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: verifier
+          image: "{{ .Values.image.repository }}-verifier:{{ .Values.image.tag }}"
+          securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports: [{containerPort: 8500, name: http}]
+          env:
+            {{- if .Values.verifier.chainRpc }}
+            - {name: CHAIN_RPC,        value: {{ .Values.verifier.chainRpc | quote }}}
+            - {name: SESSION_REGISTRY, value: {{ .Values.verifier.sessionRegistry | quote }}}
+            {{- end }}
+          readinessProbe: {httpGet: {path: /health, port: http}, initialDelaySeconds: 3}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-verifier
+spec:
+  selector: {app: {{ .Release.Name }}-verifier}
+  ports: [{port: {{ .Values.verifier.service.port }}, targetPort: http}]
+{{- end }}

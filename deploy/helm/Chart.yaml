@@ -1,0 +1,9 @@
+apiVersion: v2
+name: xcp
+description: XCP — trust layer for cross-organisation agent interaction
+type: application
+version: 0.1.0
+appVersion: "0.1.0-draft"
+home: https://github.com/AGI-Gateway/XCP
+sources: [https://github.com/AGI-Gateway/XCP]
+keywords: [mcp, agents, a2a, trust, gateway, xcp]

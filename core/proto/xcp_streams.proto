@@ -1,0 +1,128 @@
+// xcp_streams.proto — XCP direct-connection gRPC service
+// =========================================================
+// XCP — the Multi-Model Secure Context Protocol — multiplexes three
+// independent bidirectional streams, each carried as its own HTTP/2 stream
+// across the SAME mTLS TCP session established with an XCP gateway:
+//
+//   A2T  Agent  -> Tool   (agent calls MCP tools directly)
+//   A2A  Agent <-> Agent  (peer delegation / negotiation)
+//   T2T  Tool  <-> Tool   (tool chaining without round-tripping the agent)
+//
+// Every frame carries a channel-bound session envelope plus a per-message
+// governance mandate proof, so the gateway can route and authorize each
+// message without re-authenticating the stream. gRPC stream multiplexing
+// maps 1:1 onto XCP's "parallel planes across all protocols" property.
+//
+// Compile:
+//   protoc --go_out=. --go-grpc_out=. xcp_streams.proto
+//   python -m grpc_tools.protoc -I. --python_out=. --grpc_python_out=. xcp_streams.proto
+//   protoc --java_out=. --grpc-java_out=. xcp_streams.proto   (protoc-gen-grpc-java)
+//
+// Status: XCP and the ERC-8004x Session Registry are draft proposals. This
+// contract matches draft-xcp-core-00 and is subject to change.
+
+syntax = "proto3";
+
+package xcp.v1;
+
+option go_package   = "github.com/AGI-Gateway/XCP/core/proto;xcpv1";
+option java_package = "org.xcp.v1";
+option java_multiple_files = true;
+
+// ───────────────────────── common envelope ─────────────────────────
+
+// Carried on EVERY frame so the gateway can route + govern per-message
+// without re-authenticating the stream.
+message Envelope {
+  uint64 agent_id       = 1;  // ERC-8004 Identity Registry token ID
+  uint64 chain_id       = 2;  // settlement chain (e.g. 8453 Base)
+  string footprint      = 3;  // keccak256(DER(cert)) of the session cert
+  string session_id     = 4;  // ERC-8004x Session Registry binding
+  string correlation_id = 5;  // ties request<->response across a stream
+  MandateProof mandate  = 6;  // governance proof for THIS message (plane 2)
+}
+
+message MandateProof {
+  string mandate_id     = 1;
+  string leaf           = 2;  // hex keccak leaf of the mandate
+  repeated string proof = 3;  // Merkle inclusion vs on-chain mandateRoot
+  string signature      = 4;  // sponsor EIP-712 signature
+  repeated string scope = 5;  // granted scopes, e.g. "mcp:tools/research.*"
+  uint64 not_after      = 6;  // mandate expiry (unix seconds)
+}
+
+message Status {
+  uint32 code    = 1;         // 0 = ok
+  string message = 2;
+}
+
+// ───────────────────────── A2T: Agent -> Tool ─────────────────────────
+
+service AgentToTool {
+  // Bidirectional: the agent streams tool calls; the tool streams results
+  // and progress. One gRPC stream may carry many calls (correlation_id).
+  rpc Open(stream ToolCall) returns (stream ToolEvent);
+}
+
+message ToolCall {
+  Envelope env       = 1;
+  string   server    = 2;     // MCP server name/URI
+  string   tool      = 3;     // tool name (scope: mcp:tools/<tool>)
+  bytes    arguments = 4;     // JSON-encoded args
+  bool     cancel    = 5;     // cancel an in-flight correlation_id
+}
+
+message ToolEvent {
+  Envelope env      = 1;
+  oneof body {
+    bytes  partial  = 2;      // streamed chunk
+    bytes  result   = 3;      // final JSON result
+    string progress = 4;      // human-readable progress
+    Status error    = 5;
+  }
+  bool   final      = 6;
+}
+
+// ───────────────────────── A2A: Agent <-> Agent ─────────────────────────
+
+service AgentToAgent {
+  // Symmetric peer channel for delegation + negotiation. Either side may
+  // send Message frames; the gateway verifies BOTH peers' sessions.
+  rpc Connect(stream AgentMessage) returns (stream AgentMessage);
+}
+
+message AgentMessage {
+  Envelope env      = 1;
+  string   peer_did = 2;      // did:8004:<chain>:<addr> of the counterparty
+  oneof body {
+    bytes  task      = 3;     // delegated task (JSON)
+    bytes  result    = 4;     // task result (JSON)
+    bytes  negotiate = 5;     // quote/offer/counter (JSON)
+    Status error     = 6;
+  }
+  bool   final       = 7;
+}
+
+// ───────────────────────── T2T: Tool <-> Tool ─────────────────────────
+
+service ToolToTool {
+  // Tool-to-tool chaining: a tool hands its output straight to another
+  // tool's input without round-tripping the agent. The AGENT authorizes
+  // the chain up front (scope: t2t:chain/<src>-><dst>); each hop still
+  // carries the agent's mandate so governance + audit are preserved.
+  rpc Pipe(stream ToolChainFrame) returns (stream ToolChainFrame);
+}
+
+message ToolChainFrame {
+  Envelope env          = 1;
+  string   src_tool     = 2;  // producing tool (server/tool)
+  string   dst_tool     = 3;  // consuming tool (server/tool)
+  string   chain_id_ref = 4;  // logical pipeline id (not the blockchain id)
+  oneof body {
+    bytes  payload      = 5;  // data flowing src -> dst
+    bytes  result       = 6;  // dst output (may feed the next hop)
+    Status error        = 7;
+  }
+  uint32 hop            = 8;  // position in the pipeline
+  bool   final          = 9;
+}

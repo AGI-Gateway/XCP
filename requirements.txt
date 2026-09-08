@@ -1,0 +1,18 @@
+# XCP — full stack.
+# The `xcp` CLI, trust lattice and discovery modules need NO dependencies
+# (standard library only). These are for running the gateway/server/verifier.
+fastapi>=0.110
+uvicorn[standard]>=0.27
+httpx>=0.27
+eth-account>=0.13
+eth-utils>=4.0
+cryptography>=42.0
+prometheus-client>=0.20
+
+# optional — on-chain verifier + contract tests:
+# web3>=7.0
+# eth-tester>=0.12
+# py-evm>=0.10
+
+# docs site (optional):
+# mkdocs-material>=9.5

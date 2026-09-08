@@ -1,0 +1,49 @@
+# XCP Helm values. Defaults are safe-by-default: enforce posture, no
+# privileged containers, read-only root filesystem.
+
+image:
+  repository: ghcr.io/agi-gateway/xcp
+  tag: "0.1.0-draft"
+  pullPolicy: IfNotPresent
+
+gateway:
+  replicas: 2
+  posture: enforce          # enforce | observe — observe is for onboarding only
+  security: "1"             # XCP_SECURITY=1 enables the argument firewall
+  upstreams: {}             # name -> MCP url
+  service: {type: ClusterIP, port: 8080}
+  resources:
+    requests: {cpu: 100m, memory: 128Mi}
+    limits:   {cpu: "1",  memory: 512Mi}
+
+verifier:
+  enabled: true
+  replicas: 2
+  chainRpc: ""              # set with sessionRegistry for on-chain mode
+  sessionRegistry: ""
+  service: {port: 8500}
+
+server:
+  enabled: false            # your own MCP servers usually live elsewhere
+  requireVerified: true
+  service: {port: 9001}
+
+trust:
+  agent: registry           # free | registry | company
+  human: enterprise         # public | general_sso | enterprise
+
+mtls:
+  enabled: true
+  secretName: xcp-tls   # must contain ca.crt, tls.crt, tls.key
+
+podSecurityContext:
+  runAsNonRoot: true
+  runAsUser: 10001
+  seccompProfile: {type: RuntimeDefault}
+containerSecurityContext:
+  allowPrivilegeEscalation: false
+  readOnlyRootFilesystem: true
+  capabilities: {drop: [ALL]}
+
+serviceMonitor:
+  enabled: false            # set true if you run the Prometheus operator

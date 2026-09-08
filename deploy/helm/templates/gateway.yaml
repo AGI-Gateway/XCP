@@ -1,0 +1,44 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-gateway
+  labels: {app: {{ .Release.Name }}-gateway}
+spec:
+  replicas: {{ .Values.gateway.replicas }}
+  selector: {matchLabels: {app: {{ .Release.Name }}-gateway}}
+  template:
+    metadata:
+      labels: {app: {{ .Release.Name }}-gateway}
+    spec:
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: gateway
+          image: "{{ .Values.image.repository }}-gateway:{{ .Values.image.tag }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports: [{containerPort: 8080, name: http}]
+          env:
+            - {name: XCP_POSTURE,   value: {{ .Values.gateway.posture | quote }}}
+            - {name: XCP_SECURITY,  value: {{ .Values.gateway.security | quote }}}
+            - {name: XCP_UPSTREAMS, value: {{ .Values.gateway.upstreams | toJson | quote }}}
+            {{- if .Values.verifier.enabled }}
+            - {name: XCP_VERIFY_URL, value: "http://{{ .Release.Name }}-verifier:{{ .Values.verifier.service.port }}"}
+            {{- end }}
+          readinessProbe: {httpGet: {path: /health, port: http}, initialDelaySeconds: 3}
+          livenessProbe:  {httpGet: {path: /health, port: http}, initialDelaySeconds: 10}
+          resources: {{- toYaml .Values.gateway.resources | nindent 12 }}
+          {{- if .Values.mtls.enabled }}
+          volumeMounts: [{name: tls, mountPath: /etc/xcp/tls, readOnly: true}]
+          {{- end }}
+      {{- if .Values.mtls.enabled }}
+      volumes: [{name: tls, secret: {secretName: {{ .Values.mtls.secretName }}}}]
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-gateway
+spec:
+  type: {{ .Values.gateway.service.type }}
+  selector: {app: {{ .Release.Name }}-gateway}
+  ports: [{port: {{ .Values.gateway.service.port }}, targetPort: http, name: http}]

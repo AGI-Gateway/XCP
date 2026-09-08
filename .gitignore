@@ -1,0 +1,34 @@
+# Python
+__pycache__/
+*.py[cod]
+*.egg-info/
+.venv/
+venv/
+.pytest_cache/
+
+# Node
+node_modules/
+
+# Go
+/client/go/vendor/
+
+# Java
+*.class
+
+# certs & secrets (never commit)
+deploy/certs/*.crt
+deploy/certs/*.key
+deploy/certs/*.srl
+*.pem
+.env
+
+# OS / editor
+.DS_Store
+*.swp
+.idea/
+.vscode/
+
+# self-serve build output
+dist/
+xcp.toml.local
+site/

@@ -1,0 +1,35 @@
+# XCP local stack: verifier + gateway + a reference MCP server.
+#
+#   cd deploy && docker compose up --build
+#   # gateway  -> http://localhost:8080  (health, /metrics)
+#   # verifier -> http://localhost:8500
+#   # server   -> http://localhost:9001
+#
+# Build context is the repo root so images can COPY the contracts ABI.
+name: xcp
+
+services:
+  verifier:
+    build:
+      context: ..
+      dockerfile: verifier/Dockerfile
+    ports: ["8500:8500"]
+    # on-chain mode: set CHAIN_RPC + SESSION_REGISTRY here.
+
+  server:
+    build:
+      context: ../server
+    environment:
+      REQUIRE_VERIFIED: "1"
+      XCP_SERVER_NAME: "research"
+    expose: ["9001"]
+
+  gateway:
+    build:
+      context: ../gateway
+    depends_on: [verifier, server]
+    environment:
+      XCP_POSTURE: "enforce"
+      XCP_VERIFY_URL: "http://verifier:8500"
+      XCP_UPSTREAMS: '{"research":"http://server:9001/mcp"}'
+    ports: ["8080:8080"]

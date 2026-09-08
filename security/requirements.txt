@@ -1,0 +1,7 @@
+# xcpsec optional security library.
+# The core modules (argfirewall, contentfirewall, sandbox) need only the stdlib.
+# The sandbox uses ctypes + resource + unshare (Linux) for containment.
+# These extras enable signatures and real keccak/x509 handling:
+eth-account>=0.13
+eth-utils>=4.0
+cryptography>=42.0

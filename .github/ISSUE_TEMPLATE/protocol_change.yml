@@ -1,0 +1,29 @@
+name: Protocol change
+description: Propose a change to the XCP wire format, scopes, or trust lattice
+labels: [protocol, rfc]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Protocol changes go through a 7-day comment period and need maintainer
+        consensus (see GOVERNANCE.md). They affect every deployed implementation.
+  - type: textarea
+    id: problem
+    attributes: {label: Problem, description: What breaks or is impossible today}
+    validations: {required: true}
+  - type: textarea
+    id: proposal
+    attributes: {label: Proposed change, description: The concrete wire/behaviour change}
+    validations: {required: true}
+  - type: textarea
+    id: migration
+    attributes:
+      label: Migration path
+      description: "What happens to sessions, mandates and catalogs already in the field?"
+    validations: {required: true}
+  - type: textarea
+    id: security
+    attributes:
+      label: Security impact
+      description: "What new trust assumptions does this add?"
+    validations: {required: true}
