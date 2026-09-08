@@ -5,7 +5,30 @@ Two halves, because a global catalog cannot be a folder of hand-written YAML:
 | | what it is | size |
 |---|---|---|
 | `catalog/*.yaml` | curated, verified, promotable | dozens |
-| `sources.py` | crawled from upstream registries and peer nodes | thousands |
+| `snapshot/servers.json` | bundled long tail, harvested from public indexes | **4,600+** |
+| `sources.py` | live crawl of upstreams and peer nodes | unbounded |
+
+## Routable vs installable — the distinction that matters
+
+Most MCP servers are **not network endpoints**. They are packages you install and
+run locally over stdio. You cannot route agent traffic to one: there is nothing
+to connect to until somebody runs it.
+
+| kind | what it is | count in the snapshot |
+|---|---|---|
+| `routable` | a remote HTTPS endpoint — reachable today | ~160 |
+| `installable` | a package/repo — a lead, not a destination | ~4,470 |
+
+An installable entry becomes routable when **an operator installs it and exposes
+it through their own gateway**. That is the federation story: XCP does not host
+the long tail; thousands of independent nodes each wrap what they run and publish
+it to peers. This is how a corpus of packages becomes a network of endpoints.
+
+```bash
+xcp catalog                    # counts by kind and verification
+xcp catalog --search github    # find connectors
+python scripts/build-snapshot.py --fetch   # refresh from upstream
+```
 
 Ingested entries arrive `unconfirmed` / `unknown`, which the
 [Trust Firewall](../docs/trust-firewall.md) treats as observe-only, read-only,

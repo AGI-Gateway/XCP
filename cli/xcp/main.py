@@ -13,6 +13,7 @@ it discoverable, without talking to anybody:
     xcp publish              generate ai-catalog.json + MCP registry manifest
     xcp verify <url>         probe an endpoint's XCP posture before trusting it
     xcp receipt <bundle>     verify a proof-of-delivery evidence bundle
+    xcp catalog              inspect and search the discovery catalog
 
 Zero third-party dependencies — standard library only, so `xcp` runs anywhere
 Python 3.10+ does.
@@ -419,6 +420,39 @@ def cmd_receipt(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_catalog(args: argparse.Namespace) -> int:
+    """Inspect, search and refresh the discovery catalog."""
+    from connectors import GlobalCatalog
+    cat = GlobalCatalog()
+    cat.load_curated()
+    if not args.no_snapshot:
+        cat.load_snapshot()
+    if args.search:
+        head(f"Search: {args.search}")
+        rows = cat.search(args.search, limit=args.limit)
+        if not rows:
+            info("no matches")
+        for r in rows:
+            kind = "curated" if r.get("curated") else r.get("kind", "?")
+            target = r.get("endpoint") or r.get("installRef") or ""
+            print(f"  {r.get('id','')[:38]:<40} {kind:<12} {target[:52]}")
+        return 0
+    s = cat.stats()
+    head("Catalog")
+    ok(f"curated      {s['curated']:>6}   verified core, promotable")
+    ok(f"discovered   {s['ingested']:>6}   harvested, unverified")
+    print()
+    info(f"routable     {s['routable']:>6}   remote endpoints an agent can reach now")
+    info(f"installable  {s['ingestedByKind'].get('installable', 0):>6}   packages — routable once a node runs them")
+    info(f"total        {s['total']:>6}")
+    print()
+    for k, v in s["curatedByStatus"].items():
+        info(f"curated/{k:<12} {v}")
+    print()
+    info("refresh with: python scripts/build-snapshot.py --fetch")
+    return 0
+
+
 # ── small helpers ──────────────────────────────────────────────────────────
 
 def _which(binary: str) -> bool:
@@ -499,6 +533,13 @@ def build_parser() -> argparse.ArgumentParser:
     rc = sub.add_parser("receipt", help="verify a proof-of-delivery evidence bundle")
     rc.add_argument("bundle", help="path to an evidence bundle JSON file")
     rc.set_defaults(fn=cmd_receipt)
+
+    cat = sub.add_parser("catalog", help="inspect and search the discovery catalog")
+    cat.add_argument("--search", help="find connectors by name or tag")
+    cat.add_argument("--limit", type=int, default=20)
+    cat.add_argument("--no-snapshot", action="store_true",
+                     help="curated entries only")
+    cat.set_defaults(fn=cmd_catalog)
 
     u = sub.add_parser("up", help="run the stack locally")
     u.add_argument("--docker", action="store_true")

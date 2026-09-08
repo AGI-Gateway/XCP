@@ -46,6 +46,8 @@ Status: XCP and ERC-8004x are draft proposals.
 from __future__ import annotations
 
 import json
+import pathlib
+import re
 import time
 from dataclasses import dataclass, field
 from enum import Enum
@@ -56,12 +58,33 @@ MAX_DOCUMENT_BYTES = 5 * 1024 * 1024      # cap on any fetched document
 MAX_ENTRIES_PER_SOURCE = 50_000
 
 
+class EndpointKind(str, Enum):
+    """
+    The distinction that matters for a routing catalog.
+
+    Most MCP servers in the wild are NOT network endpoints. They are packages you
+    install and run locally over stdio. You cannot route agent traffic to one:
+    there is nothing to connect to until somebody runs it.
+
+        ROUTABLE     a remote HTTPS endpoint — an agent can connect today
+        INSTALLABLE  a package (npm/pip/repo) — becomes routable only once a
+                     node installs it and exposes it through its own gateway
+
+    That second case is the whole federation story. XCP does not host the
+    long tail; thousands of independent nodes each wrap the servers they run and
+    publish them to peers. An installable entry is a lead, not a destination.
+    """
+    ROUTABLE = "routable"
+    INSTALLABLE = "installable"
+
+
 class SourceKind(str, Enum):
     OFFICIAL = "official"        # the MCP Registry
     ARD = "ard"                  # a domain's /.well-known/ai-catalog.json
     AGGREGATOR = "aggregator"    # community index
     PEER = "peer"                # another XCP node
     SCAN = "scan"                # imported scan output
+    REPO_INDEX = "repo_index"    # a curated list of source repositories
     MANUAL = "manual"            # the curated catalog/ files
 
 
@@ -120,6 +143,8 @@ class IngestedEntry:
     auth_hint: str = "unknown"
     tags: list[str] = field(default_factory=list)
     discovered_at: int = 0
+    kind: EndpointKind = EndpointKind.ROUTABLE
+    install_ref: str = ""            # repo or package for INSTALLABLE entries
     # never negotiable from the wire
     verification_status: str = "unconfirmed"
     trust_class: str = "unknown"
@@ -128,6 +153,10 @@ class IngestedEntry:
     def host(self) -> str:
         return (urlparse(self.endpoint_url).hostname or "").lower()
 
+    @property
+    def routable(self) -> bool:
+        return self.kind == EndpointKind.ROUTABLE and self.host != ""
+
     def to_dict(self) -> dict[str, Any]:
         return {"id": self.id, "name": self.name, "endpoint": self.endpoint_url,
                 "host": self.host, "source": self.source_id,
@@ -135,7 +164,8 @@ class IngestedEntry:
                 "transport": self.transport, "authHint": self.auth_hint,
                 "tags": list(self.tags), "discoveredAt": self.discovered_at,
                 "verification": self.verification_status,
-                "trustClass": self.trust_class}
+                "trustClass": self.trust_class, "kind": self.kind.value,
+                "installRef": self.install_ref}
 
 
 def _safe_fetch(url: str, fetcher: Optional[Callable[[str], str]] = None) -> str:
@@ -229,12 +259,79 @@ def normalise_peer_catalog(doc: Any, source: Source) -> list[IngestedEntry]:
     return out
 
 
+_BULLET = re.compile(r"^\s*[-*]\s+(.*)$")
+_REPO = re.compile(r"https://github\.com/([A-Za-z0-9_.-]+)/([A-Za-z0-9_.-]+)")
+_IMG = re.compile(r"!\[[^\]]*\]\([^)]*\)")
+_LINK = re.compile(r"\[([^\]]*)\]\([^)]*\)")
+_EMOJI = re.compile(r"[\U0001F300-\U0001FAFF\u2600-\u27BF\uFE0F]")
+_REMOTE = re.compile(
+    r"https://(?!github\.com|glama\.ai|raw\.)"
+    r"([a-z0-9-]+(?:\.[a-z0-9-]+)+)(/[A-Za-z0-9._~/-]*(?:mcp|sse)\b[A-Za-z0-9._~/-]*)")
+_INSTALL = re.compile(r"`((?:npx|uvx|pipx|pip install|docker run)[^`]{2,80})`")
+
+
+def normalise_repo_index(doc: Any, source: Source) -> list[IngestedEntry]:
+    """
+    A curated markdown index of MCP servers — the long tail.
+
+    Most entries are INSTALLABLE: a repository you install and run over stdio.
+    There is no endpoint to route to until an operator runs one. A minority
+    advertise a remote endpoint in their description; those are extracted as
+    ROUTABLE, and still arrive unverified and untrusted like anything crawled.
+    """
+    now = int(time.time())
+    out: list[IngestedEntry] = []
+    seen: set[str] = set()
+
+    if isinstance(doc, str):
+        lines = doc.splitlines()
+    else:
+        items = doc if isinstance(doc, list) else (doc or {}).get("servers", [])
+        lines = []
+        for s in items:
+            repo = str(s.get("repo") or s.get("repository") or "")
+            lines.append(f"- [{s.get('name','')}]({repo}) - {s.get('description','')}")
+
+    for line in lines[: MAX_ENTRIES_PER_SOURCE * 4]:
+        m = _BULLET.match(line)
+        if not m:
+            continue
+        body = m.group(1)
+        r = _REPO.search(body)
+        if not r:
+            continue
+        slug = f"{r.group(1)}/{r.group(2)}"
+        if slug.lower() in seen:
+            continue
+        seen.add(slug.lower())
+
+        desc = _IMG.sub("", body)
+        desc = _LINK.sub(r"\1", desc)
+        desc = _EMOJI.sub(" ", desc)
+        desc = re.sub(r"^\s*[\w./-]+\s*[-\u2013\u2014]\s*", "", desc.strip())
+        desc = re.sub(r"\s+", " ", desc).strip(" -\u2013\u2014")[:280]
+
+        rem = _REMOTE.search(body)
+        ins = _INSTALL.search(body)
+        endpoint = f"https://{rem.group(1)}{rem.group(2)}" if rem else ""
+        out.append(IngestedEntry(
+            id=_slug(slug), name=slug, endpoint_url=endpoint,
+            install_ref=(ins.group(1) if ins else f"https://github.com/{slug}"),
+            kind=EndpointKind.ROUTABLE if endpoint else EndpointKind.INSTALLABLE,
+            description=desc, vendor=r.group(1),
+            source_id=source.id, source_kind=source.kind, discovered_at=now))
+        if len(out) >= MAX_ENTRIES_PER_SOURCE:
+            break
+    return out
+
+
 NORMALISERS: dict[SourceKind, Callable[[Any, Source], list[IngestedEntry]]] = {
     SourceKind.OFFICIAL: normalise_mcp_registry,
     SourceKind.AGGREGATOR: normalise_mcp_registry,
     SourceKind.ARD: normalise_ard_catalog,
     SourceKind.PEER: normalise_peer_catalog,
     SourceKind.SCAN: normalise_mcp_registry,
+    SourceKind.REPO_INDEX: normalise_repo_index,
 }
 
 
@@ -256,6 +353,42 @@ class GlobalCatalog:
         self.ingested: dict[str, IngestedEntry] = {}     # keyed by host+id
 
     # ---- population ----
+    SNAPSHOT = pathlib.Path(__file__).resolve().parent / "snapshot" / "servers.json"
+
+    def load_snapshot(self, path: Optional[Any] = None) -> int:
+        """
+        Load the bundled discovery snapshot: thousands of real MCP servers
+        harvested from public indexes, so a fresh node is useful before it has
+        crawled anything or met a peer.
+
+        Everything here is unverified and untrusted, exactly like a live crawl.
+        Refresh it with `python scripts/build-snapshot.py --fetch`.
+        """
+        f = pathlib.Path(path) if path else self.SNAPSHOT
+        if not f.is_file():
+            return 0
+        doc = json.loads(f.read_text())
+        now = int(time.time())
+        curated_hosts = {_host(c.endpoint_url) for c in self.curated}
+        added = 0
+        for s in doc.get("servers", []):
+            kind = (EndpointKind.ROUTABLE if s.get("kind") == "routable"
+                    else EndpointKind.INSTALLABLE)
+            url = str(s.get("endpoint", "") or "")
+            if kind == EndpointKind.ROUTABLE and _host(url) in curated_hosts:
+                continue
+            e = IngestedEntry(
+                id=str(s.get("id", "")), name=str(s.get("name", "")),
+                endpoint_url=url, install_ref=str(s.get("install", "")),
+                kind=kind, description=str(s.get("description", ""))[:300],
+                vendor=str(s.get("vendor", "")), source_id="snapshot",
+                source_kind=SourceKind.REPO_INDEX, discovered_at=now)
+            key = f"{e.host or e.install_ref}|{e.id}"
+            if key not in self.ingested:
+                self.ingested[key] = e
+                added += 1
+        return added
+
     def load_curated(self) -> int:
         from .loader import load_catalog
         self.curated = load_catalog()
@@ -274,14 +407,17 @@ class GlobalCatalog:
         added = 0
         curated_hosts = {_host(c.endpoint_url) for c in self.curated}
         for e in norm(doc, source):
-            if not e.endpoint_url.startswith("https://") or not e.host:
-                continue
-            if e.host in curated_hosts:
-                continue                  # curated always wins over crawled
+            if e.kind == EndpointKind.ROUTABLE:
+                if not e.endpoint_url.startswith("https://") or not e.host:
+                    continue
+                if e.host in curated_hosts:
+                    continue              # curated always wins over crawled
+            elif not e.install_ref:
+                continue                  # an installable lead needs a package ref
             # trust and verification are set locally, never by the document
             e.trust_class = "unknown"
             e.verification_status = "unconfirmed"
-            key = f"{e.host}|{e.id}"
+            key = f"{e.host or e.install_ref}|{e.id}"
             if key not in self.ingested:
                 self.ingested[key] = e
                 added += 1
@@ -304,8 +440,9 @@ class GlobalCatalog:
                 firewall.classify(h, mapping[c.trust_class])
                 n += 1
         for e in self.ingested.values():
-            firewall.classify(e.host, ServerClass.UNKNOWN)
-            n += 1
+            if e.routable:                # nothing to classify for a package
+                firewall.classify(e.host, ServerClass.UNKNOWN)
+                n += 1
         return n
 
     def route(self, scope: str) -> list[dict[str, Any]]:
@@ -351,7 +488,10 @@ class GlobalCatalog:
         from collections import Counter
         by_source = Counter(e.source_kind.value for e in self.ingested.values())
         by_status = Counter(c.verification_status for c in self.curated)
+        by_kind = Counter(e.kind.value for e in self.ingested.values())
         return {"curated": len(self.curated), "ingested": len(self.ingested),
+                "ingestedByKind": dict(by_kind),
+                "routable": sum(1 for e in self.ingested.values() if e.routable),
                 "total": len(self.curated) + len(self.ingested),
                 "curatedByStatus": dict(by_status),
                 "ingestedBySource": dict(by_source),
@@ -363,7 +503,7 @@ def _host(url: str) -> str:
     return (urlparse(url or "").hostname or "").lower()
 
 
-__all__ = ["GlobalCatalog", "Source", "SourceKind", "IngestedEntry",
+__all__ = ["GlobalCatalog", "Source", "SourceKind", "EndpointKind", "IngestedEntry",
            "IngestError", "DEFAULT_SOURCES", "NORMALISERS",
            "normalise_mcp_registry", "normalise_ard_catalog",
-           "normalise_peer_catalog", "MAX_DOCUMENT_BYTES"]
+           "normalise_peer_catalog", "normalise_repo_index", "MAX_DOCUMENT_BYTES"]

@@ -320,19 +320,6 @@ def test_no_certificate_or_key_files_tracked():
     assert not bad, f"key material in the repo: {bad}"
 
 
-if __name__ == "__main__":
-    tests = [(n, f) for n, f in sorted(globals().items())
-             if n.startswith("test_") and callable(f)]
-    passed = failed = 0
-    for name, fn in tests:
-        try:
-            fn(); print(f"  PASS {name}"); passed += 1
-        except Exception as e:
-            print(f"  FAIL {name}: {e}"); failed += 1
-    print(f"\n{passed} passed, {failed} failed")
-    sys.exit(1 if failed else 0)
-
-
 # ── verification status caps trust (the routing-safety rule) ───────────────
 
 def test_verification_status_caps_trust_class():
@@ -494,3 +481,82 @@ def test_shipped_catalog_never_claims_a_relationship_it_cannot_have():
     for e in load_catalog(include_template=True):
         assert e.trust_class in ("unknown", "probed"), (
             f"{e.id} ships as '{e.trust_class}'; promote locally instead")
+
+
+# ── the long tail: routable vs installable ─────────────────────────────────
+
+def test_snapshot_ships_thousands_of_real_servers():
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated()
+    n = c.load_snapshot()
+    assert n > 3000, f"snapshot should carry the long tail, got {n}"
+
+
+def test_most_of_the_ecosystem_is_installable_not_routable():
+    """
+    The honest shape of the corpus: the overwhelming majority of MCP servers are
+    local stdio packages, not network endpoints. You cannot route agent traffic
+    to a package that nobody is running.
+    """
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    s = c.stats()
+    assert s["ingestedByKind"]["installable"] > s["ingestedByKind"]["routable"] * 10
+
+
+def test_installable_entries_are_never_classified_as_hosts():
+    from connectors import GlobalCatalog
+    from trustfirewall import TrustFirewall
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    fw = TrustFirewall()
+    n = c.apply_to_firewall(fw)
+    assert n < 500, "only routable endpoints belong in the firewall"
+    for e in c.ingested.values():
+        if not e.routable:
+            assert e.host == "" or e.kind.value == "installable"
+
+
+def test_snapshot_entries_arrive_untrusted():
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    for e in list(c.ingested.values())[:400]:
+        assert e.trust_class == "unknown"
+        assert e.verification_status == "unconfirmed"
+
+
+def test_snapshot_cannot_shadow_a_curated_host():
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    curated_hosts = {__import__("urllib.parse", fromlist=["urlparse"])
+                     .urlparse(x.endpoint_url).hostname for x in c.curated}
+    for e in c.ingested.values():
+        if e.routable:
+            assert e.host not in curated_hosts
+
+
+def test_repo_index_parser_extracts_remote_endpoints_when_present():
+    from connectors.sources import normalise_repo_index, Source, SourceKind, EndpointKind
+    md = ("- [acme/tool](https://github.com/acme/tool) - Does things. "
+          "Remote endpoint `https://mcp.acme.example/mcp`.\n"
+          "- [local/only](https://github.com/local/only) - Local only. "
+          "Install: `npx -y local-only`.\n")
+    got = normalise_repo_index(md, Source(id="s", kind=SourceKind.REPO_INDEX,
+                                          url="https://raw.githubusercontent.com/x"))
+    by_id = {e.id: e for e in got}
+    assert by_id["acme-tool"].kind == EndpointKind.ROUTABLE
+    assert by_id["acme-tool"].endpoint_url == "https://mcp.acme.example/mcp"
+    assert by_id["local-only"].kind == EndpointKind.INSTALLABLE
+    assert "npx" in by_id["local-only"].install_ref
+
+
+if __name__ == "__main__":
+    tests = [(n, f) for n, f in sorted(globals().items())
+             if n.startswith("test_") and callable(f)]
+    passed = failed = 0
+    for name, fn in tests:
+        try:
+            fn(); print(f"  PASS {name}"); passed += 1
+        except Exception as e:
+            print(f"  FAIL {name}: {e}"); failed += 1
+    print(f"\n{passed} passed, {failed} failed")
+    sys.exit(1 if failed else 0)
