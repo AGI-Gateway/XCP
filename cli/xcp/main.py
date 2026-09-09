@@ -446,8 +446,11 @@ def cmd_catalog(args: argparse.Namespace) -> int:
             info("nothing in that category (see: xcp catalog --categories)")
         for r in rows:
             k = "curated" if r.get("curated") else r.get("kind", "?")
-            target = r.get("endpoint") or r.get("installRef") or ""
-            print(f"  {r.get('id','')[:38]:<40} {k:<12} {target[:52]}")
+            target = r.get("docs") or r.get("endpoint") or r.get("installRef") or ""
+            v = r.get("validated", "")
+            flag = {"alive": "ok", "archived": "archived", "gone": "GONE",
+                    "reachable": "live", "unreachable": "DOWN"}.get(v, "")
+            print(f"  {r.get('id','')[:34]:<36} {k:<12} {flag:<9} {target[:46]}")
         return 0
 
     if args.search:
@@ -468,6 +471,11 @@ def cmd_catalog(args: argparse.Namespace) -> int:
     info(f"routable     {s['routable']:>6}   remote endpoints an agent can reach now")
     info(f"installable  {s['ingestedByKind'].get('installable', 0):>6}   packages — routable once a node runs them")
     info(f"total        {s['total']:>6}")
+    print()
+    vs = cat.validation_summary()
+    for k in ("alive", "archived", "gone", "reachable", "unreachable", "unchecked"):
+        if vs.get(k):
+            info(f"{k:<12} {vs[k]:>6}")
     print()
     for k, v in s["curatedByStatus"].items():
         info(f"curated/{k:<12} {v}")

@@ -606,6 +606,54 @@ def test_curated_entries_classify_off_tags_not_boilerplate():
     assert by_id["aws"].category == "cloud-infra"
 
 
+# ── reachability + docs ────────────────────────────────────────────────────
+
+def test_most_entries_carry_a_docs_link():
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    withdocs = sum(1 for e in c.ingested.values() if e.docs)
+    assert withdocs / len(c.ingested) > 0.7, "a catalog entry without docs is a dead end"
+
+
+def test_validation_states_are_known_values():
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    allowed = {"alive", "archived", "gone", "reachable", "unreachable", "unchecked"}
+    for e in list(c.ingested.values())[:800]:
+        assert e.validated in allowed, e.validated
+
+
+def test_unchecked_is_reported_not_hidden():
+    """A pass rate that quietly excludes unchecked entries is a lie."""
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    vs = c.validation_summary()
+    assert "unchecked" in vs and vs["unchecked"] > 0
+
+
+def test_validation_never_promotes_trust():
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    for e in list(c.ingested.values())[:500]:
+        assert e.trust_class == "unknown"
+
+
+def test_dead_and_archived_artifacts_are_recorded():
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    states = {e.validated for e in c.ingested.values()}
+    assert "gone" in states and "archived" in states, \
+        "validation must record failures, not silently drop them"
+
+
+def test_curated_entries_expose_declared_tools():
+    from connectors import load_catalog
+    for e in load_catalog():
+        assert e.scopes_exposed, f"{e.id} declares no tools"
+        for s in e.scopes_exposed:
+            assert s.startswith("mcp:"), s
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]

@@ -5,7 +5,7 @@ Two halves, because a global catalog cannot be a folder of hand-written YAML:
 | | what it is | size |
 |---|---|---|
 | `https://github.com/AGI-Gateway/XCP/tree/main/connectors/catalog/*.yaml` | curated, verified, promotable | dozens |
-| `snapshot/servers.json` | bundled long tail, harvested from public indexes | **4,600+** |
+| `snapshot/servers.json` | long tail from awesome-lists **and npm** | **7,027** |
 | `sources.py` | live crawl of upstreams and peer nodes | unbounded |
 
 ## Promotion is always local
@@ -39,7 +39,7 @@ size-capped at 5 MB, curated entries always win over crawled ones, and **nothing
 ingested can set its own trust class** — a remote document asserting it is
 trusted is ignored.
 
-## Navigating 4,648 entries
+## Navigating 7,048 entries
 
 ```bash
 xcp catalog                     # headline counts
@@ -106,6 +106,60 @@ Only **179 of 4,648** entries are reachable endpoints, and they cluster in
 `dev-tools`, `finance-payments` and `data-stores`. That is the real shape of the
 ecosystem today: a handful of hosted services and a very long tail of packages.
 `ecommerce` has none at all.
+
+## The curated core — 21 verified services
+
+Every row links to the vendor's own MCP or API documentation. Tools listed are
+the scopes each connector declares; a live probe fills in the full list.
+
+| service | category | verification | endpoint | auth | tools |
+|---|---|---|---|---|---|
+| [Amazon Web Services](https://awslabs.github.io/mcp/) | `cloud-infra` | unconfirmed | `https://mcp.aws.amazon.com/mcp` | oauth2_client_creds | `aws.describe_resources`, `aws.invoke_operation` |
+| [Cloudflare](https://developers.cloudflare.com/agents/model-context-protocol/) | `cloud-infra` | unconfirmed | `https://mcp.cloudflare.com/mcp` | oauth2_auth_code | `cloudflare.list_zones`, `cloudflare.purge_cache` |
+| [Slack](https://api.slack.com/) | `communication` | unconfirmed | `https://mcp.slack.com/mcp` | oauth2_auth_code | `slack.search`, `slack.post_message` |
+| [HubSpot](https://developers.hubspot.com/mcp) | `crm-sales` | **confirmed** | `https://mcp.hubspot.com` | oauth2_auth_code | `hubspot.search_crm`, `hubspot.get_contact`, `hubspot.update_deal` |
+| [Salesforce](https://developer.salesforce.com/docs) | `crm-sales` | unconfirmed | `https://mcp.salesforce.com/mcp` | oauth2_auth_code | `salesforce.soql`, `salesforce.update_record` |
+| [Zendesk](https://developer.zendesk.com/api-reference/) | `crm-sales` | self-hosted | _you host it_ | oauth2_auth_code | `zendesk.search_tickets`, `zendesk.update_ticket` |
+| [Airtable](https://airtable.com/developers/web/api/introduction) | `data-stores` | unconfirmed | `https://mcp.airtable.com/mcp` | oauth2_auth_code | `airtable.list_records`, `airtable.create_record` |
+| [Databricks](https://docs.databricks.com/aws/en/generative-ai/mcp/) | `data-stores` | self-hosted | _you host it_ | oauth2_client_creds | `databricks.run_query`, `databricks.list_catalogs` |
+| [Snowflake](https://docs.snowflake.com/en/user-guide/snowflake-cortex/mcp-server) | `data-stores` | unconfirmed | `https://mcp.snowflake.com/mcp` | oauth2_auth_code | `snowflake.query`, `snowflake.list_tables` |
+| [Atlassian (Jira, Confluence, JSM, Bitbucket)](https://support.atlassian.com/rovo/docs/getting-started-with-the-atlassian-remote-mcp-server/) | `dev-tools` | **confirmed** | `https://mcp.atlassian.com/v2/mcp` | oauth2_auth_code | `jira.search_issues`, `jira.create_issue`, `confluence.search`, `confluence.create_page` |
+| [GitHub](https://docs.github.com/en/copilot/customizing-copilot/extending-copilot-chat-with-mcp) | `dev-tools` | **confirmed** | `https://api.githubcopilot.com/mcp/` | oauth2_auth_code | `github.search`, `github.read_file`, `github.create_issue`, `github.create_pull_request` |
+| [Linear](https://linear.app/docs/mcp) | `dev-tools` | unconfirmed | `https://mcp.linear.app/mcp` | oauth2_auth_code | `linear.search_issues`, `linear.create_issue` |
+| [Shopify](https://shopify.dev/docs/apps/build/storefront-mcp) | `finance-payments` | unconfirmed | `https://mcp.shopify.com/mcp` | oauth2_auth_code | `shopify.search_products`, `shopify.create_order` |
+| [Square](https://developer.squareup.com/docs) | `finance-payments` | unconfirmed | `https://mcp.squareup.com/mcp` | oauth2_auth_code | `square.list_payments`, `square.create_refund` |
+| [Stripe](https://docs.stripe.com/mcp) | `finance-payments` | **confirmed** | `https://mcp.stripe.com` | api_key | `stripe.list_customers`, `stripe.create_refund` |
+| [Dropbox](https://www.dropbox.com/developers/documentation) | `knowledge-memory` | unconfirmed | `https://mcp.dropbox.com/mcp` | oauth2_auth_code | `dropbox.search`, `dropbox.get_file` |
+| [Google Workspace](https://developers.google.com/workspace) | `knowledge-memory` | self-hosted | _you host it_ | oauth2_auth_code | `gworkspace.drive_search`, `gworkspace.calendar_create` |
+| [Figma](https://help.figma.com/hc/en-us/articles/32132100833559) | `media-design` | unconfirmed | `https://mcp.figma.com/mcp` | oauth2_auth_code | `figma.get_file`, `figma.list_components` |
+| [Sentry](https://docs.sentry.io/product/sentry-mcp/) | `observability` | unconfirmed | `https://mcp.sentry.dev/mcp` | oauth2_auth_code | `sentry.search_issues`, `sentry.get_event` |
+| [Asana](https://developers.asana.com/docs/using-asanas-mcp-server) | `productivity` | unconfirmed | `https://mcp.asana.com/mcp` | oauth2_auth_code | `asana.search_tasks`, `asana.create_task` |
+| [Notion](https://developers.notion.com/docs/mcp) | `productivity` | **confirmed** | `https://mcp.notion.com/mcp` | oauth2_auth_code | `notion.search`, `notion.fetch`, `notion.create_pages`, `notion.update_page` |
+
+## Reachability — what has actually been checked
+
+| state | count | meaning |
+|---|---:|---|
+| `alive` | 1,051 | repository resolves, not archived |
+| `archived` | 23 | still there, no longer maintained |
+| `gone` | 26 | 404 — the artifact was removed |
+| `unchecked` | 5,927 | not yet validated |
+| `curated` | 21 | hand-verified core |
+
+```bash
+python scripts/validate-catalog.py --installable    # resolve packages and repos
+python scripts/validate-catalog.py --routable       # probe live MCP endpoints
+```
+
+!!! warning "Routable probing needs open egress"
+    `--routable` performs a real MCP `tools/list` call against each endpoint.
+    Run it from a machine with unrestricted network access. Behind a filtering
+    proxy every endpoint returns a transport error and the run records **false
+    negatives**, which is worse for the catalog than having no data. The script
+    checks a control host first and **refuses to write** if egress is blocked.
+
+    The reachability figures above therefore cover *artifacts*, not live
+    endpoints — the 158 routable endpoints have not been probed here.
 
 # Per-service entries
 

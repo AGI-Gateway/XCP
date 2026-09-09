@@ -71,7 +71,7 @@ authorities — is stated plainly in
 [docs/agentic-internet.md](docs/agentic-internet.md), along with the honest
 limits: the network doesn't exist yet, and bootstrap is a real unsolved problem.
 
-## The catalog — 4,648 MCP servers, classified
+## The catalog — 7,048 MCP servers, classified
 
 ```bash
 xcp catalog --categories                          # every category, with counts
@@ -83,7 +83,7 @@ Navigate on **two axes**, and you need both:
 
 | axis | values | why it matters |
 |---|---|---|
-| **kind** | `routable` (179) · `installable` (4,469) | Most MCP servers are local packages, not endpoints. You cannot route traffic to something nobody is running. |
+| **kind** | `routable` (158) · `installable` (6,890) | Most MCP servers are local packages, not endpoints. You cannot route traffic to something nobody is running. |
 | **verification** | `confirmed` · `community` · `unconfirmed` · `self_hosted` | Caps how far an entry can be promoted. Harvested entries land at `unconfirmed`/`unknown` — observe-only, sandboxed, nothing binding. |
 
 Twenty categories derived from the corpus itself, largest first:

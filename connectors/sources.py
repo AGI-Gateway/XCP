@@ -146,6 +146,9 @@ class IngestedEntry:
     kind: EndpointKind = EndpointKind.ROUTABLE
     install_ref: str = ""            # repo or package for INSTALLABLE entries
     category: str = "other"          # navigation aid, never a trust signal
+    docs: str = ""                   # the server's own documentation
+    validated: str = "unchecked"     # alive | archived | gone | reachable | unreachable
+    tools: list[str] = field(default_factory=list)   # only from a live probe
     # never negotiable from the wire
     verification_status: str = "unconfirmed"
     trust_class: str = "unknown"
@@ -166,7 +169,8 @@ class IngestedEntry:
                 "tags": list(self.tags), "discoveredAt": self.discovered_at,
                 "verification": self.verification_status,
                 "trustClass": self.trust_class, "kind": self.kind.value,
-                "category": self.category,
+                "category": self.category, "docs": self.docs,
+                "validated": self.validated, "tools": list(self.tools),
                 "installRef": self.install_ref}
 
 
@@ -385,6 +389,9 @@ class GlobalCatalog:
                 kind=kind, description=str(s.get("description", ""))[:300],
                 vendor=str(s.get("vendor", "")), source_id="snapshot",
                 category=str(s.get("category", "other")),
+                docs=str(s.get("docs", "")),
+                validated=str(s.get("validated", "unchecked")),
+                tools=list(s.get("tools") or []),
                 source_kind=SourceKind.REPO_INDEX, discovered_at=now)
             key = f"{e.host or e.install_ref}|{e.id}"
             if key not in self.ingested:
@@ -489,6 +496,9 @@ class GlobalCatalog:
             if getattr(c, "category", "") == category:
                 out.append({"id": c.id, "endpoint": c.endpoint_url,
                             "curated": True, "kind": "routable",
+                            "docs": c.homepage or c.verification_source,
+                            "tools": list(c.scopes_exposed),
+                            "validated": "curated",
                             "verification": c.verification_status})
         for e in self.ingested.values():
             if e.category != category:
@@ -497,6 +507,16 @@ class GlobalCatalog:
                 continue
             out.append({**e.to_dict(), "curated": False})
         return out[:limit]
+
+    def validation_summary(self) -> dict[str, int]:
+        """
+        How much of the catalog has actually been checked, and what came back.
+        `unchecked` is reported honestly rather than folded into a pass rate.
+        """
+        from collections import Counter
+        c = Counter(e.validated for e in self.ingested.values())
+        c.update({"curated": len(self.curated)})
+        return dict(c)
 
     def categories(self) -> dict[str, dict[str, int]]:
         """Counts per category, split by what is actually reachable today."""
