@@ -549,6 +549,63 @@ def test_repo_index_parser_extracts_remote_endpoints_when_present():
     assert "npx" in by_id["local-only"].install_ref
 
 
+# ── taxonomy: navigation, never trust ──────────────────────────────────────
+
+def test_every_entry_gets_exactly_one_category():
+    from connectors import GlobalCatalog, load_catalog
+    from connectors.taxonomy import CATEGORIES
+    for e in load_catalog():
+        assert e.category in CATEGORIES, f"{e.id} -> {e.category}"
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    for e in list(c.ingested.values())[:500]:
+        assert e.category in CATEGORIES
+
+
+def test_classification_is_deterministic_and_first_match_wins():
+    from connectors.taxonomy import classify
+    assert classify("stripe-payments") == classify("stripe-payments")
+    # a postgres vector-search server lands in one place, not three
+    got = classify("pg-vector-search", "Postgres vector search for agents")
+    assert got == "data-stores", got
+
+
+def test_unclassified_residue_stays_honest():
+    """`other` is honest residue. If it dominates, the taxonomy has stopped working."""
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    cats = c.categories()
+    total = sum(v["total"] for v in cats.values())
+    assert cats.get("other", {}).get("total", 0) / total < 0.25
+
+
+def test_category_is_not_a_trust_signal():
+    """A category must never raise what an entry is allowed to do."""
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    for e in list(c.ingested.values())[:300]:
+        assert e.trust_class == "unknown"
+        assert e.verification_status == "unconfirmed"
+
+
+def test_browsing_by_category_filters_by_kind():
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    routable = c.by_category("dev-tools", kind="routable", limit=200)
+    assert routable, "dev-tools should have reachable endpoints"
+    for r in routable:
+        if not r.get("curated"):
+            assert r["kind"] == "routable"
+
+
+def test_curated_entries_classify_off_tags_not_boilerplate():
+    from connectors import load_catalog
+    by_id = {e.id: e for e in load_catalog()}
+    assert by_id["stripe"].category == "finance-payments"
+    assert by_id["github"].category == "dev-tools"
+    assert by_id["notion"].category == "productivity"
+    assert by_id["aws"].category == "cloud-infra"
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]

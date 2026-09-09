@@ -8,48 +8,12 @@ Two halves, because a global catalog cannot be a folder of hand-written YAML:
 | `snapshot/servers.json` | bundled long tail, harvested from public indexes | **4,600+** |
 | `sources.py` | live crawl of upstreams and peer nodes | unbounded |
 
-## Routable vs installable — the distinction that matters
-
-Most MCP servers are **not network endpoints**. They are packages you install and
-run locally over stdio. You cannot route agent traffic to one: there is nothing
-to connect to until somebody runs it.
-
-| kind | what it is | count in the snapshot |
-|---|---|---|
-| `routable` | a remote HTTPS endpoint — reachable today | ~160 |
-| `installable` | a package/repo — a lead, not a destination | ~4,470 |
-
-An installable entry becomes routable when **an operator installs it and exposes
-it through their own gateway**. That is the federation story: XCP does not host
-the long tail; thousands of independent nodes each wrap what they run and publish
-it to peers. This is how a corpus of packages becomes a network of endpoints.
-
-```bash
-xcp catalog                    # counts by kind and verification
-xcp catalog --search github    # find connectors
-python scripts/build-snapshot.py --fetch   # refresh from upstream
-```
-
-Ingested entries arrive `unconfirmed` / `unknown`, which the
-[Trust Firewall](trust-firewall.md) treats as observe-only, read-only,
-sandboxed, output quarantined, nothing binding. **That is what makes it safe to
-index a corpus nobody has vetted — discovery is not endorsement.**
-
-## Verification status caps trust
-
-In a catalog agents route traffic from, an unverified URL is worse than a missing
-one. So status caps how far an entry can be promoted:
-
-| status | meaning | max trust |
-|---|---|---|
-| `confirmed` | vendor-documented, source cited | `contracted` |
-| `community` | third-party, not vendor-official | `probed` |
-| `unconfirmed` | vendor hosts one; this URL unverified | `unknown` |
-| `self_hosted` | no official remote; you supply the host | `unknown` |
+## Promotion is always local
 
 **The shipped catalog never claims `attested` or `contracted`.** Those describe an
 operator's relationship with a vendor — a signed manifest they pinned, a contract
-they hold — not a property of the vendor. Promotion is always local.
+they hold — not a property of the vendor that a public catalog can assert on
+their behalf.
 
 ## Ingestion at scale
 
@@ -74,6 +38,74 @@ Safety: every fetch passes `xcpsec.argfirewall.ssrf_guard`, documents are
 size-capped at 5 MB, curated entries always win over crawled ones, and **nothing
 ingested can set its own trust class** — a remote document asserting it is
 trusted is ignored.
+
+## Navigating 4,648 entries
+
+```bash
+xcp catalog                     # headline counts
+xcp catalog --categories        # every category, with counts
+xcp catalog --category dev-tools --kind routable
+xcp catalog --search stripe
+```
+
+### Two axes, and you need both
+
+**Axis 1 — can I reach it today?**
+
+| kind | meaning | count |
+|---|---|---|
+| `routable` | a remote HTTPS endpoint. An agent connects now. | **179** |
+| `installable` | a package or repo. Nothing to connect to until an operator runs it. | **4,469** |
+
+**Axis 2 — should I believe it?**
+
+| verification | meaning | max trust class |
+|---|---|---|
+| `confirmed` | vendor-documented, source cited | `contracted` |
+| `community` | third-party, not vendor-official | `probed` |
+| `unconfirmed` | vendor hosts one; this URL unverified | `unknown` |
+| `self_hosted` | no official remote; you supply the host | `unknown` |
+
+Everything harvested lands at `unconfirmed` / `unknown`, which the Trust Firewall
+treats as observe-only, sandboxed, nothing binding. **Category tells you what a
+server claims to do. Only verification tells you whether to believe it.**
+
+### By category
+
+| category | total | routable | installable | covers |
+|---|---:|---:|---:|---|
+| `dev-tools` | 1,025 | 35 | 990 | Coding, version control, CI and IDE integration |
+| `other` | 590 | 12 | 578 | Everything not yet classified |
+| `finance-payments` | 560 | 33 | 527 | Payments, trading, accounting and crypto |
+| `security` | 364 | 11 | 353 | Security, compliance, secrets and vulnerability work |
+| `ai-agents` | 339 | 10 | 329 | Agent frameworks, orchestration, LLM and prompt tooling |
+| `data-stores` | 289 | 11 | 278 | Databases, warehouses and vector stores |
+| `cloud-infra` | 249 | 9 | 240 | Cloud platforms, containers, IaC and deployment |
+| `observability` | 179 | 7 | 172 | Monitoring, logging, tracing and incident response |
+| `browsing-scraping` | 166 | 7 | 159 | Browsers, crawlers, scrapers and web fetch |
+| `knowledge-memory` | 148 | 6 | 142 | RAG, embeddings, knowledge graphs and agent memory |
+| `media-design` | 128 | 5 | 123 | Images, audio, video, 3D and design tools |
+| `search-web` | 120 | 8 | 112 | Search engines, news and general web lookup |
+| `communication` | 109 | 5 | 104 | Chat, email, calendar and meetings |
+| `location-weather` | 105 | 6 | 99 | Maps, geospatial, weather and travel |
+| `productivity` | 102 | 4 | 98 | Docs, tasks, projects and knowledge workspaces |
+| `crm-sales` | 59 | 6 | 53 | CRM, marketing and customer support |
+| `science-research` | 42 | 2 | 40 | Papers, bio, chem, maths and scientific computing |
+| `gaming` | 33 | 1 | 32 | Games, engines and virtual worlds |
+| `iot-hardware` | 28 | 1 | 27 | Devices, sensors, robotics and embedded systems |
+| `ecommerce` | 13 | 0 | 13 | Storefronts, orders, inventory and marketplaces |
+
+Categories were derived from the corpus vocabulary rather than invented and
+forced onto it. Each entry gets exactly one primary category, first-match-wins,
+so a "Postgres vector search" server lands in one place rather than three. About
+12% fall to `other` — that is honest residue, not a gap being papered over.
+
+### Where the routable ones actually are
+
+Only **179 of 4,648** entries are reachable endpoints, and they cluster in
+`dev-tools`, `finance-payments` and `data-stores`. That is the real shape of the
+ecosystem today: a handful of hosted services and a very long tail of packages.
+`ecommerce` has none at all.
 
 # Per-service entries
 

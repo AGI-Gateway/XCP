@@ -427,6 +427,29 @@ def cmd_catalog(args: argparse.Namespace) -> int:
     cat.load_curated()
     if not args.no_snapshot:
         cat.load_snapshot()
+    if args.categories:
+        head("Catalog by category")
+        cats = cat.categories()
+        print(f"  {'category':<20}{'total':>7}{'routable':>10}{'installable':>13}  what it covers")
+        from connectors.taxonomy import describe
+        for k, v in cats.items():
+            print(f"  {k:<20}{v['total']:>7}{v['routable']:>10}{v['installable']:>13}  {describe(k)[:44]}")
+        print()
+        info("browse one:   xcp catalog --category dev-tools")
+        info("only usable:  xcp catalog --category dev-tools --kind routable")
+        return 0
+
+    if args.category:
+        head(f"{args.category} — {__import__('connectors.taxonomy', fromlist=['describe']).describe(args.category)}")
+        rows = cat.by_category(args.category, kind=args.kind, limit=args.limit)
+        if not rows:
+            info("nothing in that category (see: xcp catalog --categories)")
+        for r in rows:
+            k = "curated" if r.get("curated") else r.get("kind", "?")
+            target = r.get("endpoint") or r.get("installRef") or ""
+            print(f"  {r.get('id','')[:38]:<40} {k:<12} {target[:52]}")
+        return 0
+
     if args.search:
         head(f"Search: {args.search}")
         rows = cat.search(args.search, limit=args.limit)
@@ -537,6 +560,11 @@ def build_parser() -> argparse.ArgumentParser:
     cat = sub.add_parser("catalog", help="inspect and search the discovery catalog")
     cat.add_argument("--search", help="find connectors by name or tag")
     cat.add_argument("--limit", type=int, default=20)
+    cat.add_argument("--categories", action="store_true",
+                     help="list every category with counts")
+    cat.add_argument("--category", help="browse one category")
+    cat.add_argument("--kind", choices=["routable", "installable"],
+                     help="filter by whether it can be reached today")
     cat.add_argument("--no-snapshot", action="store_true",
                      help="curated entries only")
     cat.set_defaults(fn=cmd_catalog)

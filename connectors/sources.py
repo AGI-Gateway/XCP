@@ -145,6 +145,7 @@ class IngestedEntry:
     discovered_at: int = 0
     kind: EndpointKind = EndpointKind.ROUTABLE
     install_ref: str = ""            # repo or package for INSTALLABLE entries
+    category: str = "other"          # navigation aid, never a trust signal
     # never negotiable from the wire
     verification_status: str = "unconfirmed"
     trust_class: str = "unknown"
@@ -165,6 +166,7 @@ class IngestedEntry:
                 "tags": list(self.tags), "discoveredAt": self.discovered_at,
                 "verification": self.verification_status,
                 "trustClass": self.trust_class, "kind": self.kind.value,
+                "category": self.category,
                 "installRef": self.install_ref}
 
 
@@ -382,6 +384,7 @@ class GlobalCatalog:
                 endpoint_url=url, install_ref=str(s.get("install", "")),
                 kind=kind, description=str(s.get("description", ""))[:300],
                 vendor=str(s.get("vendor", "")), source_id="snapshot",
+                category=str(s.get("category", "other")),
                 source_kind=SourceKind.REPO_INDEX, discovered_at=now)
             key = f"{e.host or e.install_ref}|{e.id}"
             if key not in self.ingested:
@@ -406,7 +409,10 @@ class GlobalCatalog:
             raise IngestError(f"no normaliser for source kind {source.kind}")
         added = 0
         curated_hosts = {_host(c.endpoint_url) for c in self.curated}
+        from .taxonomy import classify
         for e in norm(doc, source):
+            if e.category == "other":
+                e.category = classify(e.id, e.description, e.tags)
             if e.kind == EndpointKind.ROUTABLE:
                 if not e.endpoint_url.startswith("https://") or not e.host:
                     continue
@@ -474,6 +480,36 @@ class GlobalCatalog:
             if q in e.id or q in e.name.lower() or q in " ".join(e.tags).lower():
                 hits.append({**e.to_dict(), "curated": False})
         return hits[:limit]
+
+    def by_category(self, category: str, kind: Optional[str] = None,
+                    limit: int = 100) -> list[dict[str, Any]]:
+        """Browse one slice of the catalog."""
+        out = []
+        for c in self.curated:
+            if getattr(c, "category", "") == category:
+                out.append({"id": c.id, "endpoint": c.endpoint_url,
+                            "curated": True, "kind": "routable",
+                            "verification": c.verification_status})
+        for e in self.ingested.values():
+            if e.category != category:
+                continue
+            if kind and e.kind.value != kind:
+                continue
+            out.append({**e.to_dict(), "curated": False})
+        return out[:limit]
+
+    def categories(self) -> dict[str, dict[str, int]]:
+        """Counts per category, split by what is actually reachable today."""
+        from collections import defaultdict
+        agg: dict[str, dict[str, int]] = defaultdict(
+            lambda: {"total": 0, "routable": 0, "installable": 0, "curated": 0})
+        for c in self.curated:
+            cat = getattr(c, "category", "other")
+            agg[cat]["total"] += 1; agg[cat]["routable"] += 1; agg[cat]["curated"] += 1
+        for e in self.ingested.values():
+            agg[e.category]["total"] += 1
+            agg[e.category]["routable" if e.routable else "installable"] += 1
+        return dict(sorted(agg.items(), key=lambda kv: -kv[1]["total"]))
 
     def export(self) -> dict[str, Any]:
         """Publish this node's view so peers can ingest it."""

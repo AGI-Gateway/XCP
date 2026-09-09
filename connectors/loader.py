@@ -79,6 +79,7 @@ class ConnectorEntry:
     maintainer: str = "anonymous"
     notes: str = ""
     source_file: str = ""
+    category: str = "other"
 
     def validate(self) -> list[str]:
         from vault.refs import scan_for_secrets, SecretRef, VaultError
@@ -172,7 +173,7 @@ def parse_entry(data: dict, source: str = "") -> ConnectorEntry:
     ep = data.get("endpoint") or {}
     auth = data.get("auth") or {}
     trust = data.get("trust") or {}
-    return ConnectorEntry(
+    entry = ConnectorEntry(
         id=str(data.get("id", "")),
         name=str(data.get("name", "")),
         vendor=str(data.get("vendor", "")),
@@ -200,6 +201,17 @@ def parse_entry(data: dict, source: str = "") -> ConnectorEntry:
         notes=str(data.get("notes", "")),
         source_file=source,
     )
+    entry.category = _categorise(entry)
+    return entry
+
+
+def _categorise(entry: "ConnectorEntry") -> str:
+    """
+    Curated descriptions are generated boilerplate, so classify on the id, the
+    vendor name and the hand-written tags — the parts that actually carry signal.
+    """
+    from .taxonomy import classify
+    return classify(f"{entry.id} {entry.name}", "", entry.tags)
 
 
 def load_catalog(directory: Optional[pathlib.Path] = None,

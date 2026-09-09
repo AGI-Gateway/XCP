@@ -71,6 +71,34 @@ authorities — is stated plainly in
 [docs/agentic-internet.md](docs/agentic-internet.md), along with the honest
 limits: the network doesn't exist yet, and bootstrap is a real unsolved problem.
 
+## The catalog — 4,648 MCP servers, classified
+
+```bash
+xcp catalog --categories                          # every category, with counts
+xcp catalog --category dev-tools --kind routable  # only what you can reach today
+xcp catalog --search stripe
+```
+
+Navigate on **two axes**, and you need both:
+
+| axis | values | why it matters |
+|---|---|---|
+| **kind** | `routable` (179) · `installable` (4,469) | Most MCP servers are local packages, not endpoints. You cannot route traffic to something nobody is running. |
+| **verification** | `confirmed` · `community` · `unconfirmed` · `self_hosted` | Caps how far an entry can be promoted. Harvested entries land at `unconfirmed`/`unknown` — observe-only, sandboxed, nothing binding. |
+
+Twenty categories derived from the corpus itself, largest first:
+
+| | | | |
+|---|---|---|---|
+| `dev-tools` 1,025 | `finance-payments` 560 | `security` 364 | `ai-agents` 339 |
+| `data-stores` 289 | `cloud-infra` 249 | `observability` 179 | `browsing-scraping` 166 |
+| `knowledge-memory` 148 | `media-design` 128 | `search-web` 120 | `communication` 109 |
+| `location-weather` 105 | `productivity` 102 | `crm-sales` 59 | `science-research` 42 |
+| `gaming` 33 | `iot-hardware` 28 | `ecommerce` 13 | `other` 590 |
+
+**Category tells you what a server claims to do. Only verification tells you
+whether to believe it.** Full breakdown: [`connectors/README.md`](connectors/README.md).
+
 ## Extend it — this is the part you're meant to change
 
 Two open registries. No gatekeeper, no allowlist, validation is the only gate.

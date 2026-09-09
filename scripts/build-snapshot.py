@@ -34,6 +34,7 @@ def fetch(url: str) -> str:
 
 def main() -> int:
     from connectors.sources import normalise_repo_index, Source, SourceKind
+    from connectors.taxonomy import classify, CATEGORIES
     cache = pathlib.Path("/tmp")
     merged: dict[str, dict] = {}
     for name, url in SOURCES.items():
@@ -53,6 +54,7 @@ def main() -> int:
                 "id": e.id, "name": e.name, "endpoint": e.endpoint_url,
                 "install": e.install_ref, "kind": e.kind.value,
                 "description": e.description, "vendor": e.vendor, "source": name,
+                "category": classify(e.id, e.description),
             })
         print(f"  {name:<10} {len(entries):>5} entries")
 
@@ -63,6 +65,8 @@ def main() -> int:
         "sources": SOURCES,
         "counts": {"total": len(merged), "routable": routable,
                    "installable": len(merged) - routable},
+        "categories": {c: sum(1 for v in merged.values() if v["category"] == c)
+                       for c in CATEGORIES},
         "note": ("Harvested from public indexes. Every entry is UNVERIFIED and "
                  "UNTRUSTED: routable ones reach the Trust Firewall as 'unknown' "
                  "(observe-only, sandboxed, nothing binding); installable ones are "
