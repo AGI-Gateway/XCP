@@ -758,6 +758,68 @@ def test_duplicate_operation_ids_are_disambiguated():
     assert len(names) == len(set(names)), "MCP tool names must be unique"
 
 
+# ── the wrappable set is complete and actually wrappable ───────────────────
+
+def test_wrappable_set_is_substantial():
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    w = [e for e in c.ingested.values() if e.kind.value == "wrappable"]
+    assert len(w) > 2000, f"expected the full API directory, got {len(w)}"
+
+
+def test_every_wrappable_entry_is_actually_wrappable():
+    """A wrappable entry with no spec is a dead end, not a lead."""
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    for e in c.ingested.values():
+        if e.kind.value == "wrappable":
+            assert e.spec_url.startswith("https://"), e.id
+
+
+def test_specs_are_mirrored_not_vendor_hosted():
+    """
+    Wrapping must not depend on a third-party API host being up. Specs resolve
+    from a mirror we can reach independently of the API itself.
+    """
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    w = [e for e in c.ingested.values() if e.kind.value == "wrappable"]
+    mirrored = sum(1 for e in w if "raw.githubusercontent.com" in e.spec_url)
+    assert mirrored / len(w) > 0.95
+
+
+def test_wrappable_entries_are_categorised_not_dumped_in_other():
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    w = [e for e in c.ingested.values() if e.kind.value == "wrappable"]
+    other = sum(1 for e in w if e.category == "other")
+    assert other / len(w) < 0.25, "the API taxonomy mapping has stopped working"
+
+
+def test_swagger_2_specs_are_supported():
+    """Much of the public API corpus is still Swagger 2.0, not OpenAPI 3."""
+    from connectors.wrap import parse_openapi
+    doc = {"swagger": "2.0", "info": {"title": "Old", "version": "1"},
+           "host": "api.old.example", "basePath": "/v1", "schemes": ["https"],
+           "paths": {"/things": {"get": {"operationId": "listThings"}}}}
+    spec = parse_openapi(doc, api_id="old")
+    assert spec.base_url == "https://api.old.example/v1"
+    assert spec.operations[0].tool_name == "listThings"
+
+
+def test_oauth2_specs_resolve_to_a_credential_reference():
+    from connectors.wrap import parse_openapi, generate
+    doc = {"openapi": "3.0.0", "info": {"title": "O", "version": "1"},
+           "servers": [{"url": "https://api.o.example"}],
+           "components": {"securitySchemes": {"o": {"type": "oauth2",
+                                                    "flows": {}}}},
+           "paths": {"/a": {"get": {"operationId": "a"}}}}
+    spec = parse_openapi(doc, api_id="o")
+    assert spec.auth_scheme == "oauth2"
+    assert spec.secret_ref.startswith("vault://")
+    compile(generate(spec), "<gen>", "exec")
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]

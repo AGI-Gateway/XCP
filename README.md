@@ -71,7 +71,7 @@ authorities — is stated plainly in
 [docs/agentic-internet.md](docs/agentic-internet.md), along with the honest
 limits: the network doesn't exist yet, and bootstrap is a real unsolved problem.
 
-## The catalog — 7,568 entries, classified
+## The catalog — 9,576 entries, classified
 
 ```bash
 xcp catalog --categories                          # every category, with counts
@@ -83,18 +83,18 @@ Navigate on **two axes**, and you need both:
 
 | axis | values | why it matters |
 |---|---|---|
-| **kind** | `routable` (158) · `wrappable` (520) · `installable` (6,869) | `routable` means an MCP agent connects **now**. `wrappable` is a public API that speaks REST — `xcp wrap` turns it into an MCP server at your URL. `installable` is a package someone must run. |
+| **kind** | `routable` (158) · `wrappable` (2,528) · `installable` (6,869) | `routable` means an MCP agent connects **now**. `wrappable` is a public API that speaks REST — `xcp wrap` turns it into an MCP server at your URL. `installable` is a package someone must run. |
 | **verification** | `confirmed` · `community` · `unconfirmed` · `self_hosted` | Caps how far an entry can be promoted. Harvested entries land at `unconfirmed`/`unknown` — observe-only, sandboxed, nothing binding. |
 
 Twenty categories derived from the corpus itself, largest first:
 
 | | | | |
 |---|---|---|---|
-| `dev-tools` 1,025 | `finance-payments` 560 | `security` 364 | `ai-agents` 339 |
-| `data-stores` 289 | `cloud-infra` 249 | `observability` 179 | `browsing-scraping` 166 |
-| `knowledge-memory` 148 | `media-design` 128 | `search-web` 120 | `communication` 109 |
-| `location-weather` 105 | `productivity` 102 | `crm-sales` 59 | `science-research` 42 |
-| `gaming` 33 | `iot-hardware` 28 | `ecommerce` 13 | `other` 590 |
+| `dev-tools` 1,611 | `other` 1,591 | `cloud-infra` 1,269 | `finance-payments` 757 |
+| `ai-agents` 695 | `data-stores` 648 | `security` 436 | `science-research` 342 |
+| `media-design` 334 | `communication` 259 | `productivity` 248 | `observability` 228 |
+| `browsing-scraping` 227 | `knowledge-memory` 218 | `location-weather` 201 | `search-web` 199 |
+| `crm-sales` 116 | `ecommerce` 97 | `iot-hardware` 56 | `gaming` 44 |
 
 **Category tells you what a server claims to do. Only verification tells you
 whether to believe it.** Full breakdown: [`connectors/README.md`](connectors/README.md).

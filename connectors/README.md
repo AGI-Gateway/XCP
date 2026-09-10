@@ -39,7 +39,7 @@ size-capped at 5 MB, curated entries always win over crawled ones, and **nothing
 ingested can set its own trust class** — a remote document asserting it is
 trusted is ignored.
 
-## Navigating 7,568 entries
+## Navigating 9,576 entries
 
 ```bash
 xcp catalog                     # headline counts
@@ -55,7 +55,7 @@ xcp catalog --search stripe
 | kind | meaning | count |
 |---|---|---:|
 | `routable` | an **MCP** endpoint. An agent connects now. | **158** |
-| `wrappable` | a public API with a spec. Reachable over the internet, but it speaks **REST, not MCP** — one `xcp wrap` from routable. | **520** |
+| `wrappable` | a public API with a spec. Reachable over the internet, but it speaks **REST, not MCP** — one `xcp wrap` from routable. | **2,528** |
 | `installable` | a package. Nothing to connect to until an operator runs it. | **6,869** |
 
 !!! warning "Why `wrappable` is not counted as routable"
@@ -101,26 +101,26 @@ server claims to do. Only verification tells you whether to believe it.**
 
 | category | total | routable | installable | covers |
 |---|---:|---:|---:|---|
-| `dev-tools` | 1,025 | 35 | 990 | Coding, version control, CI and IDE integration |
-| `other` | 590 | 12 | 578 | Everything not yet classified |
-| `finance-payments` | 560 | 33 | 527 | Payments, trading, accounting and crypto |
-| `security` | 364 | 11 | 353 | Security, compliance, secrets and vulnerability work |
-| `ai-agents` | 339 | 10 | 329 | Agent frameworks, orchestration, LLM and prompt tooling |
-| `data-stores` | 289 | 11 | 278 | Databases, warehouses and vector stores |
-| `cloud-infra` | 249 | 9 | 240 | Cloud platforms, containers, IaC and deployment |
-| `observability` | 179 | 7 | 172 | Monitoring, logging, tracing and incident response |
-| `browsing-scraping` | 166 | 7 | 159 | Browsers, crawlers, scrapers and web fetch |
-| `knowledge-memory` | 148 | 6 | 142 | RAG, embeddings, knowledge graphs and agent memory |
-| `media-design` | 128 | 5 | 123 | Images, audio, video, 3D and design tools |
-| `search-web` | 120 | 8 | 112 | Search engines, news and general web lookup |
-| `communication` | 109 | 5 | 104 | Chat, email, calendar and meetings |
-| `location-weather` | 105 | 6 | 99 | Maps, geospatial, weather and travel |
-| `productivity` | 102 | 4 | 98 | Docs, tasks, projects and knowledge workspaces |
-| `crm-sales` | 59 | 6 | 53 | CRM, marketing and customer support |
-| `science-research` | 42 | 2 | 40 | Papers, bio, chem, maths and scientific computing |
-| `gaming` | 33 | 1 | 32 | Games, engines and virtual worlds |
-| `iot-hardware` | 28 | 1 | 27 | Devices, sensors, robotics and embedded systems |
-| `ecommerce` | 13 | 0 | 13 | Storefronts, orders, inventory and marketplaces |
+| `dev-tools` | 1,611 | 35 | 1,576 | Coding, version control, CI and IDE integration |
+| `other` | 1,591 | 12 | 1,579 | Everything not yet classified |
+| `cloud-infra` | 1,269 | 9 | 1,260 | Cloud platforms, containers, IaC and deployment |
+| `finance-payments` | 757 | 33 | 724 | Payments, trading, accounting and crypto |
+| `ai-agents` | 695 | 10 | 685 | Agent frameworks, orchestration, LLM and prompt tooling |
+| `data-stores` | 648 | 11 | 637 | Databases, warehouses and vector stores |
+| `security` | 436 | 11 | 425 | Security, compliance, secrets and vulnerability work |
+| `science-research` | 342 | 2 | 340 | Papers, bio, chem, maths and scientific computing |
+| `media-design` | 334 | 5 | 329 | Images, audio, video, 3D and design tools |
+| `communication` | 259 | 5 | 254 | Chat, email, calendar and meetings |
+| `productivity` | 248 | 4 | 244 | Docs, tasks, projects and knowledge workspaces |
+| `observability` | 228 | 7 | 221 | Monitoring, logging, tracing and incident response |
+| `browsing-scraping` | 227 | 7 | 220 | Browsers, crawlers, scrapers and web fetch |
+| `knowledge-memory` | 218 | 6 | 212 | RAG, embeddings, knowledge graphs and agent memory |
+| `location-weather` | 201 | 6 | 195 | Maps, geospatial, weather and travel |
+| `search-web` | 199 | 8 | 191 | Search engines, news and general web lookup |
+| `crm-sales` | 116 | 6 | 110 | CRM, marketing and customer support |
+| `ecommerce` | 97 | 0 | 97 | Storefronts, orders, inventory and marketplaces |
+| `iot-hardware` | 56 | 1 | 55 | Devices, sensors, robotics and embedded systems |
+| `gaming` | 44 | 1 | 43 | Games, engines and virtual worlds |
 
 Categories were derived from the corpus vocabulary rather than invented and
 forced onto it. Each entry gets exactly one primary category, first-match-wins,
@@ -129,7 +129,7 @@ so a "Postgres vector search" server lands in one place rather than three. About
 
 ### Where the routable ones actually are
 
-Only **179 of 4,648** entries are reachable endpoints, and they cluster in
+Only **158 of 9,576** entries are reachable endpoints, and they cluster in
 `dev-tools`, `finance-payments` and `data-stores`. That is the real shape of the
 ecosystem today: a handful of hosted services and a very long tail of packages.
 `ecommerce` has none at all.
