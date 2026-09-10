@@ -5,7 +5,7 @@ Two halves, because a global catalog cannot be a folder of hand-written YAML:
 | | what it is | size |
 |---|---|---|
 | `catalog/*.yaml` | curated, verified, promotable | dozens |
-| `snapshot/servers.json` | long tail from awesome-lists **and npm** | **7,027** |
+| `snapshot/servers.json` | long tail: awesome-lists, npm **and public API specs** | **7,027** |
 | `sources.py` | live crawl of upstreams and peer nodes | unbounded |
 
 ## Promotion is always local
@@ -39,7 +39,7 @@ size-capped at 5 MB, curated entries always win over crawled ones, and **nothing
 ingested can set its own trust class** — a remote document asserting it is
 trusted is ignored.
 
-## Navigating 7,048 entries
+## Navigating 7,568 entries
 
 ```bash
 xcp catalog                     # headline counts
@@ -53,9 +53,36 @@ xcp catalog --search stripe
 **Axis 1 — can I reach it today?**
 
 | kind | meaning | count |
-|---|---|---|
-| `routable` | a remote HTTPS endpoint. An agent connects now. | **179** |
-| `installable` | a package or repo. Nothing to connect to until an operator runs it. | **4,469** |
+|---|---|---:|
+| `routable` | an **MCP** endpoint. An agent connects now. | **158** |
+| `wrappable` | a public API with a spec. Reachable over the internet, but it speaks **REST, not MCP** — one `xcp wrap` from routable. | **520** |
+| `installable` | a package. Nothing to connect to until an operator runs it. | **6,869** |
+
+!!! warning "Why `wrappable` is not counted as routable"
+    A public REST API is demonstrably online, so it is tempting to call it
+    routable. It is not: an MCP agent cannot connect to `https://api.stripe.com/v1`.
+    Marking it routable would make the Trust Firewall send agent traffic to an
+    endpoint where every call fails.
+
+    Both `wrappable` and `installable` become routable the same way — **an
+    operator deploys something, and it is routable at their URL, not the
+    vendor's.** That is the federation property again: XCP does not host the long
+    tail.
+
+```bash
+xcp catalog --kind wrappable            # browse public APIs
+xcp wrap stripe                         # generate a deployable MCP server
+uvicorn mcp_stripe:app --port 9100       # now it is routable, at your host
+```
+
+The generator reads an OpenAPI 3.x document and emits **one MCP tool per API
+operation**, with input schemas derived from the spec's parameters and request
+bodies. Credentials resolve through `vault://` references — a generated wrapper
+contains no secret, and there is a test asserting it. `DELETE` operations are
+excluded unless you pass `--include-destructive`.
+
+It emits a readable file rather than proxying, deliberately: a generated wrapper
+you cannot inspect is a supply-chain problem wearing a convenience costume.
 
 **Axis 2 — should I believe it?**
 

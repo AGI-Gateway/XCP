@@ -14,6 +14,7 @@ it discoverable, without talking to anybody:
     xcp verify <url>         probe an endpoint's XCP posture before trusting it
     xcp receipt <bundle>     verify a proof-of-delivery evidence bundle
     xcp catalog              inspect and search the discovery catalog
+    xcp wrap <api>           generate an MCP server from a public API spec
 
 Zero third-party dependencies — standard library only, so `xcp` runs anywhere
 Python 3.10+ does.
@@ -26,6 +27,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import pathlib
 import subprocess
 import sys
 import urllib.error
@@ -484,6 +486,72 @@ def cmd_catalog(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_wrap(args: argparse.Namespace) -> int:
+    """Generate a deployable MCP server from a public API's OpenAPI spec."""
+    from connectors.wrap import parse_openapi, generate, WrapError
+    from connectors import GlobalCatalog
+
+    spec_url = args.spec
+    api_id = args.id or ""
+    if not spec_url:
+        cat = GlobalCatalog(); cat.load_curated(); cat.load_snapshot()
+        match = [e for e in cat.ingested.values()
+                 if e.kind.value == "wrappable" and args.api and args.api in e.id]
+        if not match:
+            bad(f"no wrappable API matching {args.api!r} "
+                "(try: xcp catalog --kind wrappable)")
+            return 1
+        spec_url, api_id = match[0].spec_url, match[0].id.replace("api-", "")
+        info(f"using {match[0].name} — {spec_url}")
+
+    head("Fetching specification")
+    try:
+        from security.xcpsec.argfirewall import ssrf_guard
+        ssrf_guard(spec_url)
+    except ImportError:
+        pass
+    except PermissionError as e:
+        bad(str(e)); return 1
+    try:
+        with urllib.request.urlopen(spec_url, timeout=45) as r:
+            raw = r.read(16 * 1024 * 1024).decode("utf-8", "replace")
+    except Exception as e:
+        bad(f"could not fetch the spec: {e}")
+        return 1
+    try:
+        import yaml
+        doc = yaml.safe_load(raw)
+    except Exception:
+        try:
+            doc = json.loads(raw)
+        except Exception as e:
+            bad(f"spec is neither YAML nor JSON: {e}")
+            return 1
+
+    try:
+        spec = parse_openapi(doc, api_id=api_id,
+                             include_destructive=args.include_destructive,
+                             max_operations=args.max_operations)
+    except WrapError as e:
+        bad(str(e)); return 1
+
+    ok(f"{spec.title}  —  {len(spec.operations)} operations")
+    info(f"upstream  {spec.base_url}")
+    info(f"auth      {spec.auth_scheme}")
+    info(f"secret    {spec.secret_ref}")
+    if not args.include_destructive:
+        info("DELETE operations excluded (pass --include-destructive to add them)")
+
+    out = pathlib.Path(args.out or f"mcp_{spec.id.replace('-', '_')}.py")
+    out.write_text(generate(spec, module_name=out.stem))
+    print()
+    ok(f"wrote {out}")
+    info("read it before deploying, then:")
+    info(f"  uvicorn {out.stem}:app --port 9100")
+    info("register it with your gateway — it becomes ROUTABLE at YOUR url, not the vendor's.")
+    return 0
+
+
 # ── small helpers ──────────────────────────────────────────────────────────
 
 def _which(binary: str) -> bool:
@@ -576,6 +644,16 @@ def build_parser() -> argparse.ArgumentParser:
     cat.add_argument("--no-snapshot", action="store_true",
                      help="curated entries only")
     cat.set_defaults(fn=cmd_catalog)
+
+    w = sub.add_parser("wrap", help="generate an MCP server from a public API spec")
+    w.add_argument("api", nargs="?", help="catalog id fragment, e.g. stripe")
+    w.add_argument("--spec", help="OpenAPI URL (skips the catalog)")
+    w.add_argument("--id", help="override the generated id")
+    w.add_argument("--out", help="output file")
+    w.add_argument("--max-operations", type=int, default=400)
+    w.add_argument("--include-destructive", action="store_true",
+                   help="also expose DELETE operations")
+    w.set_defaults(fn=cmd_wrap)
 
     u = sub.add_parser("up", help="run the stack locally")
     u.add_argument("--docker", action="store_true")

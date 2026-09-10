@@ -654,6 +654,110 @@ def test_curated_entries_expose_declared_tools():
             assert s.startswith("mcp:"), s
 
 
+# ── wrappable: public APIs, not yet MCP ────────────────────────────────────
+
+def test_wrappable_is_not_routable():
+    """
+    The invariant this whole kind exists to protect: a public REST API is
+    reachable, but an MCP agent cannot connect to it. Counting it as routable
+    would send agent traffic somewhere every call fails.
+    """
+    from connectors.sources import EndpointKind
+    assert EndpointKind.ROUTABLE.reachable_today is True
+    assert EndpointKind.WRAPPABLE.reachable_today is False
+    assert EndpointKind.INSTALLABLE.reachable_today is False
+
+
+def test_wrappable_entries_never_reach_the_firewall():
+    from connectors import GlobalCatalog
+    from trustfirewall import TrustFirewall
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    wrappable = [e for e in c.ingested.values() if e.kind.value == "wrappable"]
+    assert wrappable, "catalog should carry wrappable APIs"
+    fw = TrustFirewall(); c.apply_to_firewall(fw)
+    from trustfirewall import ServerClass
+    for e in wrappable[:50]:
+        assert not e.routable
+        if e.host:
+            assert fw.class_of(e.host) == ServerClass.UNKNOWN
+
+
+def test_wrappable_needs_a_spec_to_be_a_lead():
+    from connectors import GlobalCatalog
+    c = GlobalCatalog(); c.load_curated(); c.load_snapshot()
+    for e in c.ingested.values():
+        if e.kind.value == "wrappable":
+            assert e.spec_url, f"{e.id} is wrappable with no spec to generate from"
+
+
+def test_openapi_parses_into_mcp_tools():
+    from connectors.wrap import parse_openapi
+    doc = {"openapi": "3.0.0", "info": {"title": "Demo", "version": "1"},
+           "servers": [{"url": "https://api.demo.example"}],
+           "paths": {"/things/{id}": {
+               "get": {"operationId": "getThing", "summary": "Fetch a thing",
+                       "parameters": [{"name": "id", "in": "path",
+                                       "required": True,
+                                       "schema": {"type": "string"}}]},
+               "delete": {"operationId": "deleteThing"}}}}
+    spec = parse_openapi(doc, api_id="demo")
+    names = [o.tool_name for o in spec.operations]
+    assert "getThing" in names
+    assert "deleteThing" not in names, "DELETE must be opt-in"
+    schema = spec.operations[0].input_schema()
+    assert schema["required"] == ["id"]
+
+
+def test_destructive_operations_are_opt_in():
+    from connectors.wrap import parse_openapi
+    doc = {"openapi": "3.0.0", "info": {"title": "D", "version": "1"},
+           "servers": [{"url": "https://api.d.example"}],
+           "paths": {"/x": {"delete": {"operationId": "wipe"}}}}
+    try:
+        parse_openapi(doc)
+        assert False, "a spec with only DELETE should yield nothing by default"
+    except Exception:
+        pass
+    spec = parse_openapi(doc, include_destructive=True)
+    assert spec.operations[0].destructive
+
+
+def test_spec_without_https_server_is_refused():
+    from connectors.wrap import parse_openapi, WrapError
+    doc = {"openapi": "3.0.0", "info": {"title": "X", "version": "1"},
+           "servers": [{"url": "http://insecure.example"}],
+           "paths": {"/a": {"get": {"operationId": "a"}}}}
+    try:
+        parse_openapi(doc); assert False, "must refuse a spec with no https server"
+    except WrapError:
+        pass
+
+
+def test_generated_server_is_valid_python_and_holds_no_secret():
+    from connectors.wrap import parse_openapi, generate
+    from vault import scan_for_secrets
+    doc = {"openapi": "3.0.0", "info": {"title": "Demo", "version": "1"},
+           "servers": [{"url": "https://api.demo.example"}],
+           "components": {"securitySchemes": {"b": {"type": "http",
+                                                    "scheme": "bearer"}}},
+           "paths": {"/x": {"get": {"operationId": "getX"}}}}
+    spec = parse_openapi(doc, api_id="demo")
+    code = generate(spec)
+    compile(code, "<generated>", "exec")          # must be valid Python
+    assert not scan_for_secrets(code), "a generated wrapper must contain no credential"
+    assert "vault://" in code, "credentials must be resolved by reference"
+
+
+def test_duplicate_operation_ids_are_disambiguated():
+    from connectors.wrap import parse_openapi
+    doc = {"openapi": "3.0.0", "info": {"title": "D", "version": "1"},
+           "servers": [{"url": "https://api.d.example"}],
+           "paths": {"/a": {"get": {"operationId": "same"}},
+                     "/b": {"get": {"operationId": "same"}}}}
+    names = [o.tool_name for o in parse_openapi(doc).operations]
+    assert len(names) == len(set(names)), "MCP tool names must be unique"
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]

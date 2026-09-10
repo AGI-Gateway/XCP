@@ -67,6 +67,9 @@ class EndpointKind(str, Enum):
     there is nothing to connect to until somebody runs it.
 
         ROUTABLE     a remote HTTPS endpoint — an agent can connect today
+        WRAPPABLE    a public API with a machine-readable spec. Reachable over
+                     the internet, but it speaks REST, not MCP: an agent cannot
+                     connect to it until XCP generates and deploys a wrapper.
         INSTALLABLE  a package (npm/pip/repo) — becomes routable only once a
                      node installs it and exposes it through its own gateway
 
@@ -75,7 +78,13 @@ class EndpointKind(str, Enum):
     publish them to peers. An installable entry is a lead, not a destination.
     """
     ROUTABLE = "routable"
+    WRAPPABLE = "wrappable"
     INSTALLABLE = "installable"
+
+    @property
+    def reachable_today(self) -> bool:
+        """Only ROUTABLE means an agent can connect right now."""
+        return self is EndpointKind.ROUTABLE
 
 
 class SourceKind(str, Enum):
@@ -147,6 +156,9 @@ class IngestedEntry:
     install_ref: str = ""            # repo or package for INSTALLABLE entries
     category: str = "other"          # navigation aid, never a trust signal
     docs: str = ""                   # the server's own documentation
+    api_base: str = ""               # upstream REST base, for WRAPPABLE
+    spec_url: str = ""               # the OpenAPI document
+    operations: int = 0              # how many API operations the spec exposes
     validated: str = "unchecked"     # alive | archived | gone | reachable | unreachable
     tools: list[str] = field(default_factory=list)   # only from a live probe
     # never negotiable from the wire
@@ -171,6 +183,8 @@ class IngestedEntry:
                 "trustClass": self.trust_class, "kind": self.kind.value,
                 "category": self.category, "docs": self.docs,
                 "validated": self.validated, "tools": list(self.tools),
+                "apiBase": self.api_base, "specUrl": self.spec_url,
+                "operations": self.operations,
                 "installRef": self.install_ref}
 
 
@@ -378,8 +392,10 @@ class GlobalCatalog:
         curated_hosts = {_host(c.endpoint_url) for c in self.curated}
         added = 0
         for s in doc.get("servers", []):
-            kind = (EndpointKind.ROUTABLE if s.get("kind") == "routable"
-                    else EndpointKind.INSTALLABLE)
+            try:
+                kind = EndpointKind(str(s.get("kind", "installable")))
+            except ValueError:
+                kind = EndpointKind.INSTALLABLE
             url = str(s.get("endpoint", "") or "")
             if kind == EndpointKind.ROUTABLE and _host(url) in curated_hosts:
                 continue
@@ -392,8 +408,11 @@ class GlobalCatalog:
                 docs=str(s.get("docs", "")),
                 validated=str(s.get("validated", "unchecked")),
                 tools=list(s.get("tools") or []),
+                api_base=str(s.get("apiBase", "")),
+                spec_url=str(s.get("specUrl", "")),
+                operations=int(s.get("operations", 0) or 0),
                 source_kind=SourceKind.REPO_INDEX, discovered_at=now)
-            key = f"{e.host or e.install_ref}|{e.id}"
+            key = f"{e.host or e.install_ref or e.spec_url}|{e.id}"
             if key not in self.ingested:
                 self.ingested[key] = e
                 added += 1
@@ -425,6 +444,9 @@ class GlobalCatalog:
                     continue
                 if e.host in curated_hosts:
                     continue              # curated always wins over crawled
+            elif e.kind == EndpointKind.WRAPPABLE:
+                if not e.spec_url or not e.api_base:
+                    continue              # a wrappable lead needs a spec to generate from
             elif not e.install_ref:
                 continue                  # an installable lead needs a package ref
             # trust and verification are set locally, never by the document
