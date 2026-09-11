@@ -81,6 +81,43 @@ bodies. Credentials resolve through `vault://` references — a generated wrappe
 contains no secret, and there is a test asserting it. `DELETE` operations are
 excluded unless you pass `--include-destructive`.
 
+### Who owns the credential
+
+The difference between a wrapper you self-host and one you can safely host **for
+other people**:
+
+```bash
+xcp wrap stripe                              # operator: your key, from your vault
+xcp wrap stripe --credential-source session  # session: the caller's key, per request
+```
+
+| mode | whose key | stores it? | use for |
+|---|---|---|---|
+| `operator` | yours, from your vault | no — resolved at call time | self-hosting an API you already pay for |
+| `session` | **the caller's**, in `XCP-Upstream-Credential` | **never** | multi-tenant hosting |
+| `none` | — | — | genuinely public APIs |
+
+In `session` mode the wrapper refuses in two situations that matter more than the
+happy path:
+
+- **an unverified request** cannot present a credential at all, or anyone could
+  post one directly and bypass the trust layer;
+- **a caller who supplies none fails**, rather than falling back to the
+  operator's key. Silently spending the host's money under the host's liability
+  is the exact failure this mode exists to prevent.
+
+An unrecognised mode raises rather than picking a default — it fails closed.
+
+!!! warning "What session mode does and does not give you"
+    It means the wrapper never **stores** the caller's credential, and the
+    operator is not the system of record for it. The credential still transits
+    the wrapper's memory to make the upstream call — that is unavoidable for any
+    proxy and this is not zero-knowledge. What changes is custody and liability,
+    which is what makes hosting at scale defensible.
+
+The gateway forwards `XCP-Upstream-Credential` to the upstream and never logs,
+caches or inspects it.
+
 It emits a readable file rather than proxying, deliberately: a generated wrapper
 you cannot inspect is a supply-chain problem wearing a convenience costume.
 

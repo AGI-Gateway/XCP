@@ -820,6 +820,247 @@ def test_oauth2_specs_resolve_to_a_credential_reference():
     compile(generate(spec), "<gen>", "exec")
 
 
+# ── session-scoped credentials: what makes hosting defensible ──────────────
+
+def _spec(mode, auth="bearer"):
+    from connectors.wrap import parse_openapi, CredentialSource
+    schemes = ({"b": {"type": "http", "scheme": "bearer"}} if auth == "bearer"
+               else {})
+    doc = {"openapi": "3.0.0", "info": {"title": "Demo", "version": "1"},
+           "servers": [{"url": "https://api.demo.example"}],
+           "components": {"securitySchemes": schemes},
+           "paths": {"/x": {"get": {"operationId": "getX"}}}}
+    return parse_openapi(doc, api_id="demo",
+                         credential_source=CredentialSource(mode))
+
+
+def test_session_wrapper_holds_no_secret_reference():
+    """An operator wrapper points at the operator's vault. A session wrapper
+    must point at nothing — there is no key of its own to resolve."""
+    assert _spec("operator").secret_ref.startswith("vault://")
+    assert _spec("session").secret_ref == ""
+
+
+def test_session_mode_never_falls_back_to_the_operator_key():
+    """
+    The invariant this feature exists for: a caller who supplies no credential
+    must fail, not quietly spend the host's money under the host's liability.
+    """
+    from connectors.wrap import generate
+    code = generate(_spec("session"))
+    assert "_operator_credential()" in code, "operator path still defined"
+    body = code[code.index("def _credential("):code.index("def _auth_headers")]
+    start = body.index('if CREDENTIAL_SOURCE == "session"')
+    session_branch = body[start:body.index('if CREDENTIAL_SOURCE == "operator"')]
+    assert "_operator_credential" not in session_branch, \
+        "session mode must not reach the operator credential"
+    assert "raise CredentialError" in session_branch
+    # and an unrecognised mode must fail closed rather than pick a default
+    assert "unknown credential source" in code
+
+
+def test_session_credential_requires_a_verified_request():
+    from connectors.wrap import generate
+    code = generate(_spec("session"))
+    body = code[code.index("def _credential("):code.index("def _auth_headers")]
+    assert "if not verified" in body, \
+        "an unverified request must not be able to present a session credential"
+
+
+def test_no_auth_upstream_needs_no_credential_at_all():
+    from connectors.wrap import CredentialSource
+    s = _spec("session", auth="none")
+    assert s.credential_source is CredentialSource.NONE
+    assert s.secret_ref == ""
+
+
+def test_generated_wrappers_never_embed_a_credential():
+    from connectors.wrap import generate
+    from vault import scan_for_secrets
+    for mode in ("operator", "session", "none"):
+        code = generate(_spec(mode))
+        compile(code, "<gen>", "exec")
+        assert not scan_for_secrets(code), f"{mode} wrapper embeds a credential"
+
+
+def test_health_reports_the_mode_not_the_credential():
+    from connectors.wrap import generate
+    code = generate(_spec("session"))
+    health = code[code.index("async def health"):]
+    assert "credentialSource" in health
+    assert "reveal()" not in health and "SECRET_REF" not in health
+
+
+def test_gateway_forwards_but_does_not_log_the_credential():
+    import pathlib
+    gw = pathlib.Path(__file__).resolve().parent.parent / "core/gateway/xcp_gateway.py"
+    src = gw.read_text()
+    assert "H_UPSTREAM_CREDENTIAL" in src, "gateway must forward the caller's key"
+    # it must never reach the audit log
+    audit = src[src.index("def audit("):src.index("def _reject(")]
+    assert "credential" not in audit.lower()
+
+
+def test_credential_source_round_trips_through_the_summary():
+    for mode in ("operator", "session", "none"):
+        assert _spec(mode, auth="bearer" if mode != "none" else "none"
+                     ).summary()["credentialSource"] in ("operator", "session", "none")
+
+
+# ── sealed credentials: removing the gateway from the trust set ────────────
+
+def _rk():
+    from vault.sealed import generate_recipient_key
+    return generate_recipient_key()
+
+
+def test_seal_unseal_roundtrip():
+    from vault.sealed import seal, unseal
+    priv, pub = _rk()
+    blob = seal("sk_live_secret", pub, context="tools/call:Charge")
+    assert unseal(blob, priv, pub, context="tools/call:Charge") == "sk_live_secret"
+
+
+def test_the_gateway_cannot_read_a_sealed_credential():
+    """
+    The property the whole mode exists for: whoever forwards the blob has no key
+    for it. Without this, a hosted wrapper means the gateway operator holds every
+    user's upstream credential.
+    """
+    from vault.sealed import seal, unseal, SealError
+    _priv, pub = _rk()
+    other_priv, _other_pub = _rk()          # the gateway's own key, if it had one
+    blob = seal("sk_live_secret", pub, context="c")
+    assert "sk_live_secret" not in blob
+    try:
+        unseal(blob, other_priv, pub, context="c")
+        assert False, "a non-recipient must not be able to open it"
+    except SealError:
+        pass
+
+
+def test_sealed_blob_is_bound_to_its_context():
+    """A blob sealed for one operation cannot be replayed against another."""
+    from vault.sealed import seal, unseal, SealError
+    priv, pub = _rk()
+    blob = seal("cred", pub, context="tools/call:GetAccount")
+    try:
+        unseal(blob, priv, pub, context="tools/call:DeleteAccount")
+        assert False, "context must bind"
+    except SealError:
+        pass
+
+
+def test_sealed_blob_is_bound_to_its_recipient():
+    from vault.sealed import seal, unseal, SealError
+    priv_a, pub_a = _rk()
+    _priv_b, pub_b = _rk()
+    blob = seal("cred", pub_a, context="c")
+    try:
+        unseal(blob, priv_a, pub_b, context="c")   # wrong recipient in the AAD
+        assert False, "recipient must bind"
+    except SealError:
+        pass
+
+
+def test_tampered_ciphertext_is_rejected():
+    from vault.sealed import seal, unseal, SealError
+    priv, pub = _rk()
+    blob = seal("cred", pub, context="c")
+    tampered = blob[:-6] + ("A" if blob[-6] != "A" else "B") + blob[-5:]
+    try:
+        unseal(tampered, priv, pub, context="c")
+        assert False, "AEAD must reject tampering"
+    except SealError:
+        pass
+
+
+def test_unseal_error_is_uninformative():
+    """A padding/AAD oracle is a real attack; the error must not distinguish."""
+    from vault.sealed import seal, unseal, SealError
+    priv, pub = _rk()
+    other_priv, _ = _rk()
+    blob = seal("cred", pub, context="c")
+    msgs = set()
+    for bad in ((other_priv, pub, "c"), (priv, pub, "wrong")):
+        try:
+            unseal(blob, *bad)
+        except SealError as e:
+            msgs.add(str(e))
+    assert len(msgs) == 1, f"error text leaks which check failed: {msgs}"
+
+
+def test_refuses_to_seal_nothing():
+    from vault.sealed import seal, SealError
+    _priv, pub = _rk()
+    try:
+        seal("", pub); assert False
+    except SealError:
+        pass
+
+
+def test_persisted_key_recovers_the_same_public_half():
+    from vault.sealed import seal_public_from_private
+    priv, pub = _rk()
+    assert seal_public_from_private(priv).public_b64 == pub.public_b64
+
+
+# ── the generator honours all three modes ──────────────────────────────────
+
+def _wrapspec():
+    from connectors.wrap import parse_openapi
+    return parse_openapi({
+        "openapi": "3.0.0", "info": {"title": "D", "version": "1"},
+        "servers": [{"url": "https://api.d.example"}],
+        "components": {"securitySchemes": {"b": {"type": "http", "scheme": "bearer"}}},
+        "paths": {"/x": {"get": {"operationId": "getX"}}}}, api_id="d")
+
+
+def test_all_credential_modes_generate_valid_servers():
+    from connectors.wrap import generate
+    from vault import scan_for_secrets
+    for mode in ("operator", "session", "sealed"):
+        code = generate(_wrapspec(), credential_source=mode)
+        compile(code, "<gen>", "exec")
+        assert not scan_for_secrets(code)
+        assert f'CREDENTIAL_SOURCE = "{mode}"' in code
+
+
+def test_unknown_credential_mode_is_refused():
+    from connectors.wrap import generate, WrapError
+    try:
+        generate(_wrapspec(), credential_source="trust-me")
+        assert False, "an unknown mode must not silently default"
+    except WrapError:
+        pass
+
+
+def test_multi_tenant_modes_never_fall_back_to_the_operator_key():
+    """
+    Falling back would spend the host's money and assume the host's liability —
+    the exact failure these modes exist to prevent.
+    """
+    from connectors.wrap import generate
+    for mode in ("session", "sealed"):
+        code = generate(_wrapspec(), credential_source=mode)
+        body = code[code.index("def _credential("):]
+        i = body.index(f'if CREDENTIAL_SOURCE == "{mode}":')
+        j = body.index('if CREDENTIAL_SOURCE == "operator":')
+        assert "_operator_credential()" not in body[i:j], mode
+
+
+def test_caller_supplied_modes_require_a_verified_session():
+    from connectors.wrap import generate
+    for mode in ("session", "sealed"):
+        code = generate(_wrapspec(), credential_source=mode)
+        assert "only accepted on a gateway-verified" in code
+
+
+def test_sealed_mode_publishes_a_key_endpoint():
+    from connectors.wrap import generate
+    assert "/xcp/credential-key" in generate(_wrapspec(), credential_source="sealed")
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]

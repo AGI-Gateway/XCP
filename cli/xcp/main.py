@@ -488,7 +488,8 @@ def cmd_catalog(args: argparse.Namespace) -> int:
 
 def cmd_wrap(args: argparse.Namespace) -> int:
     """Generate a deployable MCP server from a public API's OpenAPI spec."""
-    from connectors.wrap import parse_openapi, generate, WrapError
+    from connectors.wrap import (parse_openapi, generate, WrapError,
+                                 CredentialSource)
     from connectors import GlobalCatalog
 
     spec_url = args.spec
@@ -531,19 +532,31 @@ def cmd_wrap(args: argparse.Namespace) -> int:
     try:
         spec = parse_openapi(doc, api_id=api_id,
                              include_destructive=args.include_destructive,
-                             max_operations=args.max_operations)
+                             max_operations=args.max_operations,
+                             credential_source=CredentialSource(
+                                 args.credential_source))
     except WrapError as e:
         bad(str(e)); return 1
 
     ok(f"{spec.title}  —  {len(spec.operations)} operations")
     info(f"upstream  {spec.base_url}")
     info(f"auth      {spec.auth_scheme}")
-    info(f"secret    {spec.secret_ref}")
+    info(f"credential {spec.credential_source.value}")
+    if spec.credential_source.value == "session":
+        info("           the CALLER supplies their own key per request; this")
+        info("           wrapper stores nothing and is safe to host for others")
+    elif spec.secret_ref:
+        info(f"credentials {args.credentials}")
+    if args.credentials == "operator":
+        info(f"secret    {spec.secret_ref}")
+    else:
+        info("callers supply their own key; this wrapper stores none")
     if not args.include_destructive:
         info("DELETE operations excluded (pass --include-destructive to add them)")
 
     out = pathlib.Path(args.out or f"mcp_{spec.id.replace('-', '_')}.py")
-    out.write_text(generate(spec, module_name=out.stem))
+    out.write_text(generate(spec, module_name=out.stem,
+                            credential_source=args.credentials))
     print()
     ok(f"wrote {out}")
     info("read it before deploying, then:")
@@ -650,7 +663,14 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--spec", help="OpenAPI URL (skips the catalog)")
     w.add_argument("--id", help="override the generated id")
     w.add_argument("--out", help="output file")
+    w.add_argument("--credentials", choices=["operator", "session", "sealed"],
+                   default="operator",
+                   help="whose upstream key the wrapper uses; 'sealed' for hosting")
     w.add_argument("--max-operations", type=int, default=400)
+    w.add_argument("--credential-source", default="operator",
+                   choices=["operator", "session", "none"],
+                   help="operator = your key (self-host); session = the caller's "
+                        "key per request (multi-tenant safe)")
     w.add_argument("--include-destructive", action="store_true",
                    help="also expose DELETE operations")
     w.set_defaults(fn=cmd_wrap)

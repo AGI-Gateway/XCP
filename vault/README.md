@@ -176,6 +176,46 @@ entitlement claims, it reaches `H2`. No approval step; validation is the only ga
 
 ---
 
+## Hosting a wrapper for other organisations
+
+If you deploy a [generated wrapper](../connectors/README.md) on someone else's
+behalf, the credential question decides whether that is defensible or a liability.
+
+| mode | whose key | who can read it | use when |
+|---|---|---|---|
+| `operator` | yours, from your vault | you | you self-host an API you already pay for |
+| `session` | the caller's, per request | you **and** the gateway operator | both parties already trust the gateway |
+| `sealed` | the caller's, encrypted to the wrapper | **only the wrapper** | you host for others |
+
+```
+caller --seal(cred, wrapper_pubkey)--> gateway --opaque blob--> wrapper
+                                       (cannot open it)         (unseals, uses
+                                                                 once, discards)
+```
+
+`sealed` is what makes multi-tenant hosting safe: the gateway still verifies the
+session, gates the mandate and routes — but the bytes it forwards are ciphertext
+it has no key for. That preserves the property the whole system rests on, that
+the gateway is a verifier and a router and **never a custodian**.
+
+```bash
+xcp wrap stripe --credentials sealed
+curl https://your-wrapper/xcp/credential-key     # callers seal to this
+```
+
+Construction: ephemeral X25519 per message, HKDF-SHA256, AES-256-GCM. The
+recipient key and an operation context are mixed into the AAD, so a blob sealed
+for one wrapper cannot be replayed against another, and one sealed for
+`tools/call:GetAccount` cannot be reused for `DeleteAccount`.
+
+!!! warning "What this does not protect against"
+    It does not protect you from a malicious **wrapper** operator — whoever runs
+    the wrapper can read what it unseals, because it has to use the credential
+    upstream. The guarantee is narrower and worth stating precisely: **the
+    gateway operator is removed from the trust set.** If you do not trust the
+    wrapper operator either, run the wrapper yourself — that is what `operator`
+    mode is for.
+
 ## Provisioning a deployment
 
 List every secret an operator must set before a deployment works:

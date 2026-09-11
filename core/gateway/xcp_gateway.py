@@ -313,7 +313,9 @@ async def a2t_call(request: Request) -> Response:
         if v is not None and v.blocked and POSTURE == "enforce":
             audit(ctx, "a2t", f"tool={tool} ARGFW-BLOCKED ({v.reason()})")
             return JSONResponse({"error": f"XCP argument firewall: {v.reason()}"}, 400)
-    return await _route_mcp(server, tool, body.get("arguments", {}), ctx)
+    return await _route_mcp(server, tool, body.get("arguments", {}), ctx,
+                            upstream_credential=request.headers.get(
+                                H_UPSTREAM_CREDENTIAL, ""))
 
 
 @app.post("/v1/a2a/delegate")
@@ -385,7 +387,13 @@ def _infer_argspec(args: dict) -> dict:
     return spec
 
 
-async def _route_mcp(server: str, tool: str, args: dict, ctx: Ctx) -> Response:
+# The caller's own credential for a multi-tenant wrapper upstream. The gateway
+# forwards it and never logs, stores or inspects it — see connectors/wrap.py.
+H_UPSTREAM_CREDENTIAL = "xcp-upstream-credential"
+
+
+async def _route_mcp(server: str, tool: str, args: dict, ctx: Ctx,
+                     upstream_credential: str = "") -> Response:
     """Forward a verified tool call to the upstream MCP server."""
     url = UPSTREAMS.get(server)
     if not url:
@@ -395,10 +403,14 @@ async def _route_mcp(server: str, tool: str, args: dict, ctx: Ctx) -> Response:
     t0 = time.time()
     try:
         async with httpx.AsyncClient(timeout=30) as hc:
-            r = await hc.post(url, json=rpc, headers={
+            headers = {
                 # the verified identity travels upstream, not the client's claim
                 "XCP-Agent-Identity": f"{ctx.agent_id};{ctx.chain_id};{ctx.footprint}",
-                "XCP-Verified-By": GATEWAY_ID})
+                "XCP-Verified-By": GATEWAY_ID}
+            if upstream_credential:
+                # pass-through only: never logged, never cached, never inspected
+                headers["XCP-Upstream-Credential"] = upstream_credential
+            r = await hc.post(url, json=rpc, headers=headers)
     except Exception as e:
         return JSONResponse({"error": f"upstream unreachable: {e}"}, 502)
     finally:
