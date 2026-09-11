@@ -18,6 +18,7 @@ test: ## run every test suite
 	@echo "── providers ──"          && $(PY) tests/test_providers.py
 	@echo "── federation ──"         && $(PY) tests/test_federation.py
 	@echo "── paid transport ──"     && $(PY) tests/test_transport.py
+	@echo "── abuse controls ──"     && $(PY) tests/test_limits.py
 	@echo "── vault + connectors ──" && $(PY) tests/test_vault.py
 	@echo "── receipts ──"           && $(PY) tests/test_receipts.py
 	@echo "── trust firewall ──"     && $(PY) tests/test_trustfirewall.py

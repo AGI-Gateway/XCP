@@ -318,12 +318,29 @@ _SEAL_PUB = None
 if CREDENTIAL_SOURCE == "sealed":
     import sys as _sys, pathlib as _pl
     _sys.path.insert(0, str(_pl.Path(__file__).resolve().parents[1]))
-    from vault.sealed import (generate_recipient_key, unseal, seal_public_from_private,
-                              RecipientKey, SealError)
+    from vault.sealed import (generate_recipient_key, unseal,
+                              seal_public_from_private, RecipientKey, SealError)
     if _SEAL_PRIV:
         _SEAL_PUB = seal_public_from_private(_SEAL_PRIV)
-    else:
+    elif os.getenv("XCP_SEAL_EPHEMERAL") == "1":
+        # Explicitly opted in: fine for local testing, fatal in production.
         _SEAL_PRIV, _SEAL_PUB = generate_recipient_key()
+        print("[wrapper] WARNING: ephemeral sealing key. Every credential "
+              "sealed to this wrapper stops opening when it restarts.", flush=True)
+    else:
+        # Fail closed. Silently generating a new key would break every caller's
+        # sealed credential on restart, with no error anyone can see — the worst
+        # possible failure mode for a hosted wrapper.
+        raise RuntimeError(
+            "sealed mode needs a persistent key: set XCP_SEAL_PRIVATE to a "
+            "stored X25519 private key, or XCP_SEAL_EPHEMERAL=1 to accept that "
+            "restarting invalidates every credential already sealed to this "
+            "wrapper. Generate one with: python -c "
+            "\'from vault.sealed import generate_recipient_key as g; print(g()[0])\'")
+
+    # Accept credentials sealed to a PREVIOUS key during rotation, so rolling a
+    # key does not break requests already in flight.
+    _SEAL_PREV = [k for k in os.getenv("XCP_SEAL_PREVIOUS", "").split(",") if k]
 
 app = FastAPI(title="{title} (MCP)", version="{version}")
 
@@ -384,8 +401,17 @@ def _credential(request: Request, verified: bool, context: str = "") -> str:
                 "XCP-Upstream-Credential. The gateway cannot read it.")
         try:
             return unseal(blob, _SEAL_PRIV, _SEAL_PUB, context=context)
-        except SealError as e:
-            raise CredentialError(str(e))
+        except SealError:
+            pass
+        for _old in _SEAL_PREV:                      # key rotation grace
+            try:
+                return unseal(blob, _old, seal_public_from_private(_old),
+                              context=context)
+            except SealError:
+                continue
+        raise CredentialError(
+            "could not open the sealed credential — it may be sealed to a key "
+            "this wrapper has rotated away from; re-fetch /xcp/credential-key")
     if CREDENTIAL_SOURCE == "operator":
         return _operator_credential()
     # Fail closed. An unrecognised mode must never default to somebody's key.

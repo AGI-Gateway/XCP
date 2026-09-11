@@ -71,7 +71,41 @@ if _SECURITY:
 else:
     _SECURITY_OK = False
 
+# ── abuse controls ─────────────────────────────────────────────────────────
+# A gateway published in a discovery catalog, routing for callers it has never
+# met, with no rate limit, is an open relay. Capacity follows authority: the
+# trust lattice already says how much a caller is trusted, so it also says how
+# much of this node's budget they may consume.
+_LIMITS = None
+if os.getenv("XCP_RATE_LIMIT", "1") == "1":
+    try:
+        import sys as _sys
+        _sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", ".."))
+        from trustfirewall.limits import RateLimiter
+        _LIMITS = RateLimiter(
+            global_rate_per_min=int(os.getenv("XCP_GLOBAL_RATE", "120000")),
+            global_concurrency=int(os.getenv("XCP_GLOBAL_CONCURRENCY", "256")),
+            fail_closed=os.getenv("XCP_LIMIT_FAIL_OPEN", "0") != "1")
+    except Exception as _e:
+        print(f"[gateway] rate limiting unavailable: {_e}", flush=True)
+
 app = FastAPI(title="XCP Gateway", version="0.1.0-draft")
+
+
+def _limit(ctx: "Ctx", method: str, scope: str = "", body: bytes = b""):
+    """Returns a 429 response if the caller is over budget, else None."""
+    if _LIMITS is None:
+        return None
+    tier = getattr(ctx.binding, "tier", "") if ctx.binding else ""
+    d = _LIMITS.check(agent_key=str(ctx.agent_id or ""), tier=tier,
+                      method=method, scope=scope, body_bytes=len(body))
+    if d.allowed:
+        return None
+    audit(ctx, "limit", f"{d.limit}: {d.reason}")
+    return JSONResponse({"error": f"XCP rate limit: {d.reason}",
+                        "limit": d.limit, "retryAfter": d.retry_after},
+                        status_code=429,
+                        headers={"Retry-After": str(max(1, d.retry_after))})
 
 if _PROM:
     M_REQ = Counter("xcp_gateway_requests_total", "requests",
@@ -102,6 +136,7 @@ class Binding:
     rails: int
     not_after: int
     revoked: bool = False
+    tier: str = ""            # trust-lattice cell; drives the caller's allowance
 
     def valid(self) -> bool:
         return not self.revoked and self.not_after > int(time.time())
@@ -114,10 +149,11 @@ class LocalRegistry:
         self._b: dict[str, Binding] = {}
 
     def bind(self, agent_id: int, footprint: str, mandate_root: str = "",
-             rails: int = 0b0011, ttl: int = 7 * 86400) -> Binding:
+             rails: int = 0b0011, ttl: int = 7 * 86400,
+             tier: str = "A0xH0") -> Binding:
         b = Binding(agent_id=agent_id, footprint=footprint,
                     mandate_root=mandate_root or "0x" + "00" * 32, rails=rails,
-                    not_after=int(time.time()) + min(ttl, 7 * 86400))
+                    not_after=int(time.time()) + min(ttl, 7 * 86400), tier=tier)
         self._b[footprint] = b
         return b
 
@@ -156,7 +192,8 @@ def verify_session(footprint: str, agent_id: int) -> tuple[bool, str, Binding | 
                 b = Binding(agent_id=int(d.get("agentId", 0)), footprint=footprint,
                             mandate_root=d.get("mandateRoot", ""),
                             rails=int(d.get("railsBitmap", 0)),
-                            not_after=int(time.time()) + 30)
+                            not_after=int(time.time()) + 30,
+                            tier=str(d.get("tier", "")))
                 if b.agent_id and agent_id and b.agent_id != agent_id:
                     return False, "agentId mismatch", None
                 return True, "", b
@@ -264,11 +301,12 @@ async def session_open(request: Request) -> JSONResponse:
     if not VERIFY_URL:
         b = registry.bind(agent_id, footprint,
                           mandate_root=body.get("mandateRoot", ""),
-                          rails=int(body.get("rails", 0b0011)))
+                          rails=int(body.get("rails", 0b0011)),
+                          tier=str(body.get("tier", "A0xH0")))
         _m(M_SESS, result="ok")
         return JSONResponse({"sessionId": f"sess-{footprint[:10]}",
                             "mandateRoot": b.mandate_root, "rails": b.rails,
-                            "notAfter": b.not_after})
+                            "tier": b.tier, "notAfter": b.not_after})
     # external verifier: the binding must already exist on-chain
     ok, reason, b = verify_session(footprint, agent_id)
     _m(M_SESS, result="ok" if ok else "reject")
@@ -294,8 +332,12 @@ async def a2t_call(request: Request) -> Response:
         _m(M_REQ, stream="a2t", decision="reject")
         audit(ctx, "a2t", f"({ctx.reason})")
         return _reject(ctx)
-    body = await request.json()
+    raw = await request.body()
+    body = json.loads(raw or b"{}")
     server, tool = body.get("server", ""), body.get("tool", "")
+    limited = _limit(ctx, "tools/call", f"mcp:tools/{tool}", raw)
+    if limited is not None:
+        return limited
     scope = f"mcp:tools/{tool}"
     ok, why = check_mandate(request.headers.get("xcp-mandate", ""),
                             ctx.binding, scope)
@@ -325,8 +367,12 @@ async def a2a_delegate(request: Request) -> Response:
     if not ctx.verified and POSTURE == "enforce":
         _m(M_REQ, stream="a2a", decision="reject")
         return _reject(ctx)
-    body = await request.json()
+    raw = await request.body()
+    body = json.loads(raw or b"{}")
     peer = body.get("peerDid", "")
+    limited = _limit(ctx, "tools/call", f"a2a:delegate/{peer}", raw)
+    if limited is not None:
+        return limited
     scope = f"a2a:delegate/{peer}"
     ok, why = check_mandate(request.headers.get("xcp-mandate", ""),
                             ctx.binding, scope)
@@ -349,8 +395,12 @@ async def t2t_pipe(request: Request) -> Response:
     if not ctx.verified and POSTURE == "enforce":
         _m(M_REQ, stream="t2t", decision="reject")
         return _reject(ctx)
-    body = await request.json()
+    raw = await request.body()
+    body = json.loads(raw or b"{}")
     src, dst = body.get("src", ""), body.get("dst", "")
+    limited = _limit(ctx, "tools/call", f"t2t:chain/{src}->{dst}", raw)
+    if limited is not None:
+        return limited
     scope = f"t2t:chain/{src}->{dst}"
     ok, why = check_mandate(request.headers.get("xcp-mandate", ""),
                             ctx.binding, scope)
@@ -439,5 +489,6 @@ async def metrics() -> Response:
 @app.get("/health")
 async def health() -> dict:
     return {"ok": True, "posture": POSTURE, "gateway": GATEWAY_ID,
+            "rateLimit": _LIMITS.stats() if _LIMITS else "disabled",
             "verifier": "external" if VERIFY_URL else "local",
             "upstreams": list(UPSTREAMS.keys())}

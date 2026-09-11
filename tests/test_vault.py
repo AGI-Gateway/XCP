@@ -1061,6 +1061,26 @@ def test_sealed_mode_publishes_a_key_endpoint():
     assert "/xcp/credential-key" in generate(_wrapspec(), credential_source="sealed")
 
 
+def test_sealed_mode_refuses_an_ephemeral_key_by_default():
+    """
+    Silently generating a new key on restart breaks every credential already
+    sealed to the wrapper, with no error anyone can see. Fail closed instead.
+    """
+    from connectors.wrap import generate
+    code = generate(_wrapspec(), credential_source="sealed")
+    assert "XCP_SEAL_EPHEMERAL" in code
+    assert "raise RuntimeError(" in code
+    i = code.index("sealed mode needs a persistent key")
+    assert "XCP_SEAL_PRIVATE" in code[i - 400:i + 400]
+
+
+def test_sealed_mode_supports_key_rotation():
+    """Rolling a key must not break requests already sealed to the old one."""
+    from connectors.wrap import generate
+    code = generate(_wrapspec(), credential_source="sealed")
+    assert "XCP_SEAL_PREVIOUS" in code
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]
