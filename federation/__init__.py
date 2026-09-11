@@ -12,6 +12,9 @@ from .node import (NodeRecord, Peer, Attestation, Federation, PeerTrust,
                    FederationError, NODE_RECORD_PATH, NODE_SPEC_VERSION,
                    DECAY_PER_HOP, MAX_HOPS)
 
+from .identity import (NodeIdentity, CertBinding, BindingSet, IdentityError,
+                       sign_binding, verify_binding, rotate, accept,
+                       node_id_from_address, ROTATION_GRACE)
 from .transport import (TransportReceipt, EpochCommitment, RoutingLedger,
                         RouteClass, sign_receipt, verify_receipt, merkle_root,
                         merkle_proof, verify_proof, bucket_count,
@@ -19,7 +22,10 @@ from .transport import (TransportReceipt, EpochCommitment, RoutingLedger,
                         prove_double_claim, prove_total_mismatch,
                         TransportError, EPOCH_SECONDS, CHALLENGE_WINDOW)
 
-__all__ = ["TransportReceipt", "EpochCommitment", "RoutingLedger", "RouteClass",
+__all__ = ["NodeIdentity", "CertBinding", "BindingSet", "IdentityError",
+           "sign_binding", "verify_binding", "rotate", "accept",
+           "node_id_from_address", "ROTATION_GRACE",
+           "TransportReceipt", "EpochCommitment", "RoutingLedger", "RouteClass",
            "sign_receipt", "verify_receipt", "merkle_root", "merkle_proof",
            "verify_proof", "bucket_count", "prove_bad_signature",
            "prove_not_in_tree", "prove_double_claim", "prove_total_mismatch",

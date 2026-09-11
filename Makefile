@@ -17,6 +17,7 @@ test: ## run every test suite
 	@echo "── self-serve layer ──"   && $(PY) tests/test_selfserve.py
 	@echo "── providers ──"          && $(PY) tests/test_providers.py
 	@echo "── federation ──"         && $(PY) tests/test_federation.py
+	@echo "── node identity ──"      && $(PY) tests/test_identity.py
 	@echo "── paid transport ──"     && $(PY) tests/test_transport.py
 	@echo "── abuse controls ──"     && $(PY) tests/test_limits.py
 	@echo "── vault + connectors ──" && $(PY) tests/test_vault.py

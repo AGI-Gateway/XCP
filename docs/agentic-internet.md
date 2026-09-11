@@ -73,8 +73,29 @@ shared session store**. Scale behind a plain round-robin load balancer.
 
 ## 2. Publish your node record
 
-Your node's identity is the footprint of its certificate,
-`keccak256(DER(cert))`, published on your own domain:
+Your node's identity is a **long-lived key**, not the certificate:
+
+```
+node_id       keccak(stable public key)      never changes
+cert binding  footprint + sequence + validity, SIGNED by the stable key
+```
+
+That split matters. If identity *were* the certificate footprint, every Let's
+Encrypt renewal would produce a stranger: peers orphaned, attestations others
+issued invalidated, revocations keyed to an id that no longer exists. A trust
+network whose members lose their identity four times a year is not a trust
+network.
+
+```bash
+python scripts/rotate-cert.py --init      # once — store XCP_NODE_KEY safely
+```
+
+!!! danger "Guard the node key"
+    Rotating a certificate is routine. Rotating this key is not — losing it
+    means losing the node's identity and every attestation any peer has made
+    about it. Keep it in a secret backend, not on the web server.
+
+Then publish the record:
 
 ```python
 from federation import build_node_record
@@ -90,6 +111,30 @@ open("well-known/xcp-node.json","w").write(rec.to_json())
 ```
 
 Serve it at **`/.well-known/xcp-node.json`**, unauthenticated (RFC 8615).
+
+### Renewal is automatic and costs you nothing
+
+```bash
+# /etc/letsencrypt/renewal-hooks/deploy/xcp-rotate.sh
+XCP_NODE_KEY=... python scripts/rotate-cert.py \
+    --cert "$RENEWED_LINEAGE/fullchain.pem" \
+    --domain node.example.org \
+    --record /var/www/.well-known/xcp-node.json
+```
+
+A renewal publishes a **new signed binding, not a new node**. Peers pick it up on
+their next fetch; trust, hop counts and introductions all survive. No re-peering.
+
+Two details that make it safe rather than merely convenient:
+
+- **Overlap.** Both certificates are briefly live during a renewal, so a record
+  carries the current binding *and* the previous one. A peer connecting
+  mid-rotation verifies against the old certificate and notes the rotation
+  instead of alarming. The grace window closes after 48 hours.
+- **Downgrade.** Bindings carry a monotonic sequence, and a peer refuses any
+  binding older than the newest it has seen. Without that, an attacker could
+  replay a superseded binding to make peers accept a certificate you rotated
+  away from — perhaps one whose key they stole.
 
 That file plus your TLS certificate is your entire claim to identity. There is no
 registration step, because there is nobody to register with.
@@ -355,8 +400,6 @@ This is a design and a working implementation, not a running network.
 - **Web-of-trust models have a known history of not scaling socially** — PGP is
   the cautionary example. Decay and hop caps limit the damage but don't make the
   social problem go away.
-- **Certificate rotation breaks peering** until records are republished. That is
-  operational friction we haven't automated.
 - **None of this has had an independent security audit.** That goes double for
   the contract: `NodeRegistry.sol` has not been audited, formally verified, or
   deployed to any network.

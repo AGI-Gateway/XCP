@@ -118,7 +118,8 @@ class NodeRecord:
     peer needs nothing but this file and the TLS connection that served it.
     """
     domain: str
-    node_id: str                       # keccak256(DER(node cert))
+    node_id: str                       # STABLE: keccak(long-lived public key).
+                                       # Not the certificate — see identity.py.
     gateway_url: str
     spec_version: str = NODE_SPEC_VERSION
     mcp_spec: str = "2026-07-28"
@@ -135,6 +136,15 @@ class NodeRecord:
     cluster_id: str = ""               # membership root is on-chain, roster is not
     transport_price_minor: int = 0     # what this node charges per routed call
     accepts_paid_routing: bool = False
+    seed_peers_extra: list = field(default_factory=list)
+    # Signed statement binding the current TLS certificate to the stable
+    # identity. Rotating a certificate republishes THIS, not the node id.
+    bindings: Optional[dict] = None
+    cert_footprint: str = ""           # convenience mirror of bindings.current
+
+    @property
+    def sequence(self) -> int:
+        return int(((self.bindings or {}).get("current") or {}).get("sequence", 0))
     seed_peers: list[str] = field(default_factory=list)   # domains, for bootstrap
     published_at: int = 0
 
@@ -146,6 +156,9 @@ class NodeRecord:
 
     def validate(self) -> list[str]:
         p = []
+        if self.cert_footprint and self.bindings is None:
+            p.append("cert_footprint present with no signed binding — a peer "
+                     "cannot tell whether this identity really presents it")
         if self.accepts_paid_routing and not self.bonded:
             p.append("a node charging for routing must post a bond — otherwise "
                      "there is nothing to slash when it bills for traffic nobody sent")
@@ -199,6 +212,7 @@ class Peer:
     introduced_by: str = ""            # which peer vouched, if transitive
     last_seen: int = 0
     revoked: bool = False
+    sequence: int = 0          # highest binding sequence seen; blocks replay
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -235,7 +249,8 @@ class Attestation:
 # ── verification: the whole point ──────────────────────────────────────────
 
 def verify_node_record(record: NodeRecord, tls_cert_der: bytes,
-                       served_from_domain: str) -> list[str]:
+                       served_from_domain: str,
+                       known_sequence: int = 0) -> list[str]:
     """
     Verify a peer with no third party involved.
 
@@ -253,8 +268,28 @@ def verify_node_record(record: NodeRecord, tls_cert_der: bytes,
         problems.append(
             f"record claims {record.domain} but was served from {served_from_domain}")
     actual = digest(tls_cert_der)
-    if actual.lower() != record.node_id.lower():
-        problems.append("node_id does not match the certificate presented over TLS")
+
+    if record.bindings:
+        # Current model: a stable identity attesting to a rotating certificate.
+        from .identity import BindingSet, accept
+        try:
+            bs = BindingSet.from_dict(record.bindings)
+        except Exception as e:
+            problems.append(f"malformed certificate binding: {e}")
+            return problems
+        ok, which, notes = accept(bs, tls_footprint=actual,
+                                  expected_node_id=record.node_id,
+                                  expected_domain=record.domain,
+                                  known_sequence=known_sequence)
+        if not ok:
+            problems.extend(notes or ["certificate binding did not verify"])
+        elif which == "previous":
+            problems.extend([])          # accepted; rotation in progress
+    elif actual.lower() != record.node_id.lower():
+        # Legacy record: identity IS the certificate. Still verifiable, but it
+        # cannot survive a renewal — flagged so operators migrate.
+        problems.append("node_id does not match the certificate presented over "
+                        "TLS (legacy record with no signed binding)")
     return problems
 
 
@@ -282,12 +317,36 @@ class Federation:
 
     # ---- direct peering ----
     def add_verified_peer(self, domain: str, node_id: str, gateway_url: str = "",
-                          mutual: bool = False, now: Optional[int] = None) -> Peer:
+                          mutual: bool = False, now: Optional[int] = None,
+                          sequence: int = 0) -> Peer:
+        existing = self.peers.get(domain.lower())
+        if existing and sequence and sequence < existing.sequence:
+            raise FederationError(
+                f"binding sequence {sequence} is older than the {existing.sequence} "
+                "already seen — refusing a replayed certificate binding")
         p = Peer(domain=domain.lower(), node_id=node_id, gateway_url=gateway_url,
                  trust=PeerTrust.PEERED if mutual else PeerTrust.VERIFIED,
-                 hops=1, weight=1.0, last_seen=now or int(time.time()))
+                 hops=1, weight=1.0, last_seen=now or int(time.time()),
+                 sequence=max(sequence, existing.sequence if existing else 0))
         self.peers[p.domain] = p
         return p
+
+    def note_rotation(self, domain: str, node_id: str, sequence: int) -> bool:
+        """
+        A peer rotated its certificate. Because identity is the stable key, this
+        is a routine update rather than a new peer: trust, hops and any
+        attestations that introduced them all survive.
+        """
+        p = self.peers.get(domain.lower())
+        if p is None:
+            return False
+        if p.node_id.lower() != node_id.lower():
+            return False           # different identity entirely, not a rotation
+        if sequence <= p.sequence:
+            return False           # replay or stale
+        p.sequence = sequence
+        p.last_seen = int(time.time())
+        return True
 
     # ---- transitive trust ----
     def ingest_attestation(self, att: Attestation,
