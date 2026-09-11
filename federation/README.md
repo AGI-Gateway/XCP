@@ -250,6 +250,103 @@ and climb as you probe, pin or contract with them.
 
 ---
 
+## Optional: bonded federation and paid transport
+
+Everything above works with **no chain at all**, and that stays true. This
+section is a tier you opt into, not the floor.
+
+### Why a chain earns its place here
+
+Three things gossip cannot do:
+
+| problem | why off-chain fails | what the chain adds |
+|---|---|---|
+| **Revocation** | only reaches you if a peer tells you; a compromised node whose peers stay quiet keeps working | one transaction, visible to every reader in a block, **unsuppressable** |
+| **Sybil resistance** | transitive trust with decay does not survive *free* identities — a thousand fake nodes vouching for each other defeats decay alone | a **slashable bond** makes identity cost something, with no gatekeeper deciding who may join |
+| **Paying strangers** | escrow needs a neutral holder | a contract is exactly that |
+
+### The incentive: routing is a business, not a favour
+
+An agent's workflow routes through your node; you supply transport, session
+verification and mandate enforcement; **you get paid per routed call**.
+
+```python
+from federation import RoutingLedger, TransportReceipt, RouteClass, sign_receipt
+
+led = RoutingLedger(node_id=my_node_id)
+led.record(sign_receipt(payer_key, TransportReceipt(      # the PAYER signs
+    route_id=rid, node_id=my_node_id, payer_agent=42001,
+    route_class=RouteClass.A2T, price_minor=5)))
+commitment = led.commit(epoch, bucket=100)               # the only public artifact
+```
+
+A billable receipt carries the **payer's** signature, not the node's. That is the
+anti-fraud property: you cannot invent traffic somebody else has to sign.
+
+### The public / private boundary
+
+Paying per route means counting routes, and counting routes in public leaks the
+topology. So a node publishes **one commitment per epoch** — a Merkle root plus
+totals — and nothing else.
+
+| on-chain (public) | off-chain (private) |
+|---|---|
+| node identity, bond, revocations | who routed to whom |
+| per-epoch root, route count, total | individual receipts, scopes, timing |
+| cluster **membership root** | the member roster |
+| slashes and challenges | per-counterparty volumes |
+
+Scope and counterparty are excluded from the signed payload itself, so even
+someone who later obtains a leaf learns nothing about the workload — tested.
+
+!!! warning "The residual leak, stated plainly"
+    `route_count` is a volume signal over time. `bucket_count()` rounds it up
+    before publishing — a node claiming *"between 900 and 1000 routes"* leaks far
+    less than one claiming 947 — while the amount owed stays exact. It reduces
+    the signal; it does not eliminate it.
+
+### Private clusters: roots, never rosters
+
+A cluster publishes a **membership Merkle root** and a policy hash. A member
+proves inclusion with a Merkle proof; an outsider can verify *"this cluster
+exists, is bonded, and this counterparty belongs to it"* **without learning who
+else is in it**. Two clusters can interact cluster-to-cluster, neither exposing
+its members.
+
+A fully private deployment simply never publishes a root and federates
+bilaterally, exactly as before.
+
+### Claims are optimistic, challenges are checkable
+
+A node posts a commitment, waits out a challenge window, then withdraws. Anyone
+may challenge with a **proof rather than an accusation**:
+
+- a receipt whose payer signature does not verify
+- a leaf that is not under the claimed root
+- a route id billed in two epochs
+- totals that do not match the disclosed set
+
+Each is mechanically checkable, which is what makes slashing defensible rather
+than political. A challenger takes a share of the slash, because a challenger
+with no payout has no reason to look.
+
+### Bonds lift trust, but never past a peer you verified
+
+`Federation.bond_weight()` is capped below `1.0` deliberately. Money buys a
+hearing, never the standing of a direct relationship — otherwise a rich Sybil
+outranks a peer you checked yourself.
+
+!!! danger "Before you deploy this with value at stake"
+    Staking is a **regulated activity** in most jurisdictions: slashing is
+    arguably a penalty regime, bonds resemble deposits, and a native token would
+    raise securities questions. The design is settlement-asset agnostic on
+    purpose — it works with a stablecoin or an existing rail and needs no token.
+    Get legal advice before it needs a contract.
+
+    Also: "blockchain" is the worst possible framing for the enterprise security
+    buyer this project needs. Lead with *verifiable, instantly revocable,
+    vendor-neutral*. The chain is an implementation detail two questions in.
+
 ## Honest limits
 
 This is a design and a working implementation, not a running network.
@@ -261,6 +358,11 @@ This is a design and a working implementation, not a running network.
   social problem go away.
 - **Certificate rotation breaks peering** until records are republished. That is
   operational friction we haven't automated.
-- **None of this has had an independent security audit.**
+- **None of this has had an independent security audit.** That goes double for
+  the contract: `NodeRegistry.sol` has not been audited, formally verified, or
+  deployed to any network.
+- **Optimistic claiming assumes somebody challenges.** The fraud proofs are
+  sound, but they only bite if a party with a stake actually checks. In a sparse
+  federation that assumption is weak.
 - XCP and ERC-8004x are **draft proposals originated in this project**. MCP, A2A,
   ERC-8004, ARD and the OWASP taxonomies are independent work by others.

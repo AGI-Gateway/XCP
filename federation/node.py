@@ -127,14 +127,30 @@ class NodeRecord:
     accepts_peering: bool = True
     federates_catalogs: bool = True    # will ingest peers' ARD catalogs
     relays_revocations: bool = True    # will gossip revocations onward
-    # optional, NOT required
+    # optional, NOT required — a node with chain_id 0 federates normally
     chain_id: int = 0                  # 0 = no chain anchoring
     session_registry: str = ""
+    node_registry: str = ""            # NodeRegistry address, if bonded
+    bond_minor: int = 0                # stake backing this node's identity
+    cluster_id: str = ""               # membership root is on-chain, roster is not
+    transport_price_minor: int = 0     # what this node charges per routed call
+    accepts_paid_routing: bool = False
     seed_peers: list[str] = field(default_factory=list)   # domains, for bootstrap
     published_at: int = 0
 
+    @property
+    def bonded(self) -> bool:
+        """A bonded node has something to lose, which is what makes transitive
+        trust survive cheap identities."""
+        return bool(self.node_registry) and self.bond_minor > 0
+
     def validate(self) -> list[str]:
         p = []
+        if self.accepts_paid_routing and not self.bonded:
+            p.append("a node charging for routing must post a bond — otherwise "
+                     "there is nothing to slash when it bills for traffic nobody sent")
+        if self.transport_price_minor < 0:
+            p.append("negative transport price")
         if not self.domain or "/" in self.domain:
             p.append("domain must be a bare hostname")
         if not self.node_id.startswith("0x") or len(self.node_id) < 34:
@@ -308,6 +324,17 @@ class Federation:
                  last_seen=now)
         self.peers[subject] = p
         return p
+
+    def bond_weight(self, bond_minor: int, floor: int = 0) -> float:
+        """
+        How much a bond may lift an introduced peer. Capped below 1.0 on purpose:
+        money buys you a hearing, never the standing of a peer you verified
+        yourself. Without that cap, a rich Sybil outranks a direct relationship.
+        """
+        if bond_minor <= floor:
+            return 0.0
+        import math
+        return min(0.45, 0.15 * math.log10(1 + bond_minor / max(floor or 1, 1)))
 
     def trust_of(self, domain: str) -> tuple[PeerTrust, float]:
         p = self.peers.get(domain.lower())

@@ -18,6 +18,7 @@ jobs:
           pip install eth-account eth-utils
           python tests/test_providers.py
           python tests/test_federation.py
+          python tests/test_transport.py
           pip install pyyaml
           python tests/test_vault.py
           python tests/test_trustfirewall.py
