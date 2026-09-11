@@ -3,7 +3,10 @@
 
 image:
   repository: ghcr.io/agi-gateway/xcp
-  tag: "0.1.0-draft"
+  tag: "0.1.0"
+  # Pin by digest in production. A tag is mutable; a digest is not, and this
+  # chart deploys the component that enforces everyone else's supply chain.
+  digest: ""          # e.g. sha256:abc123...
   pullPolicy: IfNotPresent
 
 gateway:

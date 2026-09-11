@@ -1,0 +1,133 @@
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: "Tag to publish (e.g. v0.1.0)"
+        required: true
+
+permissions:
+  contents: read
+  packages: write
+  id-token: write        # keyless signing via OIDC — no key to leak or rotate
+  attestations: write
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE: ${{ github.repository_owner }}/xcp
+
+jobs:
+  test:
+    name: Tests must pass before anything is published
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r requirements.txt pyyaml
+      - run: make test
+
+  image:
+    name: Build, sign and publish
+    needs: test
+    runs-on: ubuntu-latest
+    outputs:
+      digest: ${{ steps.build.outputs.digest }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: docker/setup-qemu-action@v3
+      - uses: docker/setup-buildx-action@v3
+
+      - name: Log in to ghcr.io
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Derive tags
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          tags: |
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Build and push
+        id: build
+        uses: docker/build-push-action@v6
+        with:
+          context: .
+          platforms: linux/amd64,linux/arm64
+          push: true
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          provenance: true
+          sbom: true
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+
+      # This repository enforces signed, digest-pinned tool manifests through
+      # xcpsec.supplychain. Publishing unsigned images while demanding that of
+      # everyone else would be indefensible.
+      - name: Install cosign
+        uses: sigstore/cosign-installer@v3
+
+      - name: Sign the image (keyless)
+        run: |
+          cosign sign --yes \
+            "${REGISTRY}/${IMAGE}@${{ steps.build.outputs.digest }}"
+
+      - name: Attest build provenance
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          subject-digest: ${{ steps.build.outputs.digest }}
+          push-to-registry: true
+
+      - name: Report the digest
+        run: |
+          echo "### Published" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "${REGISTRY}/${IMAGE}@${{ steps.build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY
+          echo "Pin this digest in deploy/helm/values.yaml." >> $GITHUB_STEP_SUMMARY
+
+  verify:
+    name: Verify the published image is signed and runs
+    needs: image
+    runs-on: ubuntu-latest
+    steps:
+      - uses: sigstore/cosign-installer@v3
+      - name: Verify the signature
+        run: |
+          cosign verify \
+            --certificate-identity-regexp "^https://github.com/${{ github.repository }}/" \
+            --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+            "${REGISTRY}/${IMAGE}@${{ needs.image.outputs.digest }}"
+      - name: Every role must actually start
+        run: |
+          for role in gateway server verifier; do
+            port=$([ "$role" = gateway ] && echo 8080 || { [ "$role" = server ] && echo 9001 || echo 8500; })
+            docker run -d --name "xcp-$role" -e ROLE=$role -p $port:$port \
+              "${REGISTRY}/${IMAGE}@${{ needs.image.outputs.digest }}"
+            for i in $(seq 1 30); do
+              curl -fsS "http://127.0.0.1:$port/health" && break || sleep 2
+            done
+            curl -fsS "http://127.0.0.1:$port/health" | tee /dev/stderr | grep -q '"ok": *true'
+            docker rm -f "xcp-$role"
+          done
+      - name: The gateway must refuse to start without its abuse controls
+        run: |
+          if docker run --rm -e ROLE=gateway -e XCP_RATE_LIMIT=1 \
+               --entrypoint python "${REGISTRY}/${IMAGE}@${{ needs.image.outputs.digest }}" \
+               -c "import sys;sys.modules['trustfirewall']=None;import core.gateway.xcp_gateway"; then
+            echo "gateway started without abuse controls — refusing to release" >&2
+            exit 1
+          fi

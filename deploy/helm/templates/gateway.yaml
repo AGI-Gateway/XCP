@@ -13,11 +13,12 @@ spec:
       securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
       containers:
         - name: gateway
-          image: "{{ .Values.image.repository }}-gateway:{{ .Values.image.tag }}"
+          image: "{{ .Values.image.repository }}{{ if .Values.image.digest }}@{{ .Values.image.digest }}{{ else }}:{{ .Values.image.tag }}{{ end }}"
           imagePullPolicy: {{ .Values.image.pullPolicy }}
           securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
           ports: [{containerPort: 8080, name: http}]
           env:
+            - {name: ROLE,          value: "gateway"}
             - {name: XCP_POSTURE,   value: {{ .Values.gateway.posture | quote }}}
             - {name: XCP_SECURITY,  value: {{ .Values.gateway.security | quote }}}
             - {name: XCP_UPSTREAMS, value: {{ .Values.gateway.upstreams | toJson | quote }}}

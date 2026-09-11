@@ -65,9 +65,12 @@ if _SECURITY:
         from xcpsec.argfirewall import ArgumentFirewall as _ArgFW, ArgSpec as _ArgSpec
         _guard = _Guard()
         _SECURITY_OK = True
-    except Exception as _e:      # library missing -> degrade gracefully
-        print(f"[gateway] XCP_SECURITY=1 but xcpsec unavailable: {_e}", flush=True)
-        _SECURITY_OK = False
+    except Exception as _e:
+        # Same reasoning: asking for the argument firewall and silently not
+        # getting it is worse than a clear failure at boot.
+        raise RuntimeError(
+            f"XCP_SECURITY=1 but xcpsec is unavailable ({_e}). Refusing to start "
+            "with security controls the operator asked for silently disabled.") from _e
 else:
     _SECURITY_OK = False
 
@@ -87,7 +90,15 @@ if os.getenv("XCP_RATE_LIMIT", "1") == "1":
             global_concurrency=int(os.getenv("XCP_GLOBAL_CONCURRENCY", "256")),
             fail_closed=os.getenv("XCP_LIMIT_FAIL_OPEN", "0") != "1")
     except Exception as _e:
-        print(f"[gateway] rate limiting unavailable: {_e}", flush=True)
+        # Fail closed. A gateway that silently runs without abuse controls is an
+        # open relay, and the most likely cause of this import failing is a
+        # container image missing the module — exactly the case where nobody is
+        # reading stdout. Set XCP_RATE_LIMIT=0 to run unprotected on purpose.
+        raise RuntimeError(
+            f"abuse controls are enabled but unavailable ({_e}). This gateway "
+            "will not start without them: routing for callers you have never met "
+            "with no rate limit is an open relay. Set XCP_RATE_LIMIT=0 to "
+            "override deliberately.") from _e
 
 app = FastAPI(title="XCP Gateway", version="0.1.0-draft")
 

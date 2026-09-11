@@ -1,5 +1,43 @@
 # Deployment
 
+## Container image
+
+One image, three roles. Three separate images drifted once — the gateway build
+shipped without the modules the gateway had grown to import, so abuse controls
+and the argument firewall were silently absent in the only artifact anyone would
+actually deploy. One image with a role selector cannot drift that way.
+
+```bash
+docker run -e ROLE=gateway  -p 8080:8080 ghcr.io/agi-gateway/xcp
+docker run -e ROLE=server   -p 9001:9001 ghcr.io/agi-gateway/xcp
+docker run -e ROLE=verifier -p 8500:8500 ghcr.io/agi-gateway/xcp
+```
+
+Images are multi-arch, run as UID 10001, carry an SBOM and build provenance, and
+are **signed with cosign** using keyless OIDC:
+
+```bash
+cosign verify \
+  --certificate-identity-regexp '^https://github.com/AGI-Gateway/XCP/' \
+  --certificate-oidc-issuer https://token.actions.githubusercontent.com \
+  ghcr.io/agi-gateway/xcp@sha256:<digest>
+```
+
+Signing is not decoration here: this codebase refuses to load a connector whose
+manifest is unsigned, so publishing unsigned images would be indefensible.
+
+!!! tip "Pin the digest"
+    A tag is mutable; a digest is not. Set `image.digest` in Helm for anything
+    you care about — this chart deploys the component that polices everyone
+    else's supply chain.
+
+### The gateway refuses to start without its controls
+
+If `XCP_RATE_LIMIT=1` (the default) and the limiter cannot load, the gateway
+**fails to boot** rather than silently routing for strangers with no limits. Set
+`XCP_RATE_LIMIT=0` to run unprotected deliberately. The release pipeline asserts
+this: a build where the gateway starts without abuse controls is not published.
+
 ## Docker Compose
 
 ```bash

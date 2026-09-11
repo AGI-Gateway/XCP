@@ -1,35 +1,40 @@
-# XCP local stack: verifier + gateway + a reference MCP server.
+# XCP local stack. Builds the single role-selected image from the repo root, so
+# what you run locally is the same artifact that gets published.
 #
 #   cd deploy && docker compose up --build
-#   # gateway  -> http://localhost:8080  (health, /metrics)
-#   # verifier -> http://localhost:8500
-#   # server   -> http://localhost:9001
+#   gateway -> :8080   verifier -> :8500   server -> :9001
 #
-# Build context is the repo root so images can COPY the contracts ABI.
+# To run the published image instead, replace `build:` with:
+#   image: ghcr.io/agi-gateway/xcp@sha256:<digest>
 name: xcp
+
+x-image: &image
+  build:
+    context: ..
+    dockerfile: Dockerfile
 
 services:
   verifier:
-    build:
-      context: ..
-      dockerfile: verifier/Dockerfile
+    <<: *image
+    environment: {ROLE: verifier}
     ports: ["8500:8500"]
-    # on-chain mode: set CHAIN_RPC + SESSION_REGISTRY here.
 
   server:
-    build:
-      context: ../server
+    <<: *image
     environment:
+      ROLE: server
       REQUIRE_VERIFIED: "1"
-      XCP_SERVER_NAME: "research"
+      XCP_SERVER_NAME: research
     expose: ["9001"]
 
   gateway:
-    build:
-      context: ../gateway
+    <<: *image
     depends_on: [verifier, server]
     environment:
-      XCP_POSTURE: "enforce"
-      XCP_VERIFY_URL: "http://verifier:8500"
+      ROLE: gateway
+      XCP_POSTURE: enforce
+      XCP_SECURITY: "1"
+      XCP_RATE_LIMIT: "1"
+      XCP_VERIFY_URL: http://verifier:8500
       XCP_UPSTREAMS: '{"research":"http://server:9001/mcp"}'
     ports: ["8080:8080"]
