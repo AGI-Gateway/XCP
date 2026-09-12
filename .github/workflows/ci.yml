@@ -22,6 +22,7 @@ jobs:
           python tests/test_transport.py
           python tests/test_limits.py
           python tests/test_packaging.py
+          python tests/test_version.py
           pip install pyyaml
           python tests/test_vault.py
           python tests/test_trustfirewall.py

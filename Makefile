@@ -22,6 +22,7 @@ test: ## run every test suite
 	@echo "── abuse controls ──"     && $(PY) tests/test_limits.py
 	@echo "── packaging ──"          && $(PY) tests/test_packaging.py
 	@echo "── conformance ──"        && $(PY) tests/test_conformance.py
+	@echo "── version negotiation ──" && $(PY) tests/test_version.py
 	@echo "── vault + connectors ──" && $(PY) tests/test_vault.py
 	@echo "── receipts ──"           && $(PY) tests/test_receipts.py
 	@echo "── trust firewall ──"     && $(PY) tests/test_trustfirewall.py

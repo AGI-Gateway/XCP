@@ -139,6 +139,8 @@ class NodeRecord:
     seed_peers_extra: list = field(default_factory=list)
     # Signed statement binding the current TLS certificate to the stable
     # identity. Rotating a certificate republishes THIS, not the node id.
+    protocol_versions: list = field(default_factory=list)
+    features: list = field(default_factory=list)
     bindings: Optional[dict] = None
     cert_footprint: str = ""           # convenience mirror of bindings.current
 
@@ -190,6 +192,12 @@ def build_node_record(domain: str, cert_pem: bytes, gateway_url: str,
     from cryptography import x509
     from cryptography.hazmat.primitives.serialization import Encoding
     der = x509.load_pem_x509_certificate(cert_pem).public_bytes(Encoding.DER)
+    try:
+        from protocol import SUPPORTED, IMPLEMENTED
+        kw.setdefault("protocol_versions", list(SUPPORTED))
+        kw.setdefault("features", sorted(f.value for f in IMPLEMENTED))
+    except Exception:
+        pass
     rec = NodeRecord(domain=domain, node_id=digest(der),
                      gateway_url=gateway_url,
                      published_at=int(time.time()), **kw)
@@ -248,6 +256,22 @@ class Attestation:
 
 # ── verification: the whole point ──────────────────────────────────────────
 
+def protocol_incompatible(record: NodeRecord) -> Optional[str]:
+    """
+    Whether we can talk to this peer at all. Checked before peering so an
+    incompatibility is a clear refusal rather than a mysterious failure on the
+    first call.
+    """
+    if not record.protocol_versions:
+        return None                      # legacy record; assume the baseline
+    try:
+        from protocol import compatible_with
+    except Exception:
+        return None
+    ok, msg = compatible_with({"protocolVersions": list(record.protocol_versions)})
+    return None if ok else msg
+
+
 def verify_node_record(record: NodeRecord, tls_cert_der: bytes,
                        served_from_domain: str,
                        known_sequence: int = 0) -> list[str]:
@@ -264,6 +288,9 @@ def verify_node_record(record: NodeRecord, tls_cert_der: bytes,
     entire trust argument, and it is the same one the web already runs on.
     """
     problems = record.validate()
+    incompat = protocol_incompatible(record)
+    if incompat:
+        problems.append(f"cannot federate: {incompat}")
     if served_from_domain.lower() != record.domain.lower():
         problems.append(
             f"record claims {record.domain} but was served from {served_from_domain}")

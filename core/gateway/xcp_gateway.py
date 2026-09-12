@@ -103,6 +103,31 @@ if os.getenv("XCP_RATE_LIMIT", "1") == "1":
 app = FastAPI(title="XCP Gateway", version="0.1.0-draft")
 
 
+def _negotiate(request: "Request"):
+    """
+    Agree a wire version before doing anything else. Returns (headers, error).
+    A caller this build cannot talk to is refused with the list it does support,
+    rather than being served a response it may misread.
+    """
+    try:
+        from protocol import negotiate, parse_accept, response_headers, \
+            VersionError, SUPPORTED
+    except Exception:
+        return {}, None
+    h = {k.lower(): v for k, v in request.headers.items()}
+    try:
+        n = negotiate(parse_accept(h.get("xcp-accept-versions", "")),
+                      client_features=[f for f in
+                                       h.get("xcp-features", "").split(",") if f]
+                      or None)
+    except VersionError as e:
+        return {}, JSONResponse(
+            {"error": f"XCP version negotiation failed: {e}",
+             "supported": list(SUPPORTED)},
+            status_code=400)
+    return response_headers(n), None
+
+
 def _limit(ctx: "Ctx", method: str, scope: str = "", body: bytes = b"",
            request: "Request" = None):
     """
@@ -361,6 +386,9 @@ async def session_close(request: Request) -> JSONResponse:
 @app.post("/v1/a2t/call")
 async def a2t_call(request: Request) -> Response:
     """Agent -> Tool. Verify session + mandate, route to the MCP server."""
+    vhdr, verr = _negotiate(request)
+    if verr is not None:
+        return verr
     ctx = parse_ctx(request)
     limited = _limit(ctx, "tools/call", request=request)
     if limited is not None:
@@ -400,6 +428,9 @@ async def a2t_call(request: Request) -> Response:
 @app.post("/v1/a2a/delegate")
 async def a2a_delegate(request: Request) -> Response:
     """Agent <-> Agent. BOTH peers must be verified; gate the delegate scope."""
+    vhdr, verr = _negotiate(request)
+    if verr is not None:
+        return verr
     ctx = parse_ctx(request)
     limited = _limit(ctx, "tools/call", request=request)
     if limited is not None:
@@ -431,6 +462,9 @@ async def a2a_delegate(request: Request) -> Response:
 @app.post("/v1/t2t/pipe")
 async def t2t_pipe(request: Request) -> Response:
     """Tool <-> Tool. Mandate carried on the hop; no agent round-trip."""
+    vhdr, verr = _negotiate(request)
+    if verr is not None:
+        return verr
     ctx = parse_ctx(request)
     limited = _limit(ctx, "tools/call", request=request)
     if limited is not None:
@@ -531,7 +565,13 @@ async def metrics() -> Response:
 
 @app.get("/health")
 async def health() -> dict:
-    return {"ok": True, "posture": POSTURE, "gateway": GATEWAY_ID,
+    _adv = {}
+    try:
+        from protocol import advertisement
+        _adv = advertisement()
+    except Exception:
+        pass
+    return {"ok": True, "posture": POSTURE, "gateway": GATEWAY_ID, **_adv,
             "rateLimit": _LIMITS.stats() if _LIMITS else "disabled",
             "verifier": "external" if VERIFY_URL else "local",
             "upstreams": list(UPSTREAMS.keys())}

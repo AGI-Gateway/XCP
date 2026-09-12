@@ -252,6 +252,13 @@ def normalise_ard_catalog(doc: Any, source: Source) -> list[IngestedEntry]:
         if not url.startswith("https://"):
             continue
         trust = e.get("trust") or {}
+        # A rename shipped in 0.2. Accept the old spelling until it is retired,
+        # so catalogs published before the change keep resolving.
+        try:
+            from protocol import read_compat
+            _tier, _warn = read_compat(trust, "xcpTrustTier")
+        except Exception:
+            _tier, _warn = trust.get("xcpTrustTier"), None
         out.append(IngestedEntry(
             id=_slug(str(e.get("id") or e.get("name") or url)),
             name=str(e.get("name", "")) or url, endpoint_url=url,
