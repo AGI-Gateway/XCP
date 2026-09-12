@@ -103,12 +103,27 @@ if os.getenv("XCP_RATE_LIMIT", "1") == "1":
 app = FastAPI(title="XCP Gateway", version="0.1.0-draft")
 
 
-def _limit(ctx: "Ctx", method: str, scope: str = "", body: bytes = b""):
-    """Returns a 429 response if the caller is over budget, else None."""
+def _limit(ctx: "Ctx", method: str, scope: str = "", body: bytes = b"",
+           request: "Request" = None):
+    """
+    Returns a 429 response if the caller is over budget, else None.
+
+    Called BEFORE session verification as well as after: rejecting a request
+    with 401 still costs a registry lookup, so an unauthenticated flood is a
+    denial-of-service vector unless it is metered too. Unverified callers are
+    keyed on their source address, because there is no identity to key on yet
+    and one attacker must not be able to starve every other anonymous caller.
+    """
     if _LIMITS is None:
         return None
-    tier = getattr(ctx.binding, "tier", "") if ctx.binding else ""
-    d = _LIMITS.check(agent_key=str(ctx.agent_id or ""), tier=tier,
+    if ctx.verified and ctx.binding is not None:
+        tier = getattr(ctx.binding, "tier", "")
+        key = str(ctx.agent_id or "")
+    else:
+        tier = ""                       # the austere anonymous allowance
+        key = (getattr(getattr(request, "client", None), "host", "") or
+               f"unverified:{ctx.agent_id or 0}")
+    d = _LIMITS.check(agent_key=key, tier=tier,
                       method=method, scope=scope, body_bytes=len(body))
     if d.allowed:
         return None
@@ -301,6 +316,14 @@ def _deny(scope: str, why: str) -> JSONResponse:
 @app.post("/v1/session/open")
 async def session_open(request: Request) -> JSONResponse:
     """Bind a certificate footprint to an agent (channel-bound session)."""
+    if _LIMITS is not None:
+        _d = _LIMITS.check(
+            agent_key=getattr(getattr(request, "client", None), "host", "") or "anon",
+            tier="", method="tools/list")
+        if not _d.allowed:
+            return JSONResponse({"error": f"XCP rate limit: {_d.reason}"},
+                                status_code=429,
+                                headers={"Retry-After": str(max(1, _d.retry_after))})
     body = await request.json()
     footprint = body.get("footprint", "")
     agent_id = int(body.get("agentId", 0))
@@ -339,6 +362,9 @@ async def session_close(request: Request) -> JSONResponse:
 async def a2t_call(request: Request) -> Response:
     """Agent -> Tool. Verify session + mandate, route to the MCP server."""
     ctx = parse_ctx(request)
+    limited = _limit(ctx, "tools/call", request=request)
+    if limited is not None:
+        return limited
     if not ctx.verified and POSTURE == "enforce":
         _m(M_REQ, stream="a2t", decision="reject")
         audit(ctx, "a2t", f"({ctx.reason})")
@@ -375,6 +401,9 @@ async def a2t_call(request: Request) -> Response:
 async def a2a_delegate(request: Request) -> Response:
     """Agent <-> Agent. BOTH peers must be verified; gate the delegate scope."""
     ctx = parse_ctx(request)
+    limited = _limit(ctx, "tools/call", request=request)
+    if limited is not None:
+        return limited
     if not ctx.verified and POSTURE == "enforce":
         _m(M_REQ, stream="a2a", decision="reject")
         return _reject(ctx)
@@ -403,6 +432,9 @@ async def a2a_delegate(request: Request) -> Response:
 async def t2t_pipe(request: Request) -> Response:
     """Tool <-> Tool. Mandate carried on the hop; no agent round-trip."""
     ctx = parse_ctx(request)
+    limited = _limit(ctx, "tools/call", request=request)
+    if limited is not None:
+        return limited
     if not ctx.verified and POSTURE == "enforce":
         _m(M_REQ, stream="t2t", decision="reject")
         return _reject(ctx)

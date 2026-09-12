@@ -62,6 +62,7 @@ nav:
       - Vault & authentication: vault.md
   - Operate:
       - Security model: security.md
+      - Conformance: conformance.md
       - Deployment: deployment.md
       - Run a node — the Agentic Internet: agentic-internet.md
   - Project:

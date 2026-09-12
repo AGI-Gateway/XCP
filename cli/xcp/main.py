@@ -15,6 +15,7 @@ it discoverable, without talking to anybody:
     xcp receipt <bundle>     verify a proof-of-delivery evidence bundle
     xcp catalog              inspect and search the discovery catalog
     xcp wrap <api>           generate an MCP server from a public API spec
+    xcp conform <url>        test an implementation against the spec
 
 Zero third-party dependencies — standard library only, so `xcp` runs anywhere
 Python 3.10+ does.
@@ -565,6 +566,22 @@ def cmd_wrap(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_conform(args: argparse.Namespace) -> int:
+    """Run the conformance suite against any XCP endpoint."""
+    from conformance import run, format_report, Profile
+    profiles = ([Profile(p) for p in args.profile.split(",")] if args.profile
+                else [Profile.CORE, Profile.STATELESS, Profile.SECURITY])
+    rep = run(args.url, profiles)
+    if args.json:
+        print(json.dumps(rep.to_dict(), indent=2))
+    else:
+        print(format_report(rep))
+    if args.out:
+        pathlib.Path(args.out).write_text(json.dumps(rep.to_dict(), indent=2))
+        info(f"report written to {args.out}")
+    return 0 if rep.conformant else 1
+
+
 # ── small helpers ──────────────────────────────────────────────────────────
 
 def _which(binary: str) -> bool:
@@ -674,6 +691,14 @@ def build_parser() -> argparse.ArgumentParser:
     w.add_argument("--include-destructive", action="store_true",
                    help="also expose DELETE operations")
     w.set_defaults(fn=cmd_wrap)
+
+    cf = sub.add_parser("conform",
+                        help="test any XCP endpoint against the conformance suite")
+    cf.add_argument("url")
+    cf.add_argument("--profile", help="core,stateless,security,federation")
+    cf.add_argument("--json", action="store_true")
+    cf.add_argument("--out", help="write the report to a file")
+    cf.set_defaults(fn=cmd_conform)
 
     u = sub.add_parser("up", help="run the stack locally")
     u.add_argument("--docker", action="store_true")
