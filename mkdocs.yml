@@ -63,6 +63,7 @@ nav:
   - Operate:
       - Security model: security.md
       - Conformance: conformance.md
+      - Contract review: contract-review.md
       - Deployment: deployment.md
       - Run a node — the Agentic Internet: agentic-internet.md
   - Project:

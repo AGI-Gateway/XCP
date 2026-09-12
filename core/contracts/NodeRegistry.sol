@@ -60,6 +60,7 @@ contract NodeRegistry {
         uint256 bond;          // slashable stake
         uint64  registeredAt;
         uint64  revokedAt;     // 0 = live
+        uint64  unbondAt;      // 0 = not exiting; else when the bond is claimable
         bool    exists;
     }
 
@@ -98,6 +99,14 @@ contract NodeRegistry {
     uint256 public constant MIN_BOND = 0.05 ether;
     uint64  public constant CHALLENGE_WINDOW = 7 days;
     uint16  public constant CHALLENGER_SHARE_BPS = 2000; // 20% of a slash
+    /// Exit cooldown. Must exceed CHALLENGE_WINDOW, or a node could post a
+    /// fraudulent claim and withdraw its bond before anyone could challenge it.
+    uint64  public constant UNBOND_DELAY = 14 days;
+
+    /// Forfeited stake, net of challenger rewards. Deliberately unrecoverable:
+    /// a slash must be a deterrent, not a revenue stream. Making this
+    /// withdrawable would create a party that profits from slashing others.
+    uint256 public totalForfeited;
 
     event NodeRegistered(bytes32 indexed nodeId, address indexed operator, uint256 bond);
     event NodeRevoked(bytes32 indexed nodeId, uint64 at, string reason);
@@ -107,6 +116,8 @@ contract NodeRegistry {
     event ClaimSettled(bytes32 indexed nodeId, uint64 indexed epoch, uint256 amount);
     event ClaimChallenged(bytes32 indexed nodeId, uint64 indexed epoch, address challenger, uint8 kind);
     event Slashed(bytes32 indexed nodeId, uint256 amount, address challenger, uint8 kind);
+    event UnbondRequested(bytes32 indexed nodeId, uint64 claimableAt);
+    event BondWithdrawn(bytes32 indexed nodeId, uint256 amount);
 
     error NotOperator();
     error AlreadyExists();
@@ -117,6 +128,10 @@ contract NodeRegistry {
     error WindowOpen();
     error AlreadySettled();
     error RouteAlreadyClaimed();
+    error UnbondPending();
+    error NothingToWithdraw();
+    error CooldownActive();
+    error ProofDoesNotVerify();
 
     // ── registration ───────────────────────────────────────────────────────
 
@@ -127,7 +142,7 @@ contract NodeRegistry {
         nodes[nodeId] = Node({
             operator: msg.sender, domainHash: domainHash, nodeId: nodeId,
             bond: msg.value, registeredAt: uint64(block.timestamp),
-            revokedAt: 0, exists: true
+            revokedAt: 0, unbondAt: 0, exists: true
         });
         operatorNode[msg.sender] = nodeId;
         emit NodeRegistered(nodeId, msg.sender, msg.value);
@@ -148,6 +163,39 @@ contract NodeRegistry {
         if (msg.sender != n.operator) revert NotOperator();
         n.revokedAt = uint64(block.timestamp);
         emit NodeRevoked(nodeId, n.revokedAt, reason);
+    }
+
+    /**
+     * Begin leaving the federation. The bond stays slashable for UNBOND_DELAY,
+     * which is longer than CHALLENGE_WINDOW so an operator cannot post a
+     * fraudulent claim and exit before anyone can contest it.
+     *
+     * Without this, stake is unrecoverable even for an honest operator — and a
+     * bond nobody can ever recover is a bond nobody rational posts.
+     */
+    function requestUnbond(bytes32 nodeId) external {
+        Node storage n = nodes[nodeId];
+        if (!n.exists) revert NoSuchNode();
+        if (msg.sender != n.operator) revert NotOperator();
+        if (n.unbondAt != 0) revert UnbondPending();
+        n.unbondAt = uint64(block.timestamp) + UNBOND_DELAY;
+        n.revokedAt = uint64(block.timestamp);   // stops accepting new claims
+        emit UnbondRequested(nodeId, n.unbondAt);
+        emit NodeRevoked(nodeId, n.revokedAt, "unbonding");
+    }
+
+    function withdrawBond(bytes32 nodeId) external {
+        Node storage n = nodes[nodeId];
+        if (!n.exists) revert NoSuchNode();
+        if (msg.sender != n.operator) revert NotOperator();
+        if (n.unbondAt == 0) revert NothingToWithdraw();
+        if (block.timestamp < n.unbondAt) revert CooldownActive();
+        uint256 amount = n.bond;
+        if (amount == 0) revert NothingToWithdraw();
+        n.bond = 0;                              // effects before interaction
+        emit BondWithdrawn(nodeId, amount);
+        (bool ok, ) = n.operator.call{value: amount}("");
+        require(ok, "bond transfer failed");
     }
 
     function isLive(bytes32 nodeId) external view returns (bool) {
@@ -247,16 +295,20 @@ contract NodeRegistry {
         Claim storage c = claims[nodeId][epoch];
         if (c.postedAt == 0) revert NoSuchNode();
         if (c.settled) revert AlreadySettled();
-        if (!spentRoute[routeIdHash]) {
-            spentRoute[routeIdHash] = true;   // first sighting: record and stop
-            return;
-        }
+        // Verify membership FIRST. Recording a route id on an unproven call
+        // would let anyone poison an arbitrary id and then slash the honest node
+        // that later bills it legitimately.
         bytes32 h = leaf;
         for (uint256 i = 0; i < proof.length; i++) {
             h = h < proof[i] ? keccak256(abi.encodePacked(h, proof[i]))
                              : keccak256(abi.encodePacked(proof[i], h));
         }
-        if (h != c.root) revert RouteAlreadyClaimed();
+        if (h != c.root) revert ProofDoesNotVerify();
+
+        if (!spentRoute[routeIdHash]) {
+            spentRoute[routeIdHash] = true;   // first proven sighting
+            return;
+        }
         c.challenged = true;
         emit ClaimChallenged(nodeId, epoch, msg.sender, 0);
         _slash(nodeId, msg.sender, 0);
@@ -268,6 +320,7 @@ contract NodeRegistry {
         n.bond = 0;
         n.revokedAt = uint64(block.timestamp);
         uint256 reward = (amount * CHALLENGER_SHARE_BPS) / 10000;
+        totalForfeited += amount - reward;   // burned by design, see the field
         emit Slashed(nodeId, amount, challenger, kind);
         emit NodeRevoked(nodeId, n.revokedAt, "slashed");
         // A challenger with no payout has no reason to look, so the reward is

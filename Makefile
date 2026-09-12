@@ -23,6 +23,7 @@ test: ## run every test suite
 	@echo "── packaging ──"          && $(PY) tests/test_packaging.py
 	@echo "── conformance ──"        && $(PY) tests/test_conformance.py
 	@echo "── version negotiation ──" && $(PY) tests/test_version.py
+	@echo "── contracts ──"          && $(PY) tests/test_contracts.py
 	@echo "── vault + connectors ──" && $(PY) tests/test_vault.py
 	@echo "── receipts ──"           && $(PY) tests/test_receipts.py
 	@echo "── trust firewall ──"     && $(PY) tests/test_trustfirewall.py
@@ -53,10 +54,13 @@ docs: docs-sync ## build the documentation site
 docs-serve: docs-sync ## preview the docs site locally
 	mkdocs serve
 
+contracts: ## compile the Solidity and regenerate ABIs
+	$(PY) scripts/compile-contracts.py
+
 clean: ## remove caches and build output
 	@find . -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
 	@find . -name '*.pyc' -delete 2>/dev/null || true
 	@rm -rf dist site deploy/certs/*.crt deploy/certs/*.key deploy/certs/*.srl
 	@echo "cleaned"
 
-.PHONY: help install demo test lint certs up image publish docs docs-sync docs-serve clean
+.PHONY: help install demo test lint certs up image contracts publish docs docs-sync docs-serve clean

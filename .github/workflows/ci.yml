@@ -72,6 +72,29 @@ jobs:
       - run: pip install grpcio-tools
       - run: python -m grpc_tools.protoc -Icore/proto --python_out=/tmp --grpc_python_out=/tmp core/proto/xcp_streams.proto
 
+  contracts:
+    name: Contracts compile, deploy and behave
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Install solc 0.8.24
+        run: |
+          curl -sL -o /usr/local/bin/solc \
+            https://github.com/ethereum/solidity/releases/download/v0.8.24/solc-static-linux
+          chmod +x /usr/local/bin/solc
+          solc --version
+      - run: pip install "web3<8" eth-tester py-evm
+      - name: ABIs must match the sources
+        run: |
+          python scripts/compile-contracts.py
+          git diff --exit-code core/contracts/build/ \
+            || (echo "committed ABIs are stale — run make contracts" && exit 1)
+      - run: python tests/test_contracts.py
+      - name: Deployment path
+        run: python scripts/deploy-contracts.py
+
   chain:
     name: On-chain verifier path
     runs-on: ubuntu-latest
