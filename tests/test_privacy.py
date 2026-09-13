@@ -234,6 +234,88 @@ def test_hashing_is_documented_as_insufficient_for_erasure():
     assert "args_digest" in src
 
 
+# ── regulatory alignment ───────────────────────────────────────────────────
+
+def test_security_audit_meets_the_ai_act_six_month_floor():
+    """
+    EU AI Act Art. 19 / 26(6) require at least six CALENDAR months. Six calendar
+    months can run to 184 days, so a 180-day default sits under the floor while
+    looking entirely reasonable. That was a real defect found on review.
+    """
+    assert classify("security_audit").retention_days >= 184
+
+
+def test_the_floor_is_not_applied_to_deployments_that_do_not_owe_it():
+    """
+    Raising everyone's retention to a floor they do not owe trades an AI Act
+    finding for a GDPR one: keeping personal data longer than necessary.
+    """
+    from compliance import reconcile_retention
+    for c in reconcile_retention(ai_act_applies=False):
+        assert c.resolved
+        assert "not applicable" in c.floor_source
+
+
+def test_retention_conflicts_are_surfaced_not_hidden():
+    from compliance import reconcile_retention, unresolved
+    conflicts = reconcile_retention(ai_act_applies=True)
+    assert conflicts, "the AI Act floor and GDPR ceiling both bind; say so"
+    for c in conflicts:
+        assert "Art. 5(1)(e)" in c.ceiling_principle
+        assert c.guidance
+    # call_chain is genuinely below the floor; the tool must not pretend otherwise
+    assert any(not c.resolved for c in conflicts), \
+        "a reconciliation that always shows green is a sales document"
+
+
+def test_the_floor_override_is_opt_in_and_never_lowers_retention():
+    from compliance import apply_ai_act_floor
+    overrides = apply_ai_act_floor()
+    for cid, days in overrides.items():
+        assert days >= classify(cid).retention_days, "an override must not shorten"
+        assert days >= 184
+
+
+def test_dora_does_not_impose_a_log_floor():
+    """A common misreading is importing the AI Act six-month figure into DORA.
+    Del. Reg. 2024/1774 Art. 12 leaves the period to the entity."""
+    import compliance.frameworks as F
+    dora_logs = [c for c in F.CONTROLS
+                 if c.framework is F.Framework.DORA and "2024/1774" in c.reference]
+    assert dora_logs, "the DORA log-retention clause should be mapped"
+    assert "no fixed floor" in dora_logs[0].gap_note.lower()
+
+
+def test_every_framework_control_states_a_gap():
+    """A mapping with no gaps is a sales document, not a compliance artifact."""
+    import compliance.frameworks as F
+    for c in F.CONTROLS:
+        assert c.gap_note, f"{c.framework.value} {c.reference} claims coverage with no caveat"
+
+
+def test_nothing_claims_to_make_anyone_compliant():
+    import compliance.frameworks as F
+    src = (ROOT / "compliance" / "frameworks.py").read_text().lower()
+    assert "does not make anything compliant" in src
+    for c in F.CONTROLS:
+        assert c.coverage.value != "compliant"
+
+
+def test_frameworks_cover_the_regimes_an_adopter_will_ask_about():
+    import compliance.frameworks as F
+    names = {f.value for f in F.Framework}
+    for expected in ("eu_ai_act", "dora", "gdpr", "soc2", "nist_ai_rmf",
+                     "nis2", "colorado_ai", "ccpa", "iso_27001", "iso_42001"):
+        assert expected in names, f"{expected} not mapped"
+
+
+def test_transparency_obligation_is_declared_a_gap_not_claimed():
+    """XCP has no interface to a human; claiming Art. 50 coverage would be false."""
+    import compliance.frameworks as F
+    art50 = [c for c in F.CONTROLS if "Art. 50" in c.reference]
+    assert art50 and art50[0].coverage is F.Coverage.GAP
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]

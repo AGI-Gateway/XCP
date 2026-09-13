@@ -110,6 +110,42 @@ for **another organisation's** users is a **processor**, and that organisation i
 the controller — a processor agreement is required before federating. This is the
 first question an adopter's legal team will ask.
 
+## Where the regimes disagree
+
+These frameworks were written independently and they do not agree.
+
+| | |
+|---|---|
+| **EU AI Act Art. 19 / 26(6)** | keep logs **at least** six months |
+| **GDPR Art. 5(1)(e)** | keep personal data **no longer** than necessary |
+
+Both bind the same records. The Act resolves the legal hierarchy — the floor
+applies *"unless provided otherwise in applicable Union or national law, in
+particular Union law on the protection of personal data"* — without resolving
+the engineering question.
+
+```bash
+xcp privacy reconcile              # assumes you front a high-risk AI system
+xcp privacy reconcile --no-ai-act  # assumes you do not
+```
+
+!!! danger "Six months is not 180 days"
+    Six **calendar** months runs to 184 days. A 180-day retention default sits
+    under the Art. 26(6) floor while looking entirely reasonable. This codebase
+    shipped exactly that defect until it was caught on review; `security_audit`
+    is now 190 days.
+
+**The floor is opt-in, deliberately.** Most deployments do not front a high-risk
+AI system, and raising everyone's retention to a floor they do not owe trades an
+AI Act finding for a GDPR one — keeping personal data longer than necessary is
+the breach. `apply_ai_act_floor()` returns overrides for operators who declare
+they need them.
+
+A related misreading worth avoiding: **DORA does not set a log floor.** Delegated
+Regulation (EU) 2024/1774 Art. 12 leaves the period to the entity's own risk
+assessment. Importing the AI Act's six months into a DORA programme is a common
+error.
+
 ## Limits worth stating
 
 - **Shredding does not reach copies held by peers.** A federation that gossiped a

@@ -602,6 +602,25 @@ def cmd_privacy(args: argparse.Namespace) -> int:
         warn(m["notLegalAdvice"])
         return 0
 
+    if args.action == "reconcile":
+        from compliance import reconcile_retention, apply_ai_act_floor
+        head("Retention conflicts")
+        info("EU AI Act Art. 19/26(6) sets a FLOOR; GDPR Art. 5(1)(e) sets a "
+             "CEILING. Both bind the same records.")
+        print()
+        for c in reconcile_retention(not args.no_ai_act):
+            mark = "ok  " if c.resolved else "GAP "
+            print(f"  {mark}{c.data_class:<18}{c.configured_days:>4}d"
+                  f"  floor {c.floor_days}d")
+            print(f"      {c.guidance}")
+        if not args.no_ai_act:
+            print()
+            info(f"overrides for a high-risk deployment: {apply_ai_act_floor()}")
+        print()
+        warn("Surfaces the conflict; it does not resolve it for you. Record the "
+             "reasoning where an auditor will look.")
+        return 0
+
     if args.action == "erase":
         if not args.subject:
             bad("--subject is required"); return 1
@@ -739,8 +758,11 @@ def build_parser() -> argparse.ArgumentParser:
     cf.set_defaults(fn=cmd_conform)
 
     pv = sub.add_parser("privacy", help="data map, retention, erasure requests")
-    pv.add_argument("action", choices=["map", "retention", "erase"], default="map",
-                    nargs="?")
+    pv.add_argument("action",
+                    choices=["map", "retention", "erase", "reconcile"],
+                    default="map", nargs="?")
+    pv.add_argument("--no-ai-act", action="store_true",
+                    help="this deployment does not front a high-risk AI system")
     pv.add_argument("--subject", help="pseudonymous subject id to erase")
     pv.add_argument("--classes", help="comma-separated data classes held")
     pv.add_argument("--json", action="store_true")

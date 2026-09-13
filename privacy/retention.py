@@ -56,6 +56,17 @@ from typing import Any, Optional
 DAY = 86400
 YEAR = 365 * DAY
 
+#: EU AI Act Art. 19 (providers) and Art. 26(6) (deployers) set a floor of six
+#: CALENDAR months on automatically generated logs. Six calendar months can run
+#: to 184 days, so a "180 day" default silently sits under the floor — which is
+#: how a reasonable-looking retention setting becomes a finding. 190 days gives
+#: margin for clock skew and a monthly sweep.
+#:
+#: The floor applies "unless provided otherwise in applicable Union or national
+#: law, in particular Union law on the protection of personal data" — so GDPR
+#: Art. 5(1)(e) can pull the other way. See compliance.reconcile_retention().
+AI_ACT_LOG_FLOOR = 190 * DAY
+
 
 class Basis(str, Enum):
     """Lawful basis for processing (GDPR Art. 6)."""
@@ -136,8 +147,10 @@ CLASSES: dict[str, DataClass] = {c.id: c for c in [
         description="Denials, rate-limit rejections, revocations, and the "
                     "identity asserted at the time.",
         subject=Subject.HUMAN, basis=Basis.LEGITIMATE_INTEREST,
-        retention_seconds=180 * DAY, erasable_on_request=False,
-        note="Retained against abuse and incident investigation. Art. 17(1)(c) "
+        retention_seconds=AI_ACT_LOG_FLOOR, erasable_on_request=False,
+        note="Meets the EU AI Act six-month log floor (Art. 19 / Art. 26(6)), "
+             "which 180 days does not: six calendar months can run to 184 days. "
+             "Retained against abuse and incident investigation. Art. 17(1)(c) "
              "allows an objection to be overridden by compelling legitimate "
              "grounds, but the window is bounded and short."),
     DataClass(
@@ -264,4 +277,5 @@ def data_map() -> dict[str, Any]:
 
 
 __all__ = ["DataClass", "Basis", "Subject", "CLASSES", "classify", "erasable",
-           "due_for_expiry", "data_map", "RetentionError", "DAY", "YEAR"]
+           "due_for_expiry", "data_map", "RetentionError", "DAY", "YEAR",
+           "AI_ACT_LOG_FLOOR"]
