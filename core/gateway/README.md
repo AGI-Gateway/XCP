@@ -41,6 +41,25 @@ scope coverage against an on-chain (or in-memory) Session Registry. Without it,
 the gateway uses a built-in in-memory registry so it runs standalone for
 development.
 
+## Federation endpoints
+
+Set `XCP_NODE_KEY` and `XCP_NODE_DOMAIN` to give a gateway an identity. Without
+them the federation endpoints return 404 and the node runs standalone.
+
+| endpoint | |
+|---|---|
+| `GET /.well-known/xcp-node.json` | this node's identity — unauthenticated per RFC 8615, because a peer must read it before any relationship exists |
+| `POST /v1/federation/peer` | a peer introduces itself; we **fetch its record from its own domain** rather than trusting the body it posted |
+| `GET /v1/federation/peers` | who we know, with trust and hop counts |
+| `POST /v1/federation/revoke` | gossip, accepted **only from an already-verified peer** — otherwise anyone could revoke their rivals |
+| `GET /v1/federation/catalog` | what we know, for peers to ingest |
+
+!!! warning "Plain HTTP peering is flagged, not silently accepted"
+    The certificate-footprint check needs the TLS certificate the peer actually
+    presented. Over plain HTTP there is none, so the response carries
+    `tlsVerified: false` and a development-only warning rather than implying a
+    verification that did not happen.
+
 ## Abuse controls
 
 A gateway published in a discovery catalog, routing for callers it has never met,

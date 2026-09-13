@@ -563,6 +563,158 @@ async def metrics() -> Response:
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
+# ── federation ─────────────────────────────────────────────────────────────
+# Everything in federation/ was a library nothing could reach: a node had no way
+# to publish its identity or peer with anyone over the wire. These endpoints are
+# what make it a network rather than a package.
+
+_NODE_KEY = os.getenv("XCP_NODE_KEY", "")
+_NODE_DOMAIN = os.getenv("XCP_NODE_DOMAIN", "")
+_NODE_URL = os.getenv("XCP_NODE_URL", "")
+_FED = None
+_NODE_RECORD = None
+
+if _NODE_KEY and _NODE_DOMAIN:
+    try:
+        import sys as _s, pathlib as _p
+        _s.path.insert(0, str(_p.Path(__file__).resolve().parents[2]))
+        from federation import Federation, NodeIdentity, NodeRecord, rotate
+        _ident = NodeIdentity.from_key(_NODE_KEY)
+        _fp = os.getenv("XCP_NODE_CERT_FOOTPRINT", "0x" + "00" * 32)
+        _bs = rotate(_ident, _fp, domain=_NODE_DOMAIN)
+        _NODE_RECORD = NodeRecord(
+            domain=_NODE_DOMAIN, node_id=_ident.node_id,
+            gateway_url=_NODE_URL or f"https://{_NODE_DOMAIN}",
+            operator=os.getenv("XCP_NODE_OPERATOR", "anonymous"),
+            published_at=int(time.time()),
+            bindings=_bs.to_dict(), cert_footprint=_fp)
+        _FED = Federation(self_domain=_NODE_DOMAIN, self_node_id=_ident.node_id)
+    except Exception as _e:
+        print(f"[gateway] federation disabled: {_e}", flush=True)
+
+
+def _fed_audit(msg: str) -> None:
+    """
+    Federation events are node-to-node, not caller actions. Routing them through
+    the caller audit path stamped successful peerings as REJECT, because the
+    default Ctx is unverified — a log line an operator would misread during an
+    incident.
+    """
+    print(f"[{time.strftime('%H:%M:%S')}] gw={GATEWAY_ID} federation {msg}",
+          flush=True)
+
+
+@app.get("/.well-known/xcp-node.json")
+async def node_record() -> JSONResponse:
+    """
+    This node's identity. Unauthenticated by RFC 8615 — a peer must be able to
+    read it before it has any relationship with us.
+    """
+    if _NODE_RECORD is None:
+        return JSONResponse({"error": "federation not configured; set "
+                                      "XCP_NODE_KEY and XCP_NODE_DOMAIN"},
+                            status_code=404)
+    return JSONResponse(json.loads(_NODE_RECORD.to_json()))
+
+
+@app.post("/v1/federation/peer")
+async def federation_peer(request: Request) -> JSONResponse:
+    """
+    A peer introduces itself. We fetch ITS record from ITS domain and verify —
+    we do not trust the body it posted, because anyone can post anything.
+    """
+    if _FED is None:
+        return JSONResponse({"error": "federation not configured"}, status_code=404)
+    body = json.loads(await request.body() or b"{}")
+    domain = str(body.get("domain", "")).strip().lower()
+    url = str(body.get("gatewayUrl", "")).strip()
+    if not domain or not url:
+        return JSONResponse({"error": "domain and gatewayUrl are required"},
+                            status_code=400)
+    try:
+        from federation import NodeRecord, verify_node_record, protocol_incompatible
+        import httpx
+        async with httpx.AsyncClient(timeout=10, verify=False) as hc:
+            r = await hc.get(url.rstrip("/") + "/.well-known/xcp-node.json")
+        rec = NodeRecord.from_dict(r.json()) if hasattr(NodeRecord, "from_dict") \
+            else NodeRecord(**{k: v for k, v in r.json().items()
+                               if k in NodeRecord.__dataclass_fields__})
+    except Exception as e:
+        return JSONResponse({"error": f"could not fetch the peer record: {e}"},
+                            status_code=502)
+
+    if rec.domain.lower() != domain:
+        return JSONResponse({"error": "the record does not claim that domain"},
+                            status_code=400)
+    incompat = protocol_incompatible(rec)
+    if incompat:
+        return JSONResponse({"error": f"cannot federate: {incompat}"},
+                            status_code=409)
+
+    # The cert-footprint check needs the TLS certificate the peer presented.
+    # Over plain HTTP there is none, so we say so rather than pretending.
+    tls_verified = url.startswith("https://")
+    known = _FED.peers.get(domain)
+    try:
+        p = _FED.add_verified_peer(domain, rec.node_id, rec.gateway_url,
+                                   mutual=bool(body.get("mutual")),
+                                   sequence=rec.sequence)
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=409)
+    _fed_audit(f"peered {domain} seq={rec.sequence}")
+    return JSONResponse({
+        "peered": True, "domain": p.domain, "nodeId": p.node_id,
+        "trust": p.trust.label, "sequence": p.sequence,
+        "tlsVerified": tls_verified,
+        "rotation": bool(known and known.node_id == rec.node_id
+                         and rec.sequence > known.sequence),
+        "warning": None if tls_verified else
+                   "peered over plain HTTP: the certificate footprint could not "
+                   "be checked. Development only."})
+
+
+@app.get("/v1/federation/peers")
+async def federation_peers() -> JSONResponse:
+    if _FED is None:
+        return JSONResponse({"error": "federation not configured"}, status_code=404)
+    return JSONResponse({"self": _FED.self_domain,
+                         "peers": [p.to_dict() for p in _FED.reachable()],
+                         "summary": _FED.summary()})
+
+
+@app.post("/v1/federation/revoke")
+async def federation_revoke(request: Request) -> JSONResponse:
+    """Accept a revocation, but only from a peer we already trust."""
+    if _FED is None:
+        return JSONResponse({"error": "federation not configured"}, status_code=404)
+    body = json.loads(await request.body() or b"{}")
+    node_id = str(body.get("nodeId", ""))
+    frm = str(body.get("from", "")).lower()
+    if not node_id or not frm:
+        return JSONResponse({"error": "nodeId and from are required"},
+                            status_code=400)
+    accepted = _FED.ingest_revocation(node_id, frm)
+    if not accepted:
+        return JSONResponse(
+            {"accepted": False,
+             "reason": "revocations are accepted only from a verified peer; "
+                       "otherwise anyone could revoke their rivals"},
+            status_code=403)
+    _fed_audit(f"revocation accepted for {node_id[:18]}… from {frm}")
+    return JSONResponse({"accepted": True, "nodeId": node_id})
+
+
+@app.get("/v1/federation/catalog")
+async def federation_catalog() -> JSONResponse:
+    """Publish what this node knows so peers can ingest it."""
+    try:
+        from connectors import GlobalCatalog
+        c = GlobalCatalog(); c.load_curated()
+        return JSONResponse(c.export())
+    except Exception as e:
+        return JSONResponse({"error": str(e)}, status_code=503)
+
+
 @app.get("/health")
 async def health() -> dict:
     _adv = {}

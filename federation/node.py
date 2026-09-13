@@ -150,6 +150,24 @@ class NodeRecord:
     seed_peers: list[str] = field(default_factory=list)   # domains, for bootstrap
     published_at: int = 0
 
+    def __post_init__(self) -> None:
+        # Advertise what we speak on EVERY construction path, not just the
+        # helper. A record built directly by a gateway used to carry no
+        # versions at all, which silently disabled negotiation for real nodes
+        # while the library tests kept passing.
+        if not self.protocol_versions:
+            try:
+                from protocol import SUPPORTED
+                self.protocol_versions = list(SUPPORTED)
+            except Exception:
+                pass
+        if not self.features:
+            try:
+                from protocol import IMPLEMENTED
+                self.features = sorted(f.value for f in IMPLEMENTED)
+            except Exception:
+                pass
+
     @property
     def bonded(self) -> bool:
         """A bonded node has something to lose, which is what makes transitive

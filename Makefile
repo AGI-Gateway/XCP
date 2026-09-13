@@ -18,6 +18,7 @@ test: ## run every test suite
 	@echo "── providers ──"          && $(PY) tests/test_providers.py
 	@echo "── federation ──"         && $(PY) tests/test_federation.py
 	@echo "── node identity ──"      && $(PY) tests/test_identity.py
+	@echo "── two real nodes ──"     && $(PY) tests/test_two_node.py
 	@echo "── paid transport ──"     && $(PY) tests/test_transport.py
 	@echo "── abuse controls ──"     && $(PY) tests/test_limits.py
 	@echo "── packaging ──"          && $(PY) tests/test_packaging.py

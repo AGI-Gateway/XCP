@@ -7,7 +7,7 @@ A node proves itself with a domain and a TLS certificate. Peers verify it
 directly. Trust travels transitively with decay. No registry, no chain, no
 vendor — see federation/README.md for what IS still depended on.
 """
-from .node import (NodeRecord, Peer, Attestation, Federation, PeerTrust,
+from .node import (protocol_incompatible, NodeRecord, Peer, Attestation, Federation, PeerTrust,
                    build_node_record, verify_node_record, digest, canonical,
                    FederationError, NODE_RECORD_PATH, NODE_SPEC_VERSION,
                    DECAY_PER_HOP, MAX_HOPS)

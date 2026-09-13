@@ -50,6 +50,8 @@ jobs:
         run: find . -name '*.py' -not -path './.git/*' -exec python -m py_compile {} +
       - name: End-to-end
         run: python tests/test_e2e.py
+      - name: Two real nodes federating
+        run: python tests/test_two_node.py
       - name: Conformance suite (reference must certify)
         run: python tests/test_conformance.py
 
