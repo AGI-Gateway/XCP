@@ -25,6 +25,7 @@ test: ## run every test suite
 	@echo "── version negotiation ──" && $(PY) tests/test_version.py
 	@echo "── contracts ──"          && $(PY) tests/test_contracts.py
 	@echo "── privacy ──"            && $(PY) tests/test_privacy.py
+	@echo "── covenants ──"          && $(PY) tests/test_covenants.py
 	@echo "── vault + connectors ──" && $(PY) tests/test_vault.py
 	@echo "── receipts ──"           && $(PY) tests/test_receipts.py
 	@echo "── trust firewall ──"     && $(PY) tests/test_trustfirewall.py

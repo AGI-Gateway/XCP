@@ -65,6 +65,7 @@ nav:
       - Conformance: conformance.md
       - Contract review: contract-review.md
       - Privacy & retention: privacy.md
+      - Compliance mapping: compliance.md
       - Deployment: deployment.md
       - Run a node — the Agentic Internet: agentic-internet.md
   - Project:

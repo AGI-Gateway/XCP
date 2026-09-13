@@ -119,7 +119,7 @@ CONTROLS: list[Control] = [
     C(F.EU_AI_ACT, "Art. 26 — deployer obligations",
       "Deployers must use high-risk systems per instructions and monitor "
       "operation.",
-      COV.OPERATOR, "", "", "Entirely the deployer's obligation."),
+      COV.OPERATOR, "", "", "Entirely the deployer's obligation." " Covenant COV-07 carries the residual."),
     C(F.EU_AI_ACT, "Art. 73 — serious incident reporting",
       "Providers must report serious incidents to market surveillance "
       "authorities, generally within 15 days.",
@@ -132,7 +132,7 @@ CONTROLS: list[Control] = [
       COV.OPERATOR, "",
       "compliance.frameworks documents XCP's own position.",
       "XCP is infrastructure, not a high-risk AI system. An operator embedding "
-      "it in an Annex III use case carries the classification themselves."),
+      "it in an Annex III use case carries the classification themselves." " Covenant COV-01 carries the residual."),
 
     # ── DORA ───────────────────────────────────────────────────────────────
     C(F.DORA, "Art. 9 — protection and prevention",
@@ -162,7 +162,7 @@ CONTROLS: list[Control] = [
       COV.PARTIAL, "compliance.register, federation",
       "Generated register covering peers, subcontractors and data locations.",
       "The register covers XCP's own federation. Arrangements outside XCP must "
-      "be added by the operator."),
+      "be added by the operator." " Covenant COV-09 carries the residual."),
     C(F.DORA, "Art. 28(8) — exit strategies",
       "Exit strategies for ICT services supporting critical functions, without "
       "disruption or detriment.",
@@ -176,21 +176,21 @@ CONTROLS: list[Control] = [
       COV.ENABLER, "federation",
       "Federation is many-node by design; no node is structurally required.",
       "Whether an operator has in fact concentrated on one peer is theirs to "
-      "assess."),
+      "assess." " Covenant COV-09 carries the residual."),
     C(F.DORA, "Art. 30 — contractual provisions",
       "Contracts must specify service descriptions, data locations, access and "
       "audit rights, subcontracting and termination.",
       COV.PARTIAL, "compliance.register, privacy.retention",
       "Data map, residency constraints, declared subcontracting chain.",
       "The contract itself is a legal document the operator must execute. This "
-      "supplies the technical facts it needs to state."),
+      "supplies the technical facts it needs to state." " Covenant COV-09 carries the residual."),
     C(F.DORA, "Art. 24-27 — resilience testing",
       "Test ICT tools and systems periodically; threat-led penetration testing "
       "for significant entities.",
       COV.GAP, "",
       "Conformance suite exercises protocol behaviour, not resilience.",
       "No load testing, no chaos testing, no TLPT. A financial entity subject "
-      "to DORA must arrange these independently."),
+      "to DORA must arrange these independently." " Covenant COV-16 carries the residual."),
 
     # ── GDPR ───────────────────────────────────────────────────────────────
     C(F.GDPR, "Art. 5(1)(c) — data minimisation",
@@ -256,7 +256,7 @@ CONTROLS: list[Control] = [
       "",
       "No DPIA is shipped. Systematic monitoring of individuals via agent "
       "activity plausibly triggers Art. 35(3)(a); an operator should assume one "
-      "is needed and involve their DPO."),
+      "is needed and involve their DPO." " Covenant COV-04 carries the residual."),
     C(F.GDPR, "Ch. V (Art. 44-49) — international transfers",
       "Transfers outside the EEA need an adequacy decision or safeguards.",
       COV.PARTIAL, "compliance.residency, federation",
@@ -302,12 +302,12 @@ CONTROLS: list[Control] = [
       COV.OPERATOR, "",
       "",
       "Board oversight, HR screening, security awareness training and vendor "
-      "management are organisational controls no codebase supplies."),
+      "management are organisational controls no codebase supplies." " Covenant COV-14 carries the residual."),
     C(F.SOC2, "A1 — availability",
       "Capacity, backup and recovery to meet commitments.",
       COV.GAP, "",
       "",
-      "No SLO, no backup or restore procedure, no DR plan, no tested RTO/RPO."),
+      "No SLO, no backup or restore procedure, no DR plan, no tested RTO/RPO." " Covenant COV-12 carries the residual."),
 
     # ── US and other ───────────────────────────────────────────────────────
     C(F.NIST_AI_RMF, "GOVERN 1.2 / MAP 2.3",
@@ -344,7 +344,7 @@ CONTROLS: list[Control] = [
       "Security assessment or certification before transferring out of China.",
       COV.GAP, "",
       "Residency policy can block the transfer.",
-      "CAC security assessment is a regulatory process, not a technical one."),
+      "CAC security assessment is a regulatory process, not a technical one." " Covenant COV-11 carries the residual."),
     C(F.LGPD, "Art. 18 — data subject rights", "Rights broadly mirroring GDPR.",
       COV.PARTIAL, "privacy", "Same mechanisms.", "Brazilian specifics unreviewed."),
     C(F.DPDP, "§12-13 — erasure and grievance",
@@ -435,21 +435,21 @@ CONTROLS += [
       "XCP is a component, not a system.",
       "Whether building on XCP makes you a provider depends on what you build. "
       "Substantial modification and prompt engineering are the usual triggers. "
-      "A legal question, not a technical one."),
+      "A legal question, not a technical one." " Covenant COV-02 carries the residual."),
 
     C(F.EU_AI_ACT, "Art. 27 — fundamental rights impact assessment",
       "Certain deployers must perform a FRIA before putting a high-risk system "
       "into use.",
       COV.ENABLER, "privacy.data_map, compliance.evidence_index",
       "The data map and control inventory are inputs to a FRIA.",
-      "The assessment itself is a process obligation and is yours."),
+      "The assessment itself is a process obligation and is yours." " Covenant COV-05 carries the residual."),
 
     C(F.EU_AI_ACT, "Art. 50 — transparency to natural persons",
       "Persons must be informed when they interact with an AI system.",
       COV.GAP, "-",
       "XCP sits between an agent and its tools and has no interface to a human.",
       "The application built on top owes this disclosure. XCP cannot discharge "
-      "it and does not attempt to."),
+      "it and does not attempt to." " Covenant COV-03 carries the residual."),
 
     C(F.EU_AI_ACT, "Art. 72 — post-market monitoring",
       "Providers must operate a post-market monitoring system proportionate to "
@@ -467,7 +467,7 @@ CONTROLS += [
       "Retention is configurable per class.",
       "Deliberately no fixed floor here, unlike the AI Act — a common "
       "misreading is to import the six-month figure. The justification for "
-      "whatever you choose is yours to document."),
+      "whatever you choose is yours to document." " Covenant COV-08 carries the residual."),
 
     # NIS2
     C(F.NIS2, "Art. 21 — cybersecurity risk-management measures",
@@ -486,7 +486,7 @@ CONTROLS += [
       COV.ENABLER, "compliance.incidents, federation revocation",
       "Incident records and a revocation path that contains a compromise.",
       "Classification against the significance threshold and reporting on "
-      "deadline are process obligations."),
+      "deadline are process obligations." " Covenant COV-13 carries the residual."),
 
     # Colorado — the binding US state AI law most likely to apply
     C(F.COLORADO_AI, "C.R.S. 6-1-1703 — deployer duty of reasonable care",
@@ -498,5 +498,5 @@ CONTROLS += [
       "authority.",
       "Discrimination testing, impact assessment and consumer notice are yours. "
       "There is no federal US AI statute — EO 14110 was rescinded in January "
-      "2025 — so US obligations sit in state law and sector regulators."),
+      "2025 — so US obligations sit in state law and sector regulators." " Covenant COV-06 carries the residual."),
 ]

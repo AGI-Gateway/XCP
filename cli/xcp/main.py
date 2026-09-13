@@ -17,6 +17,7 @@ it discoverable, without talking to anybody:
     xcp wrap <api>           generate an MCP server from a public API spec
     xcp conform <url>        test an implementation against the spec
     xcp privacy map          data map, retention and erasure
+    xcp compliance gaps      control mapping, gaps and covenants
 
 Zero third-party dependencies — standard library only, so `xcp` runs anywhere
 Python 3.10+ does.
@@ -639,6 +640,63 @@ def cmd_privacy(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_compliance(args: argparse.Namespace) -> int:
+    """Control mapping, gap register, and the covenants that carry the rest."""
+    import compliance.frameworks as F
+    from compliance import (coverage_statement, contract_annex, COVENANTS,
+                            Owes, recovery_plan, degradation_scenarios)
+    if args.action == "covenants":
+        owes = Owes(args.owner) if args.owner else None
+        if args.annex:
+            print(contract_annex(owes)); return 0
+        head("Covenants — what the software cannot discharge")
+        for c in COVENANTS:
+            if owes and c.owes is not owes and c.owes is not Owes.BOTH:
+                continue
+            print(f"  {c.id}  [{c.owes.value}] {c.frequency}")
+            print(f"      {c.commitment}")
+            print(f"      evidence: {c.evidence}")
+            print(f"      refs: {'; '.join(c.clauses)}")
+        print()
+        info("--annex prints these as contract clauses")
+        return 0
+
+    if args.action == "gaps":
+        head("Gap register")
+        for c in F.CONTROLS:
+            if c.coverage.value in ("gap", "operator"):
+                print(f"  {c.framework.value:<12}{c.reference[:40]:<42}{c.gap_note[-46:]}")
+        return 0
+
+    if args.action == "recovery":
+        p = recovery_plan()
+        head("State that must survive a restart")
+        for s in p["state"]:
+            print(f"  {s['name']:<26} RPO {s['rpoSeconds']:>7}s  RTO {s['rtoSeconds']:>5}s")
+            print(f"      {s['lossImpact'][:88]}")
+        print()
+        warn(f"unrecoverable if lost: {', '.join(p['unrecoverable'])}")
+        info(p["note"])
+        return 0
+
+    if args.action == "scenarios":
+        head("Resilience scenarios")
+        for s in degradation_scenarios():
+            print(f"  {s['scenario']}")
+            print(f"      expected: {s['expected']}")
+        return 0
+
+    s = coverage_statement()
+    head("Coverage")
+    for k, v in s["controlCoverage"].items():
+        info(f"{k:<14}{v}")
+    print()
+    info(f"covenants: {s['covenants']}  {s['byOwner']}")
+    print()
+    warn(s["position"])
+    return 0
+
+
 # ── small helpers ──────────────────────────────────────────────────────────
 
 def _which(binary: str) -> bool:
@@ -756,6 +814,16 @@ def build_parser() -> argparse.ArgumentParser:
     cf.add_argument("--json", action="store_true")
     cf.add_argument("--out", help="write the report to a file")
     cf.set_defaults(fn=cmd_conform)
+
+    cp = sub.add_parser("compliance",
+                        help="control mapping, gaps, covenants, recovery")
+    cp.add_argument("action",
+                    choices=["coverage", "gaps", "covenants", "recovery",
+                             "scenarios"], default="coverage", nargs="?")
+    cp.add_argument("--owner", choices=["operator", "deployer", "application"])
+    cp.add_argument("--annex", action="store_true",
+                    help="print covenants as contract clauses")
+    cp.set_defaults(fn=cmd_compliance)
 
     pv = sub.add_parser("privacy", help="data map, retention, erasure requests")
     pv.add_argument("action",

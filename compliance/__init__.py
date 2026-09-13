@@ -30,3 +30,14 @@ from .reconcile import (Conflict, reconcile_retention, unresolved,
 __all__ = list(globals().get("__all__", [])) + [
     "Conflict", "reconcile_retention", "unresolved", "retention_summary",
     "apply_ai_act_floor", "AI_ACT_LOG_CLASSES"]
+from .covenants import (Covenant, Owes, COVENANTS, covenant, for_owner,
+                        for_clause, contract_annex, coverage_statement)
+from .resilience import (concentration, concentration_from_catalog,
+                         ConcentrationReport, STATE, recovery_plan,
+                         degradation_scenarios)
+
+__all__ = list(globals().get("__all__", [])) + [
+    "Covenant", "Owes", "COVENANTS", "covenant", "for_owner", "for_clause",
+    "contract_annex", "coverage_statement", "concentration",
+    "concentration_from_catalog", "ConcentrationReport", "STATE",
+    "recovery_plan", "degradation_scenarios"]
