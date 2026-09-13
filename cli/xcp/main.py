@@ -16,6 +16,7 @@ it discoverable, without talking to anybody:
     xcp catalog              inspect and search the discovery catalog
     xcp wrap <api>           generate an MCP server from a public API spec
     xcp conform <url>        test an implementation against the spec
+    xcp privacy map          data map, retention and erasure
 
 Zero third-party dependencies — standard library only, so `xcp` runs anywhere
 Python 3.10+ does.
@@ -31,6 +32,7 @@ import os
 import pathlib
 import subprocess
 import sys
+import time
 import urllib.error
 import urllib.request
 from pathlib import Path
@@ -582,6 +584,42 @@ def cmd_conform(args: argparse.Namespace) -> int:
     return 0 if rep.conformant else 1
 
 
+def cmd_privacy(args: argparse.Namespace) -> int:
+    """Data map, retention sweep, or an erasure request."""
+    from privacy import data_map, CLASSES, erasable, KeyRing, erase
+    if args.action == "map":
+        m = data_map()
+        if args.json:
+            print(json.dumps(m, indent=2)); return 0
+        head("Data map")
+        info(m["controllerRole"])
+        print()
+        print(f"  {'class':<22}{'subject':<10}{'basis':<20}{'days':>6}  erasable")
+        for c in m["classes"]:
+            print(f"  {c['id']:<22}{c['subject']:<10}{c['basis']:<20}"
+                  f"{c['retentionDays']:>6}  {'yes' if c['erasableOnRequest'] else 'NO'}")
+        print()
+        warn(m["notLegalAdvice"])
+        return 0
+
+    if args.action == "erase":
+        if not args.subject:
+            bad("--subject is required"); return 1
+        ring = KeyRing()
+        held = [(c, int(time.time())) for c in (args.classes or "").split(",") if c] or None
+        rep = erase(ring, args.subject, held=held)
+        print(rep.human_summary())
+        if args.json:
+            print(); print(json.dumps(rep.to_dict(), indent=2))
+        return 0 if rep.complete else 2
+
+    head("Retention")
+    for cid, c in CLASSES.items():
+        ok, reason = erasable(cid)
+        print(f"  {cid:<22}{'erasable' if ok else 'RETAINED':<10} {reason[:60]}")
+    return 0
+
+
 # ── small helpers ──────────────────────────────────────────────────────────
 
 def _which(binary: str) -> bool:
@@ -699,6 +737,14 @@ def build_parser() -> argparse.ArgumentParser:
     cf.add_argument("--json", action="store_true")
     cf.add_argument("--out", help="write the report to a file")
     cf.set_defaults(fn=cmd_conform)
+
+    pv = sub.add_parser("privacy", help="data map, retention, erasure requests")
+    pv.add_argument("action", choices=["map", "retention", "erase"], default="map",
+                    nargs="?")
+    pv.add_argument("--subject", help="pseudonymous subject id to erase")
+    pv.add_argument("--classes", help="comma-separated data classes held")
+    pv.add_argument("--json", action="store_true")
+    pv.set_defaults(fn=cmd_privacy)
 
     u = sub.add_parser("up", help="run the stack locally")
     u.add_argument("--docker", action="store_true")

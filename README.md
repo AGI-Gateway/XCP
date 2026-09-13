@@ -181,6 +181,7 @@ xcp/
 ├── providers/              open registries: add an MCP connection or a model
 ├── trustfirewall/          stateless MCP credentials + graded corpus reachability
 ├── receipts/               proof-of-delivery and evidence-conditioned escrow
+├── privacy/                retention, crypto-shredded erasure, the data map
 ├── discovery/              ARD catalog + MCP Registry manifest generation
 ├── core/
 │   ├── client/             Python · Go · Java · browser
