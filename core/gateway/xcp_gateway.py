@@ -100,7 +100,50 @@ if os.getenv("XCP_RATE_LIMIT", "1") == "1":
             "with no rate limit is an open relay. Set XCP_RATE_LIMIT=0 to "
             "override deliberately.") from _e
 
+# Which ECDSA backend is actually live. eth-keys calls its pure-Python
+# implementation "NativeECCBackend", which is easy to misread as native code —
+# it is 35x slower on signature verification, and verification runs on every
+# call. Loud, because the failure mode is silent and expensive.
+_CRYPTO_BACKEND = "unknown"
+_CRYPTO_FAST = False
+try:
+    import eth_keys.backends as _bk
+    _CRYPTO_BACKEND = _bk.get_backend_class().__name__
+    _CRYPTO_FAST = "CoinCurve" in _CRYPTO_BACKEND
+    if not _CRYPTO_FAST:
+        print("[gateway] WARNING: ECDSA backend is "
+              f"{_CRYPTO_BACKEND} (pure Python). Signature verification runs on "
+              "every call and is ~35x slower than libsecp256k1. "
+              "Install `coincurve`.", flush=True)
+except Exception:
+    pass
+
 app = FastAPI(title="XCP Gateway", version="0.1.0-draft")
+
+# A pooled client for upstream calls. Creating an AsyncClient per request pays a
+# fresh TCP connect (and TLS handshake) every time, which measured at ~24 ms of
+# added latency — more than 100x the gateway's own verification work, and
+# entirely an artefact of not pooling. Benchmarked in bench/gateway.py.
+_UPSTREAM_CLIENT: "httpx.AsyncClient | None" = None
+
+
+def _upstream_client() -> "httpx.AsyncClient":
+    global _UPSTREAM_CLIENT
+    if _UPSTREAM_CLIENT is None:
+        _UPSTREAM_CLIENT = httpx.AsyncClient(
+            timeout=httpx.Timeout(30.0, connect=5.0),
+            limits=httpx.Limits(max_connections=200,
+                                max_keepalive_connections=50,
+                                keepalive_expiry=30.0))
+    return _UPSTREAM_CLIENT
+
+
+@app.on_event("shutdown")
+async def _close_upstream_client() -> None:
+    global _UPSTREAM_CLIENT
+    if _UPSTREAM_CLIENT is not None:
+        await _UPSTREAM_CLIENT.aclose()
+        _UPSTREAM_CLIENT = None
 
 
 def _negotiate(request: "Request"):
@@ -529,7 +572,8 @@ async def _route_mcp(server: str, tool: str, args: dict, ctx: Ctx,
            "params": {"name": tool, "arguments": args}}
     t0 = time.time()
     try:
-        async with httpx.AsyncClient(timeout=30) as hc:
+        if True:
+            hc = _upstream_client()
             headers = {
                 # the verified identity travels upstream, not the client's claim
                 "XCP-Agent-Identity": f"{ctx.agent_id};{ctx.chain_id};{ctx.footprint}",
@@ -724,6 +768,7 @@ async def health() -> dict:
     except Exception:
         pass
     return {"ok": True, "posture": POSTURE, "gateway": GATEWAY_ID, **_adv,
+            "cryptoBackend": _CRYPTO_BACKEND, "cryptoFastPath": _CRYPTO_FAST,
             "rateLimit": _LIMITS.stats() if _LIMITS else "disabled",
             "verifier": "external" if VERIFY_URL else "local",
             "upstreams": list(UPSTREAMS.keys())}

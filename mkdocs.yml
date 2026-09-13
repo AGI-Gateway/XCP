@@ -67,6 +67,7 @@ nav:
       - Privacy & retention: privacy.md
       - Compliance mapping: compliance.md
       - Deployment: deployment.md
+      - Performance: performance.md
       - Run a node — the Agentic Internet: agentic-internet.md
   - Project:
       - Contributing: contributing.md

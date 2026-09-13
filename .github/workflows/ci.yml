@@ -23,6 +23,7 @@ jobs:
           python tests/test_limits.py
           python tests/test_packaging.py
           python tests/test_version.py
+          python tests/test_performance.py
           python tests/test_privacy.py
           python tests/test_covenants.py
           pip install pyyaml

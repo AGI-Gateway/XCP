@@ -5,6 +5,11 @@ fastapi>=0.110
 uvicorn[standard]>=0.27
 httpx>=0.27
 eth-account>=0.13
+# Native libsecp256k1 bindings. WITHOUT THIS, eth-keys falls back to a
+# pure-Python ECDSA implementation and every signature verification on the hot
+# path costs ~6.5 ms instead of ~0.19 ms — a 35x penalty a deployment would
+# otherwise pay silently. Measured; see bench/.
+coincurve>=19.0
 eth-utils>=4.0
 cryptography>=42.0
 prometheus-client>=0.20

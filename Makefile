@@ -19,6 +19,7 @@ test: ## run every test suite
 	@echo "── federation ──"         && $(PY) tests/test_federation.py
 	@echo "── node identity ──"      && $(PY) tests/test_identity.py
 	@echo "── two real nodes ──"     && $(PY) tests/test_two_node.py
+	@echo "── performance ──"        && $(PY) tests/test_performance.py
 	@echo "── paid transport ──"     && $(PY) tests/test_transport.py
 	@echo "── abuse controls ──"     && $(PY) tests/test_limits.py
 	@echo "── packaging ──"          && $(PY) tests/test_packaging.py
@@ -60,10 +61,14 @@ docs-serve: docs-sync ## preview the docs site locally
 contracts: ## compile the Solidity and regenerate ABIs
 	$(PY) scripts/compile-contracts.py
 
+bench: ## measure protocol primitives and gateway overhead
+	$(PY) bench/micro.py
+	$(PY) bench/gateway.py
+
 clean: ## remove caches and build output
 	@find . -name __pycache__ -type d -exec rm -rf {} + 2>/dev/null || true
 	@find . -name '*.pyc' -delete 2>/dev/null || true
 	@rm -rf dist site deploy/certs/*.crt deploy/certs/*.key deploy/certs/*.srl
 	@echo "cleaned"
 
-.PHONY: help install demo test lint certs up image contracts publish docs docs-sync docs-serve clean
+.PHONY: help install demo test lint certs up image contracts bench publish docs docs-sync docs-serve clean
