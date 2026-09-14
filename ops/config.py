@@ -153,7 +153,10 @@ SETTINGS: tuple[Setting, ...] = (
     Setting("GH_TOKEN", R.TOOLING, "",
             "GitHub token for catalog harvesting and contract artifacts. Never "
             "needed by a running node.", secret=True),
-    Setting("GITHUB_TOKEN", R.TOOLING, "", "Alias for GH_TOKEN.", secret=True),
+    Setting("GITHUB_TOKEN", R.TOOLING, "",
+            "Alias for GH_TOKEN, checked second. Present because CI runners set "
+            "this name by convention; a running node never needs either.",
+            secret=True),
     Setting("SOLC", R.TOOLING, "", "Path to solc for contract compilation."),
     Setting("RPC_URL", R.TOOLING, "", "RPC endpoint for contract deployment."),
     Setting("DEPLOYER_KEY", R.TOOLING, "",
