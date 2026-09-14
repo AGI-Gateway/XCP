@@ -17,6 +17,7 @@ it discoverable, without talking to anybody:
     xcp wrap <api>           generate an MCP server from a public API spec
     xcp conform <url>        test an implementation against the spec
     xcp triage <url>         diagnose a live node
+    xcp config               every setting, risky ones marked
     xcp privacy map          data map, retention and erasure
     xcp compliance gaps      control mapping, gaps and covenants
 
@@ -710,6 +711,23 @@ def cmd_triage(args: argparse.Namespace) -> int:
     return 2 if w is Sev.CRITICAL else (1 if w is Sev.HIGH else 0)
 
 
+def cmd_config(args: argparse.Namespace) -> int:
+    """Every setting, with the ones that weaken a control marked."""
+    from ops.config import table, SETTINGS, Role, unsafe, secrets
+    if args.json:
+        print(json.dumps([s.to_dict() for s in SETTINGS], indent=2)); return 0
+    role = Role(args.role) if args.role else None
+    head("Configuration")
+    print(table(role, only_unsafe=args.unsafe))
+    if not args.unsafe and not role:
+        print()
+        warn(f"{len(unsafe())} settings weaken a control when set — "
+             "`xcp config --unsafe` lists only those")
+        info(f"{len(secrets())} are secrets: keep them in a secret backend, "
+             "never in an image or a compose file")
+    return 0
+
+
 # ── small helpers ──────────────────────────────────────────────────────────
 
 def _which(binary: str) -> bool:
@@ -848,6 +866,14 @@ def build_parser() -> argparse.ArgumentParser:
     pv.add_argument("--classes", help="comma-separated data classes held")
     pv.add_argument("--json", action="store_true")
     pv.set_defaults(fn=cmd_privacy)
+
+    cg = sub.add_parser("config", help="every setting, and which ones are risky")
+    cg.add_argument("--role", choices=["gateway", "server", "verifier", "node",
+                                       "wrapper", "telemetry", "tooling"])
+    cg.add_argument("--unsafe", action="store_true",
+                    help="only settings that weaken a control")
+    cg.add_argument("--json", action="store_true")
+    cg.set_defaults(fn=cmd_config)
 
     tr = sub.add_parser("triage", help="diagnose a live node")
     tr.add_argument("url")

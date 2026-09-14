@@ -25,6 +25,7 @@ jobs:
           python tests/test_version.py
           python tests/test_performance.py
           python tests/test_telemetry.py
+          python tests/test_config_drift.py
           python tests/test_privacy.py
           python tests/test_covenants.py
           pip install pyyaml

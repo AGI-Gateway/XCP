@@ -17,6 +17,168 @@ nothing urgent. Each playbook below is keyed to a finding it can produce.
 
 ---
 
+## Day 0 — standing up a node
+
+Six steps. `xcp triage` at the end tells you whether you actually succeeded.
+
+### 1. Create the node identity — once, and back it up first
+
+```bash
+python scripts/rotate-cert.py --init
+#   XCP_NODE_KEY=0x...
+#   node_id=0x...
+```
+
+!!! danger "Back this up offline before you use it"
+    Losing `XCP_NODE_KEY` is the only unrecoverable failure in this system. The
+    node loses its identity and **every attestation any peer ever made about
+    it**. A certificate can be rotated; this cannot. Put it in a secret backend
+    and verify the offline copy restores before you depend on it.
+
+### 2. Get a real certificate
+
+Let's Encrypt, your own CA, whatever you already run. The dev PKI from
+`xcp certs` is for local testing and nothing else.
+
+### 3. Publish the node record
+
+```bash
+XCP_NODE_KEY=... python scripts/rotate-cert.py \
+    --cert /etc/letsencrypt/live/you/fullchain.pem \
+    --domain node.example.org \
+    --record /var/www/.well-known/xcp-node.json
+```
+
+Serve `/.well-known/xcp-node.json` **unauthenticated** (RFC 8615) — a peer must
+read it before any relationship exists. Then wire the same command as a certbot
+deploy hook, so renewal never needs remembering.
+
+### 4. Start the gateway
+
+```bash
+docker run -p 8080:8080 \
+  -e ROLE=gateway \
+  -e XCP_POSTURE=enforce \
+  -e XCP_SECURITY=1 \
+  -e XCP_RATE_LIMIT=1 \
+  -e XCP_UPSTREAMS='{"research":"https://your-mcp/mcp"}' \
+  -e XCP_NODE_KEY=... -e XCP_NODE_DOMAIN=node.example.org \
+  ghcr.io/agi-gateway/xcp@sha256:<digest>
+```
+
+Or Helm — see [deployment](../docs/deployment.md). **Pin the digest**: a tag is mutable,
+and this chart deploys the component that polices everyone else's supply chain.
+
+### 5. Install the native crypto backend
+
+```bash
+pip install coincurve     # already in requirements.txt
+```
+
+Without it, signature verification costs **6.5 ms instead of 0.19 ms** on every
+call and nothing tells you. `xcp triage` checks it.
+
+### 6. Verify you actually succeeded
+
+```bash
+xcp triage https://node.example.org     # exit 0 means nothing urgent
+xcp conform https://node.example.org    # does it speak the protocol correctly
+```
+
+A node that starts is not a node that is configured. Step 6 is the step people
+skip and then discover during an incident.
+
+---
+
+## Diagnostic tools
+
+Everything available, and the question each answers.
+
+| tool | answers |
+|---|---|
+| `xcp triage <url>` | **"what is wrong right now?"** — 14 checks, worst-first, each with a next action. Exit 2 CRITICAL, 1 HIGH |
+| `xcp doctor` | "is my local environment able to run this?" — dependencies, config file, tier |
+| `xcp config` | "what settings exist, and which are dangerous?" — `--unsafe` for just those |
+| `xcp conform <url>` | "does this implementation obey the protocol?" — works against any node, not just ours |
+| `xcp compliance recovery` | "what state must survive a restart, and what is unrecoverable?" |
+| `xcp compliance gaps` | "what is not covered, and who carries it?" |
+| `xcp privacy reconcile` | "do my retention settings satisfy the floors that apply?" |
+| `xcp catalog` | "what can this node reach, and how much of it is verified?" |
+| `make bench` | "what does the trust layer cost on **my** hardware?" |
+| `GET /health` | posture, limiter, crypto backend, telemetry, protocol versions |
+| `GET /metrics` | Prometheus metrics for scraping |
+| `GET /v1/federation/peers` | who this node trusts, and at what hop count |
+
+When paged, the order is: `triage` → the matching playbook below → capture state
+before restarting.
+
+---
+
+## Configuration reference
+
+**!** weakens a control when set — find these deliberately, never by accident.
+**#** is a secret: secret backend only, never an image or a compose file.
+
+**gateway**
+
+| setting | default | |
+|---|---|---|
+| `XCP_POSTURE` **!** | `enforce` | enforce | observe. Observe logs decisions without blocking them — for onboarding an endpoint you have not vetted, never a steady state. |
+| `XCP_GATEWAY_ID` | `gw-local` | Identifier stamped on audit records and forwarded downstream as XCP-Verified-By. |
+| `XCP_UPSTREAMS` | `{}` | JSON map of name to MCP url, e.g. {"research":"https://.../mcp"}. Empty means every a2t call 404s. |
+| `XCP_VERIFY_URL` | `—` | External verifier. Unset uses in-memory bindings, which is fine for one node and insufficient for a federation. |
+| `XCP_CACHE_TTL` | `30` | Seconds to cache a verification result. Longer means a revocation takes longer to bite. |
+| `XCP_SECURITY` | `0` | Enable the xcpsec argument firewall. The gateway REFUSES TO START if this is 1 and xcpsec is unavailable, rather than running with a control you asked for silently absent. |
+| `XCP_RATE_LIMIT` **!** | `1` | Abuse controls. Setting 0 on a node reachable by strangers makes it an open relay. |
+| `XCP_GLOBAL_RATE` | `120000` | Node-wide cost units per minute, independent of any caller's tier. |
+| `XCP_GLOBAL_CONCURRENCY` | `256` | Node-wide in-flight request cap. |
+| `XCP_LIMIT_FAIL_OPEN` **!** | `0` | Serve traffic if the limiter itself fails. Turns any limiter bug into an abuse bypass; only for private deployments behind another limiter. |
+| `XCP_SECRET_*` `#` | `—` | Prefix for the env secret backend, e.g. XCP_SECRET_CONNECTORS_GITHUB_CLIENT_ID. Development only. |
+
+**server**
+
+| setting | default | |
+|---|---|---|
+| `REQUIRE_VERIFIED` **!** | `1` | Refuse calls that did not arrive through a gateway. Setting 0 lets anyone reach the tools directly, bypassing every control. |
+| `XCP_SERVER_NAME` | `research` | Name this server answers to in XCP_UPSTREAMS. |
+
+**verifier**
+
+| setting | default | |
+|---|---|---|
+| `CHAIN_RPC` | `—` | EVM RPC endpoint. Unset means in-memory verification. |
+| `CHAIN_ID` | `8453` | Chain id for EIP-712 domains. |
+| `SESSION_REGISTRY` | `—` | Deployed SessionRegistry address. Required with CHAIN_RPC. |
+| `SESSION_REGISTRY_ABI` | `—` | Path to an ABI override. Defaults to the generated artifact. |
+
+**node**
+
+| setting | default | |
+|---|---|---|
+| `XCP_NODE_KEY` `#` | `—` | Long-lived node identity key. LOSING THIS IS UNRECOVERABLE: the node loses its identity and every attestation any peer made about it. Back it up offline before first use. |
+| `XCP_NODE_DOMAIN` | `—` | Domain this node claims. Must match where the record is served. |
+| `XCP_NODE_URL` | `—` | Public gateway URL published to peers. |
+| `XCP_NODE_CERT_FOOTPRINT` | `—` | keccak256(DER(cert)) of the certificate currently served. scripts/rotate-cert.py maintains this. |
+| `XCP_NODE_OPERATOR` | `anonymous` | Operator name published in the node record. |
+
+**wrapper**
+
+| setting | default | |
+|---|---|---|
+| `XCP_SEAL_PRIVATE` `#` | `—` | X25519 private key for sealed credentials. Without it a sealed wrapper refuses to start, because regenerating silently invalidates every credential already sealed to it. |
+| `XCP_SEAL_PREVIOUS` `#` | `—` | Comma-separated previous sealing keys, accepted during a rotation so in-flight requests do not break. |
+| `XCP_SEAL_EPHEMERAL` **!** | `0` | Accept a throwaway sealing key. Every restart invalidates every sealed credential; local testing only. |
+| `UPSTREAM_CREDENTIAL` `#` | `—` | Fallback upstream credential when no vault backend is configured. Prefer a vault:// reference. |
+
+**telemetry**
+
+| setting | default | |
+|---|---|---|
+| `XCP_OTEL` | `0` | Enable OpenTelemetry. |
+| `XCP_OTEL_DETAIL` **!** | `scrubbed` | scrubbed | hosts | full. `full` exports raw agent ids, scopes and hostnames — self-hosted collectors only. Sending it to a vendor is a new processor and usually an international transfer. |
+| `OTEL_EXPORTER_OTLP_ENDPOINT` | `—` | Collector endpoint. Enabled with no endpoint sends spans to the console, which is work nobody collects. |
+| `OTEL_SERVICE_NAME` | `xcp-gateway` | Service name on exported telemetry. |
+
 ## Severity, and what it actually means
 
 | | meaning | response |
