@@ -72,7 +72,7 @@ def _client():
     from xcp_client import XCPClient, AgentIdentity, sign_mandate
     key = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
     ident = AgentIdentity(agent_id=42001, chain_id=8453, private_key=key)
-    c = XCPClient("http://127.0.0.1:8090", ident)
+    c = XCPClient("http://127.0.0.1:8090", ident, tier="A2xH2")
     c.connect()
     return c, ident, sign_mandate, key
 

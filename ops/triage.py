@@ -157,7 +157,8 @@ def triage(base: str) -> list[Finding]:
                 Sev.MEDIUM, "telemetry init", f"failed: {tel['error']}",
                 "The node is fine; you are flying without instruments."))
     else:
-        out.append(Finding(Sev.INFO, "telemetry", "disabled"))
+        out.append(Finding(Sev.OK, "telemetry",
+                           "disabled (optional; node unaffected)"))
 
     # ── verifier and upstreams ──
     if h.get("verifier") in (None, "", "unset"):
@@ -175,7 +176,8 @@ def triage(base: str) -> list[Finding]:
     # ── federation ──
     fstatus, fed = _get(f"{base}/v1/federation/peers")
     if fstatus == 404:
-        out.append(Finding(Sev.INFO, "federation", "not configured (standalone)"))
+        out.append(Finding(Sev.OK, "federation",
+                           "not configured (standalone — valid)"))
     elif fstatus == 200:
         summary = fed.get("summary", {})
         n = summary.get("direct", 0)
@@ -243,7 +245,13 @@ def triage(base: str) -> list[Finding]:
 
 
 def worst(findings: list[Finding]) -> Sev:
-    return min((f.sev for f in findings), default=Sev.OK)
+    """
+    The worst ACTIONABLE severity. INFO is context, not a problem — folding it
+    into the verdict would mean a correctly configured node never reports clean,
+    which trains an operator to ignore the exit code.
+    """
+    sev = min((f.sev for f in findings), default=Sev.OK)
+    return Sev.OK if sev is Sev.INFO else sev
 
 
 def report(base: str, findings: list[Finding]) -> str:

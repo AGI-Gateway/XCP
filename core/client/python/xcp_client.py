@@ -143,11 +143,16 @@ class XCPClient:
     """
 
     def __init__(self, gateway_url: str, identity: AgentIdentity,
-                 verify_tls: bool = True) -> None:
+                 verify_tls: bool = True, tier: str = "A0xH0") -> None:
         self.gateway_url = gateway_url.rstrip("/")
         self.identity = identity
         self.session: Optional[Session] = None
         self._verify_tls = verify_tls
+        # The lattice cell this client claims; the gateway decides whether to
+        # honour it. The default is the floor on purpose, but note that A0xH0
+        # allows 60 cost units a minute — about a dozen tool calls — so a busy
+        # client that never declares a tier will be throttled almost at once.
+        self.tier = tier
         self._http = self._build_http_client()
 
     # ---- transport ----
@@ -185,6 +190,7 @@ class XCPClient:
             "chainId": self.identity.chain_id,
             "footprint": footprint,
             "address": self.identity.address,
+            "tier": self.tier,
         }
         r = self._http.post(f"{self.gateway_url}/v1/session/open", json=body)
         if r.status_code != 200:

@@ -162,7 +162,10 @@ SETTINGS: tuple[Setting, ...] = (
     Setting("DEPLOYER_KEY", R.TOOLING, "",
             "Deployment key. Read from the environment and never written "
             "anywhere.", secret=True),
-    Setting("NO_COLOR", R.TOOLING, "", "Disable CLI colour output."),
+    Setting("NO_COLOR", R.TOOLING, "",
+            "Disable ANSI colour in CLI output. Honours the no-color.org "
+            "convention, so setting it to any value suppresses escape codes — "
+            "useful when piping triage output into an incident ticket."),
 )
 
 _BY_NAME = {s.name: s for s in SETTINGS}

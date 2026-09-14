@@ -25,6 +25,9 @@ WORKDIR /app
 # before.
 COPY core/            /app/core/
 COPY trustfirewall/   /app/trustfirewall/
+COPY protocol/        /app/protocol/
+COPY telemetry/       /app/telemetry/
+COPY ops/             /app/ops/
 COPY security/        /app/security/
 COPY vault/           /app/vault/
 COPY trust/           /app/trust/
