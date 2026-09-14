@@ -172,6 +172,21 @@ CLASSES: dict[str, DataClass] = {c.id: c for c in [
         note="No financial obligation attaches, so the Art. 17(3) exemption "
              "does not apply and these are erasable on request."),
     DataClass(
+        id="telemetry",
+        description="Spans, metrics and logs exported to an observability "
+                    "backend: pseudonymous agent ids, trust tiers, scope "
+                    "families, decisions and timings.",
+        subject=Subject.HUMAN, basis=Basis.LEGITIMATE_INTEREST,
+        retention_seconds=30 * DAY, erasable_on_request=True,
+        note="Telemetry is a data-EXPORT path, and exporting to a third-party "
+             "vendor is a new processor and usually an international transfer. "
+             "Scrubbed by default: identifiers are pseudonymised per process, "
+             "scope names are reduced to their family, and tool arguments and "
+             "result payloads are never recorded at any detail level. "
+             "XCP_OTEL_DETAIL=full raises this and should only be used with a "
+             "self-hosted collector.",
+        ),
+    DataClass(
         id="node_record",
         description="Federation peers: domains, node identities, bindings, "
                     "attestations.",

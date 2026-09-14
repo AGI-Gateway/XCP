@@ -187,6 +187,73 @@ Re-measure on your own hardware with `make bench`.
 
 ---
 
+## Observability (OpenTelemetry)
+
+Off unless asked for. Without the SDK, or without `XCP_OTEL=1`, every
+instrumentation call is a no-op — a node runs identically whether or not anyone
+is collecting.
+
+```bash
+XCP_OTEL=1 \
+OTEL_EXPORTER_OTLP_ENDPOINT=http://collector:4318 \
+OTEL_SERVICE_NAME=xcp-gateway-eu-west \
+XCP_OTEL_DETAIL=scrubbed \
+  uvicorn core.gateway.xcp_gateway:app --port 8080
+```
+
+Helm: set the same as `gateway.env`. Confirm it is live with
+`xcp triage <url>` — it reports the endpoint and detail level, and flags an
+enabled exporter with no endpoint (spans going to the console is work nobody
+collects).
+
+### What a span tells you
+
+A latency number says a call was slow. These spans say **why a call was
+refused**, which is the question you actually have:
+
+| attribute | |
+|---|---|
+| `xcp.decision` | `allow` / `block` / `reject` |
+| `xcp.decision.reason` | why — the useful half |
+| `xcp.trust.tier` | the lattice cell, e.g. `A2xH2` |
+| `xcp.scope` | scope **family**, e.g. `mcp:tools/*` |
+| `xcp.limit.kind` | which limit fired: `rate`, `concurrency`, `body`, `global` |
+| `xcp.server.trust_class` | `unknown` / `probed` / `attested` / `contracted` |
+
+A refusal is recorded as span status **OK with `xcp.refused=true`**, not ERROR.
+Marking refusals as errors makes every dashboard look like an outage during an
+attack the gateway successfully repelled.
+
+### Metrics to alert on
+
+| metric | alert when |
+|---|---|
+| `xcp.calls{decision="reject"}` | rate jumps — probe or misconfigured client |
+| `xcp.limit.rejections{kind="global"}` | non-zero — the **node** is saturated, not one caller |
+| `xcp.verify.duration` | p95 above ~2 ms — the crypto fast path was lost |
+| `xcp.peers` | drops — a peer revoked or became unreachable |
+
+`xcp.verify.duration` is the canary for the 35× pure-Python ECDSA regression: it
+sits near 0.19 ms healthy and ~6.5 ms broken.
+
+!!! danger "Telemetry is a data-export path"
+    Default is `scrubbed`: agent ids are pseudonymised per process, scope names
+    are reduced to their family (`mcp:tools/patient_lookup` becomes
+    `mcp:tools/*`), and hostnames are hashed. **Tool arguments and result
+    payloads are never recorded at any level.**
+
+    `XCP_OTEL_DETAIL=full` exports raw identifiers and is only appropriate for a
+    **self-hosted** collector. Sending it to a third-party vendor is a new
+    processor and usually an international transfer. `triage` flags it as HIGH.
+
+    Telemetry is a declared class in the [data map](../privacy/README.md) — 30 days,
+    legitimate interest, erasable — because adding it without declaring it
+    creates processing your Art. 30 record does not cover.
+
+    `telemetry.SENSITIVE_AT_FULL` lists the attributes a collector should drop
+    before forwarding, so the decision can be enforced in config rather than
+    trusted.
+
 ## Routine operations
 
 | task | cadence | command |

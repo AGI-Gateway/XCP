@@ -20,6 +20,12 @@ spec:
           env:
             - {name: ROLE,          value: "gateway"}
             - {name: XCP_POSTURE,   value: {{ .Values.gateway.posture | quote }}}
+            {{- if .Values.telemetry.enabled }}
+            - {name: XCP_OTEL, value: "1"}
+            - {name: XCP_OTEL_DETAIL, value: {{ .Values.telemetry.detail | quote }}}
+            - {name: OTEL_SERVICE_NAME, value: {{ .Values.telemetry.serviceName | quote }}}
+            - {name: OTEL_EXPORTER_OTLP_ENDPOINT, value: {{ .Values.telemetry.endpoint | quote }}}
+            {{- end }}
             - {name: XCP_SECURITY,  value: {{ .Values.gateway.security | quote }}}
             - {name: XCP_UPSTREAMS, value: {{ .Values.gateway.upstreams | toJson | quote }}}
             {{- if .Values.verifier.enabled }}

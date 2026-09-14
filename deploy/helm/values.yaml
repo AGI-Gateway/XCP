@@ -48,5 +48,13 @@ containerSecurityContext:
   readOnlyRootFilesystem: true
   capabilities: {drop: [ALL]}
 
+telemetry:
+  enabled: false                # XCP_OTEL
+  endpoint: ""                  # OTEL_EXPORTER_OTLP_ENDPOINT
+  serviceName: xcp-gateway
+  # scrubbed | hosts | full. `full` exports raw identifiers and is only
+  # appropriate for a self-hosted collector — see docs/runbook.md.
+  detail: scrubbed
+
 serviceMonitor:
   enabled: false            # set true if you run the Prometheus operator

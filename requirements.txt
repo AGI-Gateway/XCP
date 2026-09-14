@@ -22,3 +22,10 @@ prometheus-client>=0.20
 # docs site (optional):
 # mkdocs-material>=9.5
 pyyaml>=6.0
+
+# optional — OpenTelemetry. Without these, every instrumentation call is a
+# no-op and the node runs identically. See telemetry/attributes.py before
+# raising XCP_OTEL_DETAIL: telemetry is a data-export path.
+# opentelemetry-api>=1.20
+# opentelemetry-sdk>=1.20
+# opentelemetry-exporter-otlp-proto-http>=1.20

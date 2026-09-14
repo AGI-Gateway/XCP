@@ -133,6 +133,32 @@ def triage(base: str) -> list[Finding]:
         out.append(Finding(Sev.OK, "crypto backend",
                            f"{h.get('cryptoBackend')} (native)"))
 
+    # ── telemetry ──
+    tel = h.get("telemetry") or {}
+    if tel.get("enabled"):
+        if tel.get("detail") == "full":
+            out.append(Finding(
+                Sev.HIGH, "telemetry detail",
+                "exporting at FULL detail — raw agent ids, scopes and hostnames",
+                "Only appropriate for a self-hosted collector. If this ships to "
+                "a third-party vendor it is a new processor and probably an "
+                "international transfer. Set XCP_OTEL_DETAIL=scrubbed."))
+        elif not tel.get("endpoint"):
+            out.append(Finding(
+                Sev.MEDIUM, "telemetry",
+                "enabled but no OTLP endpoint — spans go to the console",
+                "Set OTEL_EXPORTER_OTLP_ENDPOINT, or disable with XCP_OTEL=0 "
+                "so the node is not doing work nobody collects."))
+        else:
+            out.append(Finding(Sev.OK, "telemetry",
+                               f"exporting to {tel['endpoint']} ({tel['detail']})"))
+        if tel.get("error"):
+            out.append(Finding(
+                Sev.MEDIUM, "telemetry init", f"failed: {tel['error']}",
+                "The node is fine; you are flying without instruments."))
+    else:
+        out.append(Finding(Sev.INFO, "telemetry", "disabled"))
+
     # ── verifier and upstreams ──
     if h.get("verifier") in (None, "", "unset"):
         out.append(Finding(

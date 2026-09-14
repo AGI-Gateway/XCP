@@ -118,6 +118,27 @@ try:
 except Exception:
     pass
 
+# OpenTelemetry. Optional and off unless XCP_OTEL=1; every call is a no-op
+# otherwise, so a node runs identically whether or not anyone is collecting.
+try:
+    import sys as _ts, pathlib as _tp
+    _ts.path.insert(0, str(_tp.Path(__file__).resolve().parents[2]))
+    from telemetry import (init as _otel_init, call_span, record_decision,
+                           record_limit, status as _otel_status,
+                           node_attributes as _node_attrs)
+    _otel_init(resource_attributes=_node_attrs(
+        posture=POSTURE, crypto_fast=_CRYPTO_FAST))
+except Exception:
+    from contextlib import contextmanager as _cm
+
+    @_cm
+    def call_span(name, **kw):
+        yield None
+
+    def record_decision(*a, **k): pass
+    def record_limit(*a, **k): pass
+    def _otel_status(): return {"enabled": False}
+
 app = FastAPI(title="XCP Gateway", version="0.1.0-draft")
 
 # A pooled client for upstream calls. Creating an AsyncClient per request pays a
@@ -196,6 +217,7 @@ def _limit(ctx: "Ctx", method: str, scope: str = "", body: bytes = b"",
     if d.allowed:
         return None
     audit(ctx, "limit", f"{d.limit}: {d.reason}")
+    record_limit(d.limit)
     return JSONResponse({"error": f"XCP rate limit: {d.reason}",
                         "limit": d.limit, "retryAfter": d.retry_after},
                         status_code=429,
@@ -438,6 +460,7 @@ async def a2t_call(request: Request) -> Response:
         return limited
     if not ctx.verified and POSTURE == "enforce":
         _m(M_REQ, stream="a2t", decision="reject")
+        record_decision(None, decision="reject", reason=ctx.reason, stream="a2t")
         audit(ctx, "a2t", f"({ctx.reason})")
         return _reject(ctx)
     raw = await request.body()
@@ -452,10 +475,16 @@ async def a2t_call(request: Request) -> Response:
     if not ok and POSTURE == "enforce":
         _m(M_REQ, stream="a2t", decision="block")
         _m(M_DENY, scope=scope)
+        record_decision(None, decision="block", reason=why, stream="a2t",
+                        agent_id=ctx.agent_id, scope=scope,
+                        tier=getattr(ctx.binding, "tier", ""))
         audit(ctx, "a2t", f"tool={tool} BLOCKED ({why})")
         return _deny(scope, why)
     audit(ctx, "a2t", f"server={server} tool={tool}")
     _m(M_REQ, stream="a2t", decision="allow")
+    record_decision(None, decision="allow", stream="a2t", agent_id=ctx.agent_id,
+                    scope=scope, server_host=server,
+                    tier=getattr(ctx.binding, "tier", ""))
     # optional xcpsec argument firewall: block command injection / SSRF before routing
     if _SECURITY_OK and _guard is not None:
         args = body.get("arguments", {})
@@ -769,6 +798,7 @@ async def health() -> dict:
         pass
     return {"ok": True, "posture": POSTURE, "gateway": GATEWAY_ID, **_adv,
             "cryptoBackend": _CRYPTO_BACKEND, "cryptoFastPath": _CRYPTO_FAST,
+            "telemetry": _otel_status(),
             "rateLimit": _LIMITS.stats() if _LIMITS else "disabled",
             "verifier": "external" if VERIFY_URL else "local",
             "upstreams": list(UPSTREAMS.keys())}

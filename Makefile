@@ -21,6 +21,7 @@ test: ## run every test suite
 	@echo "── two real nodes ──"     && $(PY) tests/test_two_node.py
 	@echo "── performance ──"        && $(PY) tests/test_performance.py
 	@echo "── triage + runbook ──"   && $(PY) tests/test_triage.py
+	@echo "── telemetry ──"          && $(PY) tests/test_telemetry.py
 	@echo "── paid transport ──"     && $(PY) tests/test_transport.py
 	@echo "── abuse controls ──"     && $(PY) tests/test_limits.py
 	@echo "── packaging ──"          && $(PY) tests/test_packaging.py

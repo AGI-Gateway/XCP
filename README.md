@@ -182,6 +182,7 @@ xcp/
 ├── trustfirewall/          stateless MCP credentials + graded corpus reachability
 ├── receipts/               proof-of-delivery and evidence-conditioned escrow
 ├── privacy/                retention, crypto-shredded erasure, the data map
+├── telemetry/              OpenTelemetry logs, metrics, traces — scrubbed
 ├── ops/                    live triage: the first five minutes, automated
 ├── bench/                  performance measurement against a baseline
 ├── discovery/              ARD catalog + MCP Registry manifest generation
