@@ -53,6 +53,8 @@ jobs:
         run: python tests/test_e2e.py
       - name: Two real nodes federating
         run: python tests/test_two_node.py
+      - name: Triage and runbook
+        run: python tests/test_triage.py
       - name: Conformance suite (reference must certify)
         run: python tests/test_conformance.py
 

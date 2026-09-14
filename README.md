@@ -182,6 +182,8 @@ xcp/
 ├── trustfirewall/          stateless MCP credentials + graded corpus reachability
 ├── receipts/               proof-of-delivery and evidence-conditioned escrow
 ├── privacy/                retention, crypto-shredded erasure, the data map
+├── ops/                    live triage: the first five minutes, automated
+├── bench/                  performance measurement against a baseline
 ├── discovery/              ARD catalog + MCP Registry manifest generation
 ├── core/
 │   ├── client/             Python · Go · Java · browser

@@ -16,6 +16,7 @@ it discoverable, without talking to anybody:
     xcp catalog              inspect and search the discovery catalog
     xcp wrap <api>           generate an MCP server from a public API spec
     xcp conform <url>        test an implementation against the spec
+    xcp triage <url>         diagnose a live node
     xcp privacy map          data map, retention and erasure
     xcp compliance gaps      control mapping, gaps and covenants
 
@@ -697,6 +698,18 @@ def cmd_compliance(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_triage(args: argparse.Namespace) -> int:
+    """Diagnose a live node: the first five minutes, automated."""
+    from ops import triage, report, worst, Sev
+    findings = triage(args.url)
+    if args.json:
+        print(json.dumps([f.to_dict() for f in findings], indent=2))
+    else:
+        print(report(args.url, findings))
+    w = worst(findings)
+    return 2 if w is Sev.CRITICAL else (1 if w is Sev.HIGH else 0)
+
+
 # ── small helpers ──────────────────────────────────────────────────────────
 
 def _which(binary: str) -> bool:
@@ -835,6 +848,11 @@ def build_parser() -> argparse.ArgumentParser:
     pv.add_argument("--classes", help="comma-separated data classes held")
     pv.add_argument("--json", action="store_true")
     pv.set_defaults(fn=cmd_privacy)
+
+    tr = sub.add_parser("triage", help="diagnose a live node")
+    tr.add_argument("url")
+    tr.add_argument("--json", action="store_true")
+    tr.set_defaults(fn=cmd_triage)
 
     u = sub.add_parser("up", help="run the stack locally")
     u.add_argument("--docker", action="store_true")
