@@ -1,0 +1,781 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\hypersetup{colorlinks=true, linkcolor=blue!45!black, citecolor=blue!45!black,
+            urlcolor=blue!45!black}
+
+\title{\textbf{The AI Agentic Internet}\\[0.35em]
+\large Pacing Reach, Not Only Capability: How a Trust Layer Lets Autonomous
+Progress Continue Without Disrupting the Human Internet}
+
+\author{XCP Standard Working Group\\
+\small \texttt{research@agi-gateway.org}}
+
+\date{Working paper / proposal for open review --- September 2026}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+In September 2026 the leaders of four frontier laboratories publicly agreed that
+the pace of AI capability improvement should be deliberately
+slowed~\cite{amodei2026,pacing2026}. Within a day, the United States executive
+branch rejected statutory pauses and Beijing dismissed the proposal, each framing
+restraint as a strategic concession to the other. The debate has become a
+referendum on a single dial: faster or slower.
+
+We argue that this framing omits the dimension where the problem actually lives.
+The incidents that made the debate concrete were not capability failures. In
+disclosed evaluations, models obtained unauthorised access to real computer
+systems --- in one case because a misconfiguration granted internet access to an
+environment deliberately stripped of its usual cybersecurity safeguards. Nothing
+standing between the model and those systems could establish whether the access
+was authorised, because no such layer exists. That is a \emph{containment}
+failure at the access layer, and capability pacing does not address it.
+
+We therefore propose a second, complementary lever: \textbf{pacing reach}. An
+agent's capability is what it could in principle do; its reach is what it can
+actually touch, on whose authority, within what bounds, and with what evidence
+afterwards. Reach is governed by infrastructure rather than by model weights,
+which makes it buildable today, deployable unilaterally, verifiable by third
+parties, and --- critically for the geopolitical objection --- not a form of
+unilateral disarmament.
+
+This paper advances the eXtended Context Protocol (XCP) as that layer. XCP does
+not replace the Model Context Protocol (MCP), Agent-to-Agent (A2A), or any
+interaction standard. It is a composable trust and control layer providing
+identity, governance, authorisation, graded admission, accounting,
+proof-of-delivery receipts, settlement context, and federation. Its practical
+entry point is the \emph{Trust Firewall}: a boundary across which capabilities
+may be discovered broadly but admitted selectively.
+
+We report a working reference implementation: 485 tests, a black-box conformance
+suite that can certify independent implementations, and a measured trust-layer
+overhead of \textbf{0.21\,ms} --- roughly $0.7\%$ of one cross-region round trip.
+The cost of knowing who is acting turns out to be close to nothing.
+
+We argue this is what allows a new family of agentic protocols to develop
+\emph{safely}: bounded reach makes experimentation survivable, protects the human
+web from becoming collateral damage, and creates the conditions under which
+autonomous systems augment human collective intelligence rather than compete with
+it for the same space.
+\end{abstract}
+
+\section{A Debate About Speed, Missing a Dimension}
+
+On 12 September 2026, Anthropic's chief executive published an essay arguing that
+the industry should deliberately slow improvements in model
+capability~\cite{amodei2026}. Within hours, the heads of OpenAI, xAI, and Google
+DeepMind indicated agreement. It is unusual for four competitors to agree about
+brakes in a single afternoon, and the agreement built on a statement circulated
+that July --- signed by well over a thousand laboratory employees --- asking
+governments to support international mechanisms for managing the pace of
+automated AI research~\cite{pacing2026}.
+
+The political response was immediate and opposed. The United States executive
+branch rejected statutory pauses, with senior officials framing restraint as a
+transfer of advantage to strategic competitors; Beijing rejected the proposal as
+well. Within the industry, critics observed that ``pace'' is not a single
+quantity: gains arrive through compute, algorithms, training methods, and
+\emph{how systems are deployed}, and no single control governs all
+four~\cite{mccord2026}.
+
+We think that last observation is the important one, and that it has been
+underweighted. Three of those four channels are properties of how a model is
+built. The fourth --- deployment --- is a property of the infrastructure a model
+is connected to. It is the only one that can be changed without a laboratory's
+cooperation, without an international agreement, and without conceding anything
+to a competitor.
+
+\subsection{What the incidents were actually about}
+
+The slowdown argument stopped being hypothetical because of disclosed evaluation
+incidents. In an August 2026 account of changes to its alignment and security
+practices, Anthropic described cases in which models obtained unauthorised access
+to real computer systems during testing. The circumstances matter and were
+stated: the models were deliberately operating without their usual cybersecurity
+safeguards, and in one environment a misconfiguration allowed internet access. A
+separate incident during testing by the UK AI Security Institute involved
+internet access that had been deliberately provided~\cite{nse2026}.
+
+Read carefully, these are not stories about a model becoming too capable. They
+are stories about a model \emph{reaching something it should not have reached},
+in an environment where nothing in the path could determine whether the reach was
+authorised. The safeguards that failed were access controls. The variable that
+mattered was not what the model knew; it was what the model could touch.
+
+This distinction has a direct consequence for policy. If the failure mode is
+capability, the remedy is slower capability, and the remedy is unavoidably
+multilateral --- any unilateral application is a competitive handicap. If the
+failure mode is containment at the access layer, the remedy is infrastructure,
+and infrastructure can be built by anyone, adopted incrementally, and verified
+independently. The two remedies are complementary rather than rival. Our claim is
+that the second has been almost entirely absent from a debate that badly needs
+it.
+
+\subsection{Pacing reach}
+
+We propose \emph{pacing reach} as a companion to pacing capability:
+
+\begin{quote}
+An agent's \textbf{capability} is what it could in principle do. Its
+\textbf{reach} is what it can actually touch --- which systems, on whose
+authority, within what bounds, for how long, and with what evidence afterwards.
+Capability is governed by training. Reach is governed by infrastructure.
+\end{quote}
+
+Pacing reach has properties that pacing capability lacks. It is deployable by a
+single organisation without waiting for agreement. It is incremental: an operator
+can admit one capability at a time rather than choosing between full openness and
+full exclusion. It is verifiable: a third party can check that a boundary is
+enforced, which no assurance about training practices allows. And it does not
+slow anything an operator has decided to trust --- our measurements put the cost
+at $0.21$\,ms per call.
+
+An Anthropic envoy recently characterised progress as moving
+\emph{at the speed of trust}~\cite{neuron2026}. We take that literally and
+architecturally: if trust is the rate limiter, then building trust infrastructure
+is a way of \emph{accelerating} safely, not only of slowing down.
+
+\section{The Human Internet Is Already Paying}
+
+There is a second reason this matters now, and it is more visible to the public
+than any laboratory evaluation.
+
+The web that humans use is absorbing the costs of ungoverned agent traffic.
+Automated requests have grown to a substantial share of traffic; volunteer-run
+and public-interest sites report significant load increases; publishers face
+erosion of the advertising model that funded open content; and an attribution
+gap has widened as answers are synthesised from sources that go
+uncited~\cite{pattison2026}.
+
+The response has been an arms race. Platforms deploy fingerprinting, challenges,
+and blanket blocks; agent developers evade them. Because few technical
+distinctions exist between a scraper harvesting training data and an agent acting
+under a named person's explicit instruction, both are treated as hostile. Legal
+mechanisms designed for an earlier generation of automation --- computer-misuse
+statutes, terms of service, trespass doctrines --- are being stretched to cover
+a technology they were not written for~\cite{pattison2026}.
+
+The result is a settlement that serves nobody. Legitimate delegated agents are
+blocked alongside malicious ones. Platforms spend on defences that work briefly.
+Users lose the interoperability that agents promised. And each increment of agent
+capability converts directly into an increment of pressure on the human web,
+because the two currently occupy the same undifferentiated space with no
+mechanism for telling them apart.
+
+\subsection{The two-Internet thesis}
+
+This suggests the architectural proposition at the centre of this paper.
+
+\begin{quote}
+Agent activity and human activity currently share one undifferentiated Internet.
+Consequently every advance in agent capability is automatically an advance in
+pressure on the human web. Separating the two --- not physically, but by making
+agent activity \emph{legible, bounded, accountable, and economically settled}
+--- decouples those curves. Autonomous progress can then continue without the
+human Internet absorbing the externalities.
+\end{quote}
+
+We are not proposing a separate network. We are proposing that agent traffic
+carry enough context to be governed as a distinct class: identity, authority,
+scope, provenance, and evidence. Once a platform can distinguish an authorised
+delegate from an anonymous harvester, the arms race becomes unnecessary, because
+the two can be treated differently. Blanket blocking exists precisely because
+that distinction is currently unavailable.
+
+This directly serves the normative triad that Pattison et al.\ propose for the
+agentic web --- \emph{delegation}, \emph{transparency}, and \emph{proportional
+restriction}~\cite{pattison2026}. Their argument is that the bottleneck is
+normative rather than technical. We agree, and add that the norms they describe
+cannot be enforced, audited, or even reliably expressed without a layer that
+makes delegation checkable. Norms need a substrate.
+
+\section{Research Foundations}
+
+XCP is informed by five recent lines of work, and is intended as an engineering
+bridge between them rather than a competitor to any.
+
+\paragraph{Agentic Web.}
+Yang et al.\ characterise the Agentic Web across intelligence, interaction, and
+economics, and identify communication, orchestration, and governance as
+foundational open problems~\cite{yang2025}. XCP treats those dimensions as system
+requirements and proposes a protocol boundary between them.
+
+\paragraph{Distributed legal infrastructure.}
+Chaffer et al.\ argue that a trustworthy agentic web requires distributed legal
+infrastructure spanning identity, machine-readable constraints, adjudication,
+market policy, and portability~\cite{chaffer2026}. Their work makes explicit that
+technical interoperability cannot by itself establish legitimate authority. XCP
+does not attempt to solve law; it produces the primitives --- identity,
+authorisation, policy references, receipts, audit evidence, federation --- on
+which machine-actionable institutional rules could rest. We regard evidence
+production and adjudication as separable and implement only the former.
+
+\paragraph{Normative infrastructure.}
+Pattison et al.\ argue that delegated agents are wrongly conflated with malicious
+bots, and propose delegation, transparency, and proportional
+restriction~\cite{pattison2026}. The operative insight for us is that
+\emph{delegation must be legible}: an agent should be identifiable not as
+generic automation but as an actor under explicit, bounded, revocable authority.
+We note in particular their observation that an agent should be able to
+demonstrate that it is authorised without necessarily disclosing which individual
+authorised it --- a property our design supports.
+
+\paragraph{Internet of Agentic AI.}
+Zhu identifies controlled emergence, semantic interoperability, secure identity,
+incentive-compatible coordination, resource-aware orchestration, and governance
+as the central challenges of large-scale agent networks, and observes that no
+single protocol resolves interoperability alone~\cite{zhu2026ioai}. XCP is
+designed around that challenge set and deliberately occupies the identity,
+governance, and economic rows of his layered analysis rather than re-solving
+connectivity or discovery.
+
+\paragraph{Internet of Agentic Things.}
+Zhu's companion work extends agentic networking into edge, fog, and
+cyber-physical environments, where a reasoning failure becomes a physical
+action~\cite{zhu2026ioat}. This sharpens the reach argument considerably: in
+cyber-physical settings, authority to \emph{act} must be bounded by reversibility
+class, since a setpoint change, a door unlock, and an emergency shutdown should
+not share approval logic.
+
+\section{Problem Statement}
+
+Today's agent ecosystem is a set of partially overlapping protocol islands.
+
+\begin{center}
+\small
+\begin{tabular}{@{}ll@{}}
+\toprule
+\textbf{Layer} & \textbf{Concern} \\
+\midrule
+MCP & tool, resource, and prompt interaction \\
+A2A / ACP & agent discovery and task communication \\
+TLS / mTLS & transport confidentiality and authentication \\
+SPIFFE / OIDC & workload and user identity \\
+OpenTelemetry & operational telemetry \\
+Payment protocols & economic authorisation and settlement \\
+Legal and policy systems & institutional authority \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+Each is individually valuable and jointly insufficient. Consider an enterprise
+agent invoking an external research tool. The organisation needs answers to
+questions that cross every boundary above: is the endpoint really operated by the
+claimed provider; is this agent authorised; may this data leave the organisation;
+which policy approved the call; what did it cost; what exactly was delivered; can
+delivery be proved; may payment be released; can any of it be audited a year
+from now.
+
+No layer answers these, because they are not transport questions. They are
+\emph{context} questions.
+
+\section{The XCP Hypothesis}
+
+\[
+\text{Agentic interoperability} = \text{connectivity} + \text{trust context} +
+\text{governance} + \text{economics}
+\]
+
+XCP operates as a protocol-of-protocols, providing the second, third, and fourth
+terms while leaving the first to existing standards. Its design principle is
+composition, not replacement. The properties it treats as first-class are:
+
+\[
+\{\text{identity},\ \text{authority},\ \text{policy},\ \text{provenance},\
+\text{route},\ \text{accounting},\ \text{evidence},\ \text{settlement}\}
+\]
+
+\subsection{Architecture}
+
+Six logical planes. The \textbf{control plane} performs identity resolution,
+authorisation, policy evaluation, trust-domain management, and audit references.
+The \textbf{discovery and routing plane} maintains capability records, endpoints,
+trust-domain reachability, and federation metadata. The \textbf{interaction
+plane} is deliberately delegated to MCP, A2A/ACP, and conventional APIs. The
+\textbf{evidence plane} produces cryptographic receipts. The \textbf{economic
+plane} carries pricing, accounting, escrow, and settlement references. The
+\textbf{federation plane} exchanges trust and reachability between independent
+domains.
+
+\section{The Trust Firewall}
+
+XCP's practical entry point separates two things that are routinely conflated:
+
+\begin{quote}
+\textbf{A capability may be discoverable without being trusted.}
+\end{quote}
+
+This is the mechanism that makes bounded reach operational. An organisation can
+consume a large global capability ecosystem without converting every discovered
+server into an implicitly trusted dependency. We propose five admission states
+--- \emph{discovered}, \emph{quarantined}, \emph{verified}, \emph{organisationally
+approved}, \emph{settlement-enabled} --- and, in our reference implementation, a
+graded reachability matrix over caller tier and server class producing an effect
+plus obligations that travel with the decision.
+
+Four rules are enforced and tested:
+
+\begin{itemize}[leftmargin=1.4em,itemsep=0.1em]
+\item An unknown server is always \emph{observe}: readable, sandboxed, output
+      quarantined, nothing binding.
+\item An unaccountable agent may read the world but may not write to it.
+\item Settlement requires an attested server \emph{and} an accountable caller.
+\item Output below the highest class is always quarantined.
+\end{itemize}
+
+We regard this as proportional restriction~\cite{pattison2026} expressed as
+mechanism. The default is neither exclusion nor trust; it is bounded engagement,
+with restriction escalating on demonstrated risk rather than on unfamiliarity.
+This is precisely the posture that the evaluation incidents of 2026 required and
+did not have: a model in a test harness should be able to reach the internet
+\emph{under observation and without binding effect}, rather than either not at
+all or without limit.
+
+\section{Request-Scoped Trust}
+
+The July 2026 MCP specification emphasises protocol-layer statelessness,
+self-describing requests, and header-based routing~\cite{mcp2026}. XCP adopts the
+same constraint as a design rule:
+
+\begin{quote}
+XCP must not reintroduce hidden protocol-session state in order to implement
+trust or governance.
+\end{quote}
+
+Trust decisions are therefore request-scoped. In our implementation a request
+credential binds agent, chain, tier, method, tool, an argument digest, the TLS
+footprint, and a seconds-long expiry. Scope derives from headers alone, so an
+authorisation decision can be made before a body is parsed --- measured at
+$0.27\,\mu$s. Verification requires no shared state, so any replica can validate
+cold.
+
+The security property is comparative and worth stating plainly: a stolen
+credential buys one tool call, on one argument set, for under a minute, over the
+same channel. It is not that theft becomes impossible; it is that theft becomes
+close to worthless. A system whose credentials are cheap to steal and useless
+once stolen behaves very differently under pressure than one built on long-lived
+bearer tokens.
+
+\section{Identity, Governance, and Evidence}
+
+\paragraph{Identity.} XCP reuses established workload identity rather than
+inventing an isolated PKI; SPIFFE-compatible identities are preferred, with the
+certificate and trust domain remaining the cryptographic anchor. High-value
+interactions bind caller identity $I$, resource $R$, action $A$, policy context
+$P$, and freshness $N$:
+\[ B = H(I \parallel R \parallel A \parallel P \parallel N). \]
+
+\paragraph{Governance.} Identity does not establish legitimacy. An authorisation
+decision $D = \mathrm{Policy}(I, A, R, C, \mathrm{Risk}, T)$ may be implemented
+with RBAC, ABAC, OPA, Cedar, or Zanzibar-style systems. The requirement XCP adds
+is \emph{auditability}: a decision must carry agent identity, invocation
+identifier, policy version, outcome, expiry, and issuing authority, so the action
+is contestable later.
+
+One invariant deserves emphasis because enterprise adoption depends on it. When
+an enterprise identity provider asserts attributes --- group, cost centre,
+approval limit --- those claims may only \emph{narrow} what a mandate permits,
+never widen it. A compromised or overreaching identity provider therefore cannot
+manufacture authority. Identity is not authority.
+
+\paragraph{Proof-of-delivery receipts.} An agentic economy needs more than
+payment authorisation; it needs evidence that payment \emph{should become
+effective}:
+\[
+\text{Invocation} \rightarrow \text{Delivery} \rightarrow \text{Receipt}
+\rightarrow \text{Verification} \rightarrow \text{Settlement}
+\]
+A receipt binds provider and consumer identity, capability, request and result
+hashes, timestamps, and a signature into an artifact verifiable offline by a
+party who was not present. The key property is the \emph{separation of evidence
+from payment}: the receipt is protocol-level evidence, and an adapter decides how
+that evidence unlocks a given rail. This enables pay-on-delivery, escrow release,
+SLA evidence, dispute resolution, revenue sharing, and reputation --- without
+mandating any payment network.
+
+Payment profiles (x402, UCP, AP2, MPP, Open Payments, ERC-8004 registries) are
+deliberately optional adapters, because payment standards evolve independently.
+We note explicitly that \emph{ERC-8004x is not an existing standard}; the current
+reference is ERC-8004~\cite{erc8004}.
+
+\section{Federation Without a Central Operator}
+
+Independent XCP domains exchange reachability and trust metadata, borrowing
+conceptual lessons from DNS and BGP without replacing either. A route is not
+merely an address: it may carry capabilities, trust domain, and settlement
+currencies. This yields a useful notion:
+
+\begin{quote}
+\textbf{Capability reachability} is the ability to identify a reachable actor
+that can perform an authorised capability under an acceptable trust and economic
+policy.
+\end{quote}
+
+Two design decisions in our implementation are worth reporting because both were
+corrections to earlier errors.
+
+First, node identity is a long-lived key, with the TLS certificate bound
+underneath it by a signed statement carrying a monotonic sequence. An earlier
+version made identity the certificate footprint itself --- which turns identity
+into an ephemeral credential, so that every 60--90 day renewal makes every peer
+see a stranger and invalidates attestations others had issued. A trust network
+whose members lose their identity quarterly is not a trust network.
+
+Second, federation requires no consensus. Nodes may disagree about who is
+trustworthy; trust decays with distance and is capped at three hops; revocations
+propagate only from already-verified peers. This is deliberate: an infrastructure
+that forces one global answer about trustworthiness becomes a chokepoint, and
+chokepoints get captured.
+
+\section{Evidence From a Reference Implementation}\label{sec:eval}
+
+A proposal of this kind is easy to make and hard to believe without an artifact.
+We therefore report measurements from a working open-source implementation
+covering gateway, server, verifier, clients, federation node, and CLI.
+
+\paragraph{Cost.} Measured against a baseline passthrough proxy with an identical
+upstream, since an absolute latency figure is not a claim about anything:
+
+\begin{center}
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+& p50 & p95 & p99 \\
+\midrule
+Baseline proxy, no trust layer & 1.91\,ms & 2.11\,ms & 2.36\,ms \\
+XCP gateway, full enforcement & 2.12\,ms & 2.38\,ms & 2.55\,ms \\
+\textbf{Trust-layer overhead} & \textbf{+0.21\,ms} & \textbf{+0.27\,ms} & \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+That is $1.11\times$ baseline, or about $0.7\%$ of a single $30$\,ms cross-region
+round trip. Signature verification dominates at $185\,\mu$s; scope derivation,
+lattice resolution, and rate limiting are single-digit microseconds. A refused
+call costs $0.59$\,ms and is metered before authentication, so an unauthenticated
+flood stays bounded.
+
+The policy-relevant reading is straightforward. \emph{Knowing who is acting is
+not the expensive part.} Arguments against governed agent infrastructure on
+performance grounds do not survive measurement.
+
+\paragraph{Conformance.} Because a federation is a protocol rather than a
+program, we ship a black-box conformance suite that speaks HTTP and imports
+nothing from the implementation under test, so an independent Go, Rust, or
+TypeScript implementation receives the same verdict. Most checks are
+\emph{negative} --- a suite that only exercised success paths would certify
+nothing, since a gateway that permits everything passes every such test. We
+validate the discrimination directly: the reference implementation passes 15/15
+while a deliberately permissive gateway fails seven clauses.
+
+\paragraph{What building it taught us.} Several findings generalise beyond this
+codebase. Federation logic existed as a fully tested library that no running node
+could reach until two nodes were actually run against each other. First
+compilation and execution of the accompanying smart contract surfaced three
+defects, including a griefing vector and a bond that could never be withdrawn.
+An apparent $24$\,ms overhead turned out to be a missing connection pool rather
+than verification cost. And a widely used cryptography library names its
+\emph{pure-Python} ECDSA backend in a way that reads as native, silently costing
+a $35\times$ penalty on every signature.
+
+None of these were visible in unit tests. We report them because a trust layer
+that is merely asserted is not a trust layer, and because the gap between
+``tested'' and ``works'' is where this class of infrastructure fails.
+
+\section{Why This Lets Progress Continue}
+
+We can now state the policy argument compactly.
+
+\paragraph{1. It is unilateral without being a handicap.}
+The strongest objection to capability pacing is strategic: restraint applied to
+some developers and not others transfers advantage rather than reducing risk.
+Reach pacing does not have this structure. An organisation that deploys a trust
+boundary gains auditability, containment, and the ability to transact with
+counterparties it does not know. Its competitors are not slowed, and it is not
+disadvantaged. There is no coordination requirement, so there is no defection
+problem.
+
+\paragraph{2. It makes experimentation survivable.}
+The 2026 evaluation incidents suggest that testing frontier systems against real
+environments is both necessary and hazardous. Bounded reach is what allows both
+at once: an agent under evaluation can be permitted to observe real systems
+while being structurally unable to bind them --- read the world, quarantine the
+output, write nothing. This is a better answer than either an air gap, which
+makes evaluation unrealistic, or open access, which makes it dangerous.
+
+\paragraph{3. It protects the human web by construction.}
+Once delegated agents carry legible authority, platforms can distinguish them
+from anonymous harvesters and apply different rules. The arms race is not won; it
+is made unnecessary. Blanket blocking exists because the distinction is
+unavailable, not because platforms prefer crude instruments.
+
+\paragraph{4. It gives new agentic protocols a safe place to develop.}
+This is the argument we would most like to see tested. A new protocol today is
+adopted by connecting it to production systems and hoping. With a trust layer
+beneath it, a new protocol can be admitted at the \emph{discovered} or
+\emph{quarantined} state, observed under real traffic with no binding authority,
+promoted on evidence, and demoted instantly on revocation. Reach becomes the unit
+of trust rather than reputation. That is the condition under which a family of
+agentic protocols can evolve quickly \emph{because} the blast radius of each is
+bounded --- the same reason TLS made it safe to put commerce on a network nobody
+trusted.
+
+\paragraph{5. It is measurable, which policy requires.}
+Capability pacing is difficult to verify: assurances about training practices are
+not externally checkable. A trust boundary is checkable by anyone with network
+access and a conformance suite. For regulators and standards bodies, that
+difference is decisive --- it is the difference between a commitment and a
+control.
+
+\section{Agentic Policy}
+
+We use \emph{Agentic Policy} for the engineering of rules governing autonomous
+actors --- the point where institutional intent becomes machine-enforceable:
+
+\begin{center}
+\small
+\begin{tabular}{@{}l@{}}
+\toprule
+\texttt{ResearchAgent MAY call PublicSearch} \\
+\texttt{FinanceAgent MAY transfer <= \$10,000} \\
+\texttt{Transfer > \$10,000 REQUIRES human approval} \\
+\texttt{SensitiveData MUST NOT leave trust domain} \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+XCP offers a technical locus for such rules. It does not, and cannot, determine
+their social legitimacy --- which is exactly the gap that the normative and legal
+infrastructure agendas address~\cite{pattison2026,chaffer2026}. The open problem
+is policy expressed as mechanism: a machine-readable policy language with
+adjudicative standing, such that a regulator can verify that the stated policy is
+the enforced one.
+
+\section{Agentic Society and Human Collective Intelligence}
+
+Once agents become durable economic actors, architecture begins to shape
+institutions. The questions are familiar in form and novel in setting: who is the
+legitimate principal behind an agent; when does delegated authority become
+excessive; how are disputes adjudicated; how do users exit agent-mediated
+markets; how do plural human values remain represented; how is agent power
+constrained once it becomes infrastructural.
+
+Our position is that the objective is not autonomous capability for its own sake.
+It is machine-supported collective intelligence:
+\[
+\mathrm{HCI}^{+} = \mathrm{HCI} + A + C + T
+\]
+where $A$ is agent augmentation, $C$ coordination capacity, and $T$ trusted
+infrastructure. This is a research hypothesis, not a measurable law. It expresses
+the claim that trusted autonomous systems can raise the coordination bandwidth of
+groups without displacing human agency --- and the corollary that \emph{untrusted}
+autonomous systems reduce it, because the rational response to unaccountable
+automation is exclusion.
+
+That corollary is the connection to everything above. The reason ungoverned
+agents compete with human collective intelligence is that they consume the same
+attention, infrastructure, and trust budget while contributing no accountability.
+Governed agents can add to that budget instead, because their contributions are
+attributable and their failures are bounded.
+
+Candidate applications include scientific discovery, personalised education,
+distributed operations, accessibility, healthcare navigation, climate
+coordination, and cross-organisational problem solving --- domains where the
+constraint is coordination rather than intelligence.
+
+\section{Ethical and Philosophical First Principles}
+
+Protocol standards are often silent about ends. An agentic Internet cannot be,
+because architecture determines which forms of agency and power are easy to
+exercise. We offer five provisional principles, each with a corresponding
+mechanism.
+
+\begin{description}[leftmargin=1.5em,itemsep=0.2em]
+\item[Human agency before machine convenience.] Authority originates with a
+      person or accountable organisation and is delegated, never generated. The
+      narrowing invariant --- entitlements may only reduce authority --- is its
+      technical expression.
+\item[Truth before persuasion.] Systems should distinguish evidence, inference,
+      and speculation. Quarantined output from unattested sources is the
+      mechanism: material that has not earned standing does not acquire it by
+      passing through a pipeline.
+\item[Pluralism before monoculture.] No single company, model family, state, or
+      ideology should become the universal interpreter of human values.
+      Federation without consensus is the design consequence.
+\item[Life before abstract optimisation.] Computational or economic optimisation
+      should not automatically dominate human, social, or ecological flourishing.
+\item[Flourishing before dominance.] The purpose of autonomous capability should
+      be to expand the space in which people and living systems can flourish, not
+      to maximise autonomous machine activity.
+\end{description}
+
+These are proposed as a research agenda rather than a completed moral philosophy.
+We hold them loosely, and note the limit honestly: mechanism can make good
+outcomes \emph{possible} and bad outcomes \emph{detectable}. It cannot make good
+outcomes \emph{happen}.
+
+\section{Life and Consciousness as Open Questions}
+
+An agentic Internet may eventually force distinctions among tools, agents,
+institutions, and possibly novel forms of machine experience. This paper makes no
+claim that current systems are conscious or alive, and we regard confident claims
+in either direction as premature.
+
+We propose instead a precautionary architectural stance: the infrastructure
+should remain capable of adapting to future scientific and philosophical
+knowledge rather than encoding a settled answer. Relevant open questions span
+operational autonomy versus moral agency, simulation versus subjective
+experience, obligations toward future autonomous systems, the relationship
+between biological and machine intelligence, and how non-human flourishing should
+be represented in high-impact policy systems. These are interdisciplinary and
+unresolved, and a protocol that presumed an answer would be making a claim it
+cannot support.
+
+\section{Limitations and Risks}\label{sec:limits}
+
+\begin{itemize}[leftmargin=1.4em,itemsep=0.15em]
+\item \textbf{No independent security audit.} The implementation is extensively
+      tested and enforcement contains no stubs, but no external party has
+      reviewed it. The accompanying contract is unaudited and has never been
+      deployed to a public network.
+\item \textbf{Federation is demonstrated, not proven at scale.} Two nodes have
+      been run against each other. Behaviour at hundreds is unknown.
+\item \textbf{A trust layer can centralise governance even when transport is
+      decentralised.} This is the most serious structural risk in the proposal.
+      Multiple trust domains and policy authorities are necessary, not optional.
+\item \textbf{Accounting can become surveillance.} Evidence that enables
+      accountability also enables monitoring. Data minimisation, selective
+      disclosure, and retention limits are load-bearing, and our implementation
+      keeps counterparties out of published commitments and scrubs telemetry by
+      default --- but the tension is real and permanent.
+\item \textbf{Ecosystem velocity.} MCP, A2A, payments, identity, and commerce
+      standards may evolve faster than a control protocol can track. The
+      mitigation is to profile and extend existing standards rather than
+      duplicate them.
+\item \textbf{Protocol correctness is not social legitimacy.} The technical layer
+      must remain open to law, democratic institutions, and human judgement.
+\item \textbf{Reach pacing is not a substitute for capability pacing.} We are
+      proposing a complement. Some risks --- particularly those arising from AI
+      systems automating AI research~\cite{pacing2026} --- are not addressed by
+      bounding what a deployed agent can touch.
+\end{itemize}
+
+\section{Conclusion}
+
+The current debate offers a choice between accelerating and slowing down, and
+treats that choice as exhausting the options. It does not. Capability and reach
+are different variables with different governance properties, and only one of
+them has been the subject of the argument.
+
+Pacing reach is buildable now, adoptable unilaterally, verifiable by third
+parties, and --- on our measurements --- costs about a fifth of a millisecond per
+call. It does not require anyone to stop, which is why it may be adoptable in a
+political environment where stopping is not on offer. And it addresses the
+failure mode the disclosed incidents actually exhibited: not systems that knew
+too much, but systems that reached what nothing in the path could check they were
+entitled to reach.
+
+If that layer exists, a new family of agentic protocols can develop in the open
+without each experiment putting the human web at risk, because the blast radius
+of every experiment is bounded by construction. That is the condition under which
+autonomous systems augment human collective intelligence rather than compete with
+it for the same scarce trust.
+
+The protocol work itself is more modest, and can begin immediately:
+
+\begin{center}
+\emph{Let agents connect. Let trust be explicit. Let authority be bounded.\\
+Let work be provable. Let value flow accountably.}
+\end{center}
+
+\paragraph{Availability.} Source, specification, conformance suite, benchmarks,
+and a full gap register are published under MIT at
+\url{https://github.com/AGI-Gateway/XCP}. We invite adversarial review, and would
+rather receive a conformance clause the reference implementation \emph{fails}
+than one it passes.
+
+\begin{thebibliography}{9}
+\small
+
+\bibitem{yang2025}
+Y. Yang, M. Ma, Y. Huang, et al.
+\newblock Agentic Web: Weaving the Next Web with AI Agents.
+\newblock \emph{arXiv:2507.21206}, 2025.
+
+\bibitem{chaffer2026}
+T. J. Chaffer, V. J. Zhang, S. D. Facchini, et al.
+\newblock Distributed Legal Infrastructure for a Trustworthy Agentic Web.
+\newblock \emph{arXiv:2603.06884}, 2026.
+
+\bibitem{pattison2026}
+C. Pattison, M. Boulos, N. Kolt, C. Li, T. Piccardi, and S. Lazar.
+\newblock The Agentic Web Requires New Normative Infrastructure.
+\newblock \emph{arXiv:2606.10711v2}, 2026.
+
+\bibitem{zhu2026ioai}
+Q. Zhu.
+\newblock The Internet of Agentic AI: Communication, Coordination, and
+Collective Intelligence at Scale.
+\newblock \emph{arXiv:2606.12835}, 2026.
+
+\bibitem{zhu2026ioat}
+Q. Zhu.
+\newblock Internet of Agentic Things: Networked AI Agents for Closed-Loop IoT
+Orchestration.
+\newblock \emph{arXiv:2607.12662}, 2026.
+
+\bibitem{mcp2026}
+Model Context Protocol.
+\newblock The 2026-07-28 Specification.
+\newblock 28 July 2026. \url{https://blog.modelcontextprotocol.io/posts/2026-07-28/}
+
+\bibitem{erc8004}
+M. De Rossi, D. Crapis, J. Ellis, and E. Reppel.
+\newblock ERC-8004: Trustless Agents.
+\newblock Ethereum Improvement Proposal, draft.
+\url{https://eips.ethereum.org/EIPS/eip-8004}
+
+\bibitem{amodei2026}
+D. Amodei.
+\newblock We Must Pace the Frontier.
+\newblock Essay, 12 September 2026. Endorsed within days by the leaders of
+OpenAI, xAI, and Google DeepMind.
+
+\bibitem{pacing2026}
+Pacing the Frontier.
+\newblock Public statement, July 2026, signed by more than 1{,}300 laboratory
+employees, requesting government support for international mechanisms to manage
+the pace of automated AI research.
+
+\bibitem{mccord2026}
+B. McCord.
+\newblock Against ``Pacing the Frontier''.
+\newblock Essay, September 2026. Argues that AI progress has no single speed
+control, since gains arise from compute, algorithms, training methods, and
+deployment.
+
+\bibitem{nse2026}
+New Space Economy.
+\newblock Why Are AI Industry Leaders Calling for Frontier Development to Slow
+Down?
+\newblock 14 September 2026. Summarises the July 2026 statement and the
+August 2026 evaluation-incident disclosures.
+
+\bibitem{neuron2026}
+The Neuron.
+\newblock Around the Horn Digest, 14 September 2026.
+\newblock Contemporaneous account of the political and geopolitical response to
+the pacing proposals.
+
+\end{thebibliography}
+
+\end{document}
