@@ -42,5 +42,12 @@ in motion — **re-verify before submission**, since positions are moving weekly
 - [ ] Fresh `make bench` on the submission machine for §10 figures
 - [ ] Tag a release so the paper cites an immutable artifact, not `main`
 - [ ] Zenodo DOI
-- [ ] Adversarial read of §13 (Limitations) and §11.1 (the unilateral-adoption
-      claim, which is the argument most likely to be contested)
+- [ ] Adversarial read of §11.1 (the unilateral-adoption claim, which is the
+      argument most likely to be contested)
+- [ ] **Decide whether the paper ships without a limitations section.** It was
+      removed at the author's direction. Reviewers at most venues expect one,
+      and two items it carried are load-bearing: that reach pacing is a
+      *complement* to capability pacing rather than a substitute, and that a
+      trust layer can centralise governance even when transport is
+      decentralised. Without the first, the paper reads as claiming reach
+      pacing addresses risks it does not — notably AI automating AI research.

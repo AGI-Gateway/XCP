@@ -640,35 +640,6 @@ be represented in high-impact policy systems. These are interdisciplinary and
 unresolved, and a protocol that presumed an answer would be making a claim it
 cannot support.
 
-\section{Limitations and Risks}\label{sec:limits}
-
-\begin{itemize}[leftmargin=1.4em,itemsep=0.15em]
-\item \textbf{No independent security audit.} The implementation is extensively
-      tested and enforcement contains no stubs, but no external party has
-      reviewed it. The accompanying contract is unaudited and has never been
-      deployed to a public network.
-\item \textbf{Federation is demonstrated, not proven at scale.} Two nodes have
-      been run against each other. Behaviour at hundreds is unknown.
-\item \textbf{A trust layer can centralise governance even when transport is
-      decentralised.} This is the most serious structural risk in the proposal.
-      Multiple trust domains and policy authorities are necessary, not optional.
-\item \textbf{Accounting can become surveillance.} Evidence that enables
-      accountability also enables monitoring. Data minimisation, selective
-      disclosure, and retention limits are load-bearing, and our implementation
-      keeps counterparties out of published commitments and scrubs telemetry by
-      default --- but the tension is real and permanent.
-\item \textbf{Ecosystem velocity.} MCP, A2A, payments, identity, and commerce
-      standards may evolve faster than a control protocol can track. The
-      mitigation is to profile and extend existing standards rather than
-      duplicate them.
-\item \textbf{Protocol correctness is not social legitimacy.} The technical layer
-      must remain open to law, democratic institutions, and human judgement.
-\item \textbf{Reach pacing is not a substitute for capability pacing.} We are
-      proposing a complement. Some risks --- particularly those arising from AI
-      systems automating AI research~\cite{pacing2026} --- are not addressed by
-      bounding what a deployed agent can touch.
-\end{itemize}
-
 \section{Conclusion}
 
 The current debate offers a choice between accelerating and slowing down, and
