@@ -1,45 +1,39 @@
-# Python
-__pycache__/
-*.py[cod]
-*.egg-info/
-.venv/
-venv/
-.pytest_cache/
-
-# Node
-node_modules/
 
 # Go
-/client/go/vendor/
-
 # Java
-*.class
-
+# Node
+# OS / editor
+# Python
 # certs & secrets (never commit)
+# never commit resolved secrets or local vault material
+# self-serve build output
+*.class
+*.egg-info/
+*.key
+*.p12
+*.pem
+*.pfx
+*.py[cod]
+*.swp
+.DS_Store
+.env
+.idea/
+.pytest_cache/
+.secrets/
+.venv/
+.vscode/
+/client/go/vendor/
+__pycache__/
 deploy/certs/*.crt
 deploy/certs/*.key
 deploy/certs/*.srl
-*.pem
-.env
-
-# OS / editor
-.DS_Store
-*.swp
-.idea/
-.vscode/
-
-# self-serve build output
 dist/
-xcp.toml.local
-site/
-
-# never commit resolved secrets or local vault material
-vault/local/
-vault/**/*.secret
-*.key
-*.pem
-*.p12
-*.pfx
-.secrets/
+node_modules/
+paper/*.pdf
 secrets.yaml
 secrets.yml
+site/
+vault/**/*.secret
+vault/local/
+venv/
+xcp.toml.local
