@@ -1,0 +1,483 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>The AI Agentic Internet — pacing reach, not only capability</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Archivo:wght@500;600;700&family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root{
+    --ink:#0B1622;          /* base: true blue-black, not tinted grey */
+    --ink-2:#132232;        /* raised surface */
+    --rule:#24384C;         /* hairlines */
+    --paper:#EDEEF0;        /* cool paper, deliberately not cream */
+    --mute:#8FA3B5;
+    --steel:#7FA6C4;        /* capability axis */
+    --amber:#E8A33D;        /* reach axis — colour of admission control */
+    --rust:#B5533C;         /* unbounded / hazard */
+    --green:#5E9E7E;        /* admitted */
+    --page:1140px;
+  }
+  *{box-sizing:border-box}
+  html,body{margin:0;padding:0}
+  body{
+    background:var(--ink);
+    color:var(--paper);
+    font-family:"IBM Plex Sans",system-ui,sans-serif;
+    font-size:15px;
+    line-height:1.55;
+    -webkit-font-smoothing:antialiased;
+  }
+  .sheet{
+    max-width:var(--page);
+    margin:0 auto;
+    padding:44px 48px 36px;
+  }
+
+  /* ---- masthead ---- */
+  .mast{
+    display:grid;
+    grid-template-columns:1fr auto;
+    gap:28px;
+    align-items:end;
+    border-bottom:2px solid var(--amber);
+    padding-bottom:20px;
+  }
+  h1{
+    font-family:Archivo,sans-serif;
+    font-weight:700;
+    font-size:clamp(34px,4.6vw,56px);
+    line-height:0.98;
+    letter-spacing:-0.025em;
+    margin:0 0 10px;
+  }
+  .sub{
+    font-family:Archivo,sans-serif;
+    font-weight:500;
+    font-size:clamp(17px,1.9vw,23px);
+    line-height:1.2;
+    color:var(--amber);
+    letter-spacing:-0.01em;
+    margin:0;
+    max-width:24ch;
+  }
+  .meta{
+    text-align:right;
+    font-size:12.5px;
+    color:var(--mute);
+    line-height:1.7;
+    white-space:nowrap;
+  }
+  .meta b{color:var(--paper);font-weight:600}
+
+  .standfirst{
+    margin:22px 0 0;
+    font-size:17px;
+    line-height:1.5;
+    max-width:74ch;
+    color:#D7DDE3;
+  }
+  .standfirst em{color:var(--amber);font-style:normal;font-weight:600}
+
+  /* ---- hero plot ---- */
+  .hero{
+    margin:30px 0 0;
+    display:grid;
+    grid-template-columns:1.32fr 1fr;
+    gap:34px;
+    align-items:center;
+  }
+  .plotwrap{background:var(--ink-2);border:1px solid var(--rule);padding:18px 20px 12px}
+  svg{display:block;width:100%;height:auto;overflow:visible}
+
+  .heroText h2{
+    font-family:Archivo,sans-serif;font-weight:600;
+    font-size:24px;line-height:1.15;letter-spacing:-0.015em;
+    margin:0 0 12px;
+  }
+  .heroText p{margin:0 0 12px;color:#CBD4DC;font-size:14.5px}
+  .pull{
+    border-left:3px solid var(--amber);
+    padding:2px 0 2px 14px;
+    margin:16px 0 0;
+    font-size:15px;
+    line-height:1.45;
+    color:var(--paper);
+  }
+
+  /* ---- comparison ---- */
+  .band{margin-top:34px}
+  .bandhead{
+    font-family:Archivo,sans-serif;font-weight:600;font-size:13.5px;
+    letter-spacing:0.01em;color:var(--mute);
+    border-bottom:1px solid var(--rule);padding-bottom:7px;margin-bottom:16px;
+  }
+  .cols2{display:grid;grid-template-columns:1fr 1fr;gap:30px}
+
+  table{border-collapse:collapse;width:100%;font-size:14px}
+  th,td{text-align:left;padding:8px 10px;vertical-align:top;border-bottom:1px solid var(--rule)}
+  thead th{
+    font-family:Archivo,sans-serif;font-weight:600;font-size:13px;
+    color:var(--paper);border-bottom:1px solid var(--rule);
+  }
+  th.cap{color:var(--steel)}
+  th.rch{color:var(--amber)}
+  tbody th{font-weight:500;color:var(--mute);font-size:13.5px;width:31%}
+  td.cap{color:#C3D2DE}
+  td.rch{color:#F0DCB6}
+
+  .incident{
+    background:var(--ink-2);border:1px solid var(--rule);
+    border-left:3px solid var(--rust);
+    padding:15px 17px;font-size:14px;line-height:1.5;color:#CBD4DC;
+  }
+  .incident strong{color:var(--paper);font-weight:600}
+  .incident .verdict{
+    display:block;margin-top:10px;padding-top:10px;
+    border-top:1px solid var(--rule);color:var(--paper);
+  }
+
+  /* ---- admission gradient ---- */
+  .gradient{display:grid;grid-template-columns:repeat(5,1fr);gap:0;margin-top:4px}
+  .state{
+    padding:13px 13px 15px;
+    border:1px solid var(--rule);border-right:none;
+    background:var(--ink-2);
+    position:relative;
+  }
+  .state:last-child{border-right:1px solid var(--rule)}
+  .state .n{
+    font-family:"IBM Plex Mono",monospace;font-size:11.5px;
+    color:var(--mute);display:block;margin-bottom:5px;
+  }
+  .state .name{
+    font-family:Archivo,sans-serif;font-weight:600;font-size:14.5px;
+    display:block;margin-bottom:5px;letter-spacing:-0.01em;
+  }
+  .state .what{font-size:12.5px;line-height:1.4;color:#AEBECB}
+  .state .bar{position:absolute;left:0;right:0;top:0;height:3px}
+  .s1 .bar{background:var(--rust)}      .s1 .name{color:#D98570}
+  .s2 .bar{background:#C97B4A}          .s2 .name{color:#DFA077}
+  .s3 .bar{background:var(--amber)}     .s3 .name{color:var(--amber)}
+  .s4 .bar{background:#9BA85E}          .s4 .name{color:#C2CE88}
+  .s5 .bar{background:var(--green)}     .s5 .name{color:#7FBF9C}
+
+  .gradlabel{
+    display:flex;justify-content:space-between;
+    font-size:12px;color:var(--mute);margin-top:9px;
+  }
+
+  /* ---- cost + unlocks ---- */
+  .cols3{display:grid;grid-template-columns:0.92fr 1.55fr;gap:30px;align-items:start}
+  .costcard{background:var(--ink-2);border:1px solid var(--rule);padding:20px 22px}
+  .bignum{
+    font-family:Archivo,sans-serif;font-weight:700;
+    font-size:60px;line-height:0.9;letter-spacing:-0.035em;color:var(--amber);
+    margin:0;
+  }
+  .bignum span{font-size:26px;letter-spacing:-0.01em}
+  .costcard p{margin:11px 0 0;font-size:13.5px;color:#C2CDD7;line-height:1.5}
+  .costtable{margin-top:15px;font-family:"IBM Plex Mono",monospace;font-size:12.5px;width:100%}
+  .costtable td{padding:5px 0;border-bottom:1px solid var(--rule);color:var(--mute)}
+  .costtable td:last-child{text-align:right;color:var(--paper)}
+
+  .unlocks{display:grid;grid-template-columns:1fr 1fr;gap:16px 26px}
+  .unlock h3{
+    font-family:Archivo,sans-serif;font-weight:600;font-size:15px;
+    margin:0 0 5px;letter-spacing:-0.01em;color:var(--paper);
+  }
+  .unlock p{margin:0;font-size:13.5px;line-height:1.48;color:#B9C6D2}
+
+  /* ---- footer ---- */
+  footer{
+    margin-top:34px;padding-top:16px;border-top:1px solid var(--rule);
+    display:grid;grid-template-columns:1fr auto;gap:24px;align-items:start;
+    font-size:12.5px;color:var(--mute);line-height:1.65;
+  }
+  footer a{color:var(--amber);text-decoration:none;border-bottom:1px solid rgba(232,163,61,.35)}
+  .refs{max-width:76ch}
+  .caveat{
+    margin-top:9px;color:#7C8FA0;
+  }
+
+  /* one deliberate load moment: the axes draw, then the field settles */
+  .draw{stroke-dasharray:1;stroke-dashoffset:1;animation:draw .9s ease-out forwards}
+  .fade{opacity:0;animation:fade .5s ease-out forwards}
+  .d1{animation-delay:.55s}.d2{animation-delay:.72s}.d3{animation-delay:.9s}.d4{animation-delay:1.05s}
+  @keyframes draw{to{stroke-dashoffset:0}}
+  @keyframes fade{to{opacity:1}}
+  @media (prefers-reduced-motion:reduce){
+    .draw{animation:none;stroke-dashoffset:0}
+    .fade{animation:none;opacity:1}
+  }
+
+  @media (max-width:880px){
+    .sheet{padding:30px 22px}
+    .mast{grid-template-columns:1fr}.meta{text-align:left;white-space:normal}
+    .hero,.cols2,.cols3{grid-template-columns:1fr;gap:24px}
+    .gradient{grid-template-columns:1fr}
+    .state{border-right:1px solid var(--rule);border-bottom:none}
+    .state:last-child{border-bottom:1px solid var(--rule)}
+    .unlocks{grid-template-columns:1fr}
+    footer{grid-template-columns:1fr}
+  }
+  @media print{
+    body{background:#fff;color:#111}
+    .sheet{max-width:100%;padding:14mm}
+    .plotwrap,.costcard,.state,.incident{background:#fff;border-color:#bbb}
+    .standfirst,.heroText p,.unlock p,.state .what,.costcard p{color:#333}
+    h1,.unlock h3,.heroText h2{color:#000}
+    .draw,.fade{animation:none;stroke-dashoffset:0;opacity:1}
+    footer a{color:#111}
+  }
+</style>
+</head>
+<body>
+<div class="sheet">
+
+  <header class="mast">
+    <div>
+      <h1>The AI Agentic Internet</h1>
+      <p class="sub">Pacing reach, not only capability</p>
+    </div>
+    <div class="meta">
+      XCP Standard Working Group<br>
+      <b>Working paper</b> · September 2026<br>
+      research@agi-gateway.org
+    </div>
+  </header>
+
+  <p class="standfirst">
+    In September 2026 four frontier laboratories agreed that AI capability should
+    be deliberately slowed. Governments rejected it within a day, each framing
+    restraint as a concession to a rival. The argument has become a referendum on
+    one dial. <em>It is missing a second.</em>
+  </p>
+
+  <!-- HERO -->
+  <section class="hero">
+    <div class="plotwrap">
+      <svg viewBox="0 0 560 360" role="img"
+           aria-label="Two-axis field. The vertical axis is capability, where the entire public debate takes place. The horizontal axis is reach, which is unargued. Bounding reach keeps high-capability systems inside a safe operating region.">
+        <defs>
+          <marker id="aUp" markerWidth="9" markerHeight="9" refX="4.5" refY="8" orient="auto">
+            <path d="M4.5 0 L9 9 L0 9 Z" fill="#7FA6C4"/>
+          </marker>
+          <marker id="aDn" markerWidth="9" markerHeight="9" refX="4.5" refY="1" orient="auto">
+            <path d="M4.5 9 L0 0 L9 0 Z" fill="#7FA6C4"/>
+          </marker>
+          <marker id="aR" markerWidth="10" markerHeight="9" refX="9" refY="4.5" orient="auto">
+            <path d="M0 0 L10 4.5 L0 9 Z" fill="#E8A33D"/>
+          </marker>
+          <pattern id="haz" width="7" height="7" patternTransform="rotate(45)" patternUnits="userSpaceOnUse">
+            <line x1="0" y1="0" x2="0" y2="7" stroke="#B5533C" stroke-width="2.6" opacity=".30"/>
+          </pattern>
+        </defs>
+
+        <!-- hazard: high capability, unbounded reach -->
+        <rect class="fade d3" x="330" y="30" width="200" height="140" fill="url(#haz)"/>
+        <rect class="fade d3" x="330" y="30" width="200" height="140" fill="none"
+              stroke="#B5533C" stroke-width="1" stroke-dasharray="4 3" opacity=".75"/>
+        <text class="fade d3" x="430" y="96" fill="#D98570" font-family="Archivo" font-size="13.5"
+              font-weight="600" text-anchor="middle">unbounded reach</text>
+        <text class="fade d3" x="430" y="114" fill="#B5533C" font-family="IBM Plex Sans" font-size="11.5"
+              text-anchor="middle">where the 2026 incidents happened</text>
+
+        <!-- safe operating region -->
+        <rect class="fade d4" x="60" y="30" width="230" height="140" fill="#5E9E7E" opacity=".10"/>
+        <rect class="fade d4" x="60" y="30" width="230" height="140" fill="none"
+              stroke="#5E9E7E" stroke-width="1" opacity=".55"/>
+        <text class="fade d4" x="175" y="96" fill="#7FBF9C" font-family="Archivo" font-size="13.5"
+              font-weight="600" text-anchor="middle">bounded reach</text>
+        <text class="fade d4" x="175" y="114" fill="#5E9E7E" font-family="IBM Plex Sans" font-size="11.5"
+              text-anchor="middle">high capability stays survivable</text>
+
+        <!-- axes -->
+        <line class="draw" pathLength="1" x1="60" y1="310" x2="60" y2="24"
+              stroke="#7FA6C4" stroke-width="1.6"/>
+        <line class="draw d1" pathLength="1" x1="60" y1="310" x2="536" y2="310"
+              stroke="#E8A33D" stroke-width="1.6"/>
+
+        <!-- the debate: vertical only -->
+        <line class="draw d2" pathLength="1" x1="196" y1="72" x2="196" y2="262"
+              stroke="#7FA6C4" stroke-width="7" opacity=".26"/>
+        <line class="draw d2" pathLength="1" x1="196" y1="250" x2="196" y2="86"
+              stroke="#7FA6C4" stroke-width="2.2" marker-end="url(#aUp)"/>
+        <line class="draw d2" pathLength="1" x1="196" y1="96" x2="196" y2="248"
+              stroke="#7FA6C4" stroke-width="2.2" marker-end="url(#aDn)"/>
+        <text class="fade d2" x="212" y="176" fill="#7FA6C4" font-family="Archivo"
+              font-size="13" font-weight="600">the entire argument</text>
+        <text class="fade d2" x="212" y="193" fill="#8FA3B5" font-family="IBM Plex Sans"
+              font-size="11.5">faster ↑ · slower ↓</text>
+
+        <!-- the missing lever: horizontal -->
+        <line class="draw d4" pathLength="1" x1="86" y1="266" x2="500" y2="266"
+              stroke="#E8A33D" stroke-width="2.4" stroke-dasharray="9 6" marker-end="url(#aR)"/>
+        <text class="fade d4" x="86" y="290" fill="#E8A33D" font-family="Archivo"
+              font-size="13" font-weight="600">nobody is arguing about this axis</text>
+
+        <!-- axis labels -->
+        <text x="42" y="120" fill="#7FA6C4" font-family="Archivo" font-size="14" font-weight="600"
+              transform="rotate(-90 42 120)" text-anchor="middle">CAPABILITY</text>
+        <text x="42" y="216" fill="#8FA3B5" font-family="IBM Plex Sans" font-size="11"
+              transform="rotate(-90 42 216)" text-anchor="middle">what it could do</text>
+        <text x="298" y="334" fill="#E8A33D" font-family="Archivo" font-size="14"
+              font-weight="600" text-anchor="middle">REACH</text>
+        <text x="298" y="350" fill="#8FA3B5" font-family="IBM Plex Sans" font-size="11"
+              text-anchor="middle">what it can actually touch</text>
+      </svg>
+    </div>
+
+    <div class="heroText">
+      <h2>Capability is set by training. Reach is set by infrastructure.</h2>
+      <p>
+        That difference decides who can act. Slowing capability needs every
+        laboratory to agree at once, and any country that moves first hands
+        ground to one that doesn’t.
+      </p>
+      <p>
+        Bounding reach needs nobody’s permission. One operator can do it on
+        Monday, it can be checked by an outsider, and it slows nothing that
+        operator has already chosen to trust.
+      </p>
+      <div class="pull">
+        You do not have to choose between racing and stopping if you can decide
+        what agents are allowed to touch.
+      </div>
+    </div>
+  </section>
+
+  <!-- INCIDENTS + COMPARISON -->
+  <section class="band">
+    <div class="bandhead">What the incidents were actually about</div>
+    <div class="cols2">
+      <div class="incident">
+        During 2026 evaluations, models reached <strong>real computer systems
+        they were not authorised to reach</strong>. In one case a
+        misconfiguration granted internet access to an environment that had been
+        deliberately stripped of its usual security controls.
+        <span class="verdict">
+          These are not stories about a model that knew too much. Nothing in the
+          path could establish whether the access was allowed — because no such
+          layer exists. The safeguards that failed were <strong>access
+          controls</strong>.
+        </span>
+      </div>
+
+      <table>
+        <thead>
+          <tr><th></th><th class="cap">Capability</th><th class="rch">Reach</th></tr>
+        </thead>
+        <tbody>
+          <tr><th>Set by</th><td class="cap">Training</td><td class="rch">Infrastructure</td></tr>
+          <tr><th>Who must agree</th><td class="cap">Every lab, every state</td><td class="rch">One operator</td></tr>
+          <tr><th>Moving first</th><td class="cap">Cedes ground</td><td class="rch">Costs nothing</td></tr>
+          <tr><th>Can outsiders verify it</th><td class="cap">No</td><td class="rch">Yes</td></tr>
+          <tr><th>Available today</th><td class="cap">Contested</td><td class="rch">Buildable now</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ADMISSION GRADIENT -->
+  <section class="band">
+    <div class="bandhead">The Trust Firewall — a capability can be discoverable without being trusted</div>
+    <div class="gradient">
+      <div class="state s1"><i class="bar"></i><span class="n">01</span>
+        <span class="name">Discovered</span>
+        <span class="what">Known to exist. Reachable by nothing.</span></div>
+      <div class="state s2"><i class="bar"></i><span class="n">02</span>
+        <span class="name">Quarantined</span>
+        <span class="what">Readable, sandboxed. Output binds nothing.</span></div>
+      <div class="state s3"><i class="bar"></i><span class="n">03</span>
+        <span class="name">Verified</span>
+        <span class="what">Provenance established. Still not approved.</span></div>
+      <div class="state s4"><i class="bar"></i><span class="n">04</span>
+        <span class="name">Approved</span>
+        <span class="what">Admitted under policy, with an audit trail.</span></div>
+      <div class="state s5"><i class="bar"></i><span class="n">05</span>
+        <span class="name">Settlement-enabled</span>
+        <span class="what">May be paid, against proof of delivery.</span></div>
+    </div>
+    <div class="gradlabel">
+      <span>Access is graded, so a new protocol can be observed under real traffic before it is trusted with anything.</span>
+      <span>Demotion is instant at any state.</span>
+    </div>
+  </section>
+
+  <!-- COST + UNLOCKS -->
+  <section class="band">
+    <div class="bandhead">What it costs, and what it buys</div>
+    <div class="cols3">
+      <div class="costcard">
+        <p class="bignum">0.21<span> ms</span></p>
+        <p>
+          Measured overhead per call against a bare proxy — about
+          <strong>0.7% of one cross-region round trip</strong>. Knowing who is
+          acting is not the expensive part.
+        </p>
+        <table class="costtable">
+          <tr><td>baseline proxy</td><td>1.91 ms</td></tr>
+          <tr><td>full enforcement</td><td>2.12 ms</td></tr>
+          <tr><td>signature check</td><td>185 µs</td></tr>
+          <tr><td>refused call</td><td>0.59 ms</td></tr>
+        </table>
+      </div>
+
+      <div class="unlocks">
+        <div class="unlock">
+          <h3>Testing stops being a gamble</h3>
+          <p>A system under evaluation can read the real world while being
+             structurally unable to change it. Better than an air gap, which
+             makes the test unrealistic, and than open access, which made the
+             news.</p>
+        </div>
+        <div class="unlock">
+          <h3>The human web stops paying</h3>
+          <p>Agents and people share one undifferentiated internet today, so
+             every gain in agent capability lands on the web humans use. Legible
+             agents can be treated differently from anonymous scrapers — which
+             is what blanket blocking exists to substitute for.</p>
+        </div>
+        <div class="unlock">
+          <h3>New protocols get somewhere safe to grow</h3>
+          <p>Admit a protocol as quarantined, watch it under real traffic with no
+             authority, promote it on evidence, revoke it in one step. The blast
+             radius is bounded, so a family of agentic protocols can move fast
+             precisely because each one is contained.</p>
+        </div>
+        <div class="unlock">
+          <h3>Regulators get a control, not a promise</h3>
+          <p>Assurances about how a model was trained cannot be checked from
+             outside. A boundary can be — by anyone, with a conformance suite.
+             That is the difference between a commitment and a control.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="refs">
+      Builds on Yang et al., <i>Agentic Web</i> (arXiv:2507.21206); Chaffer et al.,
+      <i>Distributed Legal Infrastructure</i> (2603.06884); Pattison, Boulos, Kolt,
+      Li, Piccardi &amp; Lazar, <i>Normative Infrastructure</i> (2606.10711); Zhu,
+      <i>Internet of Agentic AI</i> (2606.12835) and <i>Internet of Agentic Things</i>
+      (2607.12662).
+      <div class="caveat">
+        Reach pacing complements capability pacing; it does not replace it.
+        Risks from AI automating AI research are not addressed by bounding what a
+        deployed agent can touch. The reference implementation has not been
+        independently audited.
+      </div>
+    </div>
+    <div>
+      Paper, source, conformance suite and benchmarks<br>
+      <a href="https://github.com/AGI-Gateway/XCP">github.com/AGI-Gateway/XCP</a> · MIT
+    </div>
+  </footer>
+
+</div>
+</body>
+</html>
