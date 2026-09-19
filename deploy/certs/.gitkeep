@@ -1,0 +1,2 @@
+# gen-certs.sh writes CA + gateway + agent certificates here.
+# Certificates are git-ignored — generate your own with ./deploy/gen-certs.sh

@@ -1,0 +1,16 @@
+# Example policy — the statement form is deliberately readable, because a policy
+# nobody can read in a meeting gets approved without being understood.
+#
+#   xcp policy check policy/examples/enterprise.policy
+#   XCP_POLICY=policy/examples/enterprise.policy uvicorn core.gateway.xcp_gateway:app
+
+ResearchAgent MAY mcp:tools/search [reversible]
+ResearchAgent MAY mcp:tools/fetch [reversible]
+ResearchAgent MUST NOT pay:x402/transfer [irreversible]
+
+FinanceAgent MAY mcp:tools/search [reversible]
+FinanceAgent MAY pay:x402/transfer up to 1000000 USD [costly]
+FinanceAgent MUST NOT admin:registry/delete [irreversible]
+
+OpsAgent MAY iot:actuator/setpoint [recoverable]
+OpsAgent MUST NOT iot:actuator/shutdown [irreversible]

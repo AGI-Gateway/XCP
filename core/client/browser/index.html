@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>XCP Browser Client</title>
+<style>
+  :root{--bg:#05070d;--panel:#101524;--line:#222a42;--teal:#4DFFD2;--violet:#7B61FF;--magenta:#FF4D8B;--text:#c9d2ec;--mute:#646f93;--bright:#eef2ff}
+  *{box-sizing:border-box;margin:0;padding:0}
+  body{background:var(--bg);color:var(--text);font-family:'SF Mono',ui-monospace,Menlo,monospace;font-size:14px;line-height:1.5;padding:28px;max-width:860px;margin:0 auto}
+  h1{font-family:system-ui,sans-serif;font-weight:800;font-size:26px;color:var(--bright);margin-bottom:4px}
+  h1 b{color:var(--teal)}
+  .sub{color:var(--mute);font-size:13px;margin-bottom:22px}
+  .card{background:var(--panel);border:1px solid var(--line);border-radius:12px;padding:18px;margin-bottom:16px}
+  label{display:block;font-size:11px;letter-spacing:.1em;text-transform:uppercase;color:var(--mute);margin:10px 0 4px}
+  input,textarea{width:100%;background:#02040a;border:1px solid var(--line);border-radius:7px;color:var(--text);padding:9px 11px;font-family:inherit;font-size:13px}
+  button{background:var(--teal);color:#05070d;border:none;border-radius:8px;padding:10px 16px;font-family:inherit;font-weight:700;font-size:13px;cursor:pointer;margin-top:12px;margin-right:8px}
+  button.alt{background:transparent;color:var(--violet);border:1px solid var(--violet)}
+  button:disabled{opacity:.4;cursor:not-allowed}
+  .row{display:grid;grid-template-columns:1fr 1fr;gap:12px}
+  pre{background:#02040a;border:1px solid var(--line);border-radius:8px;padding:12px;overflow:auto;font-size:12px;color:var(--teal);white-space:pre-wrap;word-break:break-all;max-height:240px}
+  .pill{display:inline-block;font-size:11px;padding:3px 9px;border-radius:6px;border:1px solid var(--line);color:var(--mute)}
+  .pill.ok{color:var(--teal);border-color:var(--teal)}
+  .note{font-size:12px;color:var(--mute);margin-top:8px;line-height:1.5}
+</style>
+</head>
+<body>
+  <h1>X<b>C</b>P — browser client</h1>
+  <div class="sub">Multi-Model Secure Context Protocol · demo client for the reference gateway</div>
+
+  <div class="card">
+    <label>Gateway URL</label>
+    <input id="gw" value="http://localhost:8080">
+    <div class="row">
+      <div><label>Agent ID</label><input id="agentId" value="42001"></div>
+      <div><label>Chain ID</label><input id="chainId" value="8453"></div>
+    </div>
+    <button id="connectBtn" onclick="connect()">Open session</button>
+    <span id="status" class="pill">not connected</span>
+    <div class="note">The browser cannot present an mTLS client certificate from JS, so this demo derives a
+      development footprint from the agent id (the gateway's local registry accepts it). In production a browser
+      agent uses a delegated-session model: a trusted local service holds the certificate and the page drives it.</div>
+  </div>
+
+  <div class="card">
+    <label>A2T — call a tool</label>
+    <div class="row">
+      <div><input id="server" value="research" placeholder="server"></div>
+      <div><input id="tool" value="echo" placeholder="tool"></div>
+    </div>
+    <label>Arguments (JSON)</label>
+    <textarea id="args" rows="2">{"text":"hello from the browser"}</textarea>
+    <label>Mandate scope (granted)</label>
+    <input id="scope" value="mcp:tools/echo">
+    <button onclick="callTool()" class="alt">Call tool</button>
+  </div>
+
+  <div class="card">
+    <label>Result</label>
+    <pre id="out">—</pre>
+  </div>
+
+<script type="module">
+// ---- tiny keccak-ish footprint (dev only): SHA-256 via WebCrypto ----
+// Production footprint is keccak256(DER(cert)); the gateway's dev registry
+// accepts the agent-derived footprint below so the browser demo works.
+async function devFootprint(agentId){
+  const data = new TextEncoder().encode("agent:" + agentId);
+  const buf = await crypto.subtle.digest("SHA-256", data);
+  return "0x" + [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,"0")).join("");
+}
+
+let session = null;
+
+function gw(){ return document.getElementById("gw").value.replace(/\/+$/,""); }
+function setStatus(txt, ok){
+  const el = document.getElementById("status");
+  el.textContent = txt; el.className = "pill" + (ok ? " ok" : "");
+}
+function show(obj){ document.getElementById("out").textContent =
+  typeof obj === "string" ? obj : JSON.stringify(obj, null, 2); }
+
+window.connect = async function(){
+  const agentId = Number(document.getElementById("agentId").value);
+  const chainId = Number(document.getElementById("chainId").value);
+  const footprint = await devFootprint(agentId);
+  try{
+    const r = await fetch(gw() + "/v1/session/open", {
+      method:"POST", headers:{"Content-Type":"application/json"},
+      body: JSON.stringify({agentId, chainId, footprint})
+    });
+    if(!r.ok){ setStatus("open failed " + r.status); show(await r.text()); return; }
+    const d = await r.json();
+    session = {agentId, chainId, footprint, ...d};
+    setStatus("session " + (d.sessionId||"open"), true);
+    show(session);
+  }catch(e){ setStatus("error"); show(String(e)); }
+};
+
+// A mandate proof the reference gateway's local verifier accepts: it checks
+// scope coverage + expiry from the header (no signature needed in local mode).
+function devMandate(scope){
+  return JSON.stringify({
+    mandateId:"m-browser", delegator:"0xSPONSOR",
+    mandateScope:[scope], notAfter: Math.floor(Date.now()/1000)+3600,
+    leaf:"0x", proof:[], signature:""
+  });
+}
+
+window.callTool = async function(){
+  if(!session){ show("open a session first"); return; }
+  const server = document.getElementById("server").value;
+  const tool = document.getElementById("tool").value;
+  let args; try{ args = JSON.parse(document.getElementById("args").value); }
+  catch(e){ show("arguments must be valid JSON"); return; }
+  const scope = document.getElementById("scope").value;
+  try{
+    const r = await fetch(gw() + "/v1/a2t/call", {
+      method:"POST",
+      headers:{
+        "Content-Type":"application/json",
+        "XCP-Agent-Identity": `${session.agentId};${session.chainId};${session.footprint}`,
+        "XCP-Mandate": devMandate(scope)
+      },
+      body: JSON.stringify({server, tool, arguments: args})
+    });
+    const d = await r.json().catch(()=>({error:"non-JSON response"}));
+    show(r.ok ? d : {status:r.status, ...d});
+  }catch(e){ show(String(e)); }
+};
+</script>
+</body>
+</html>

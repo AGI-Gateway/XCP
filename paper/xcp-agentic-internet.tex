@@ -1,0 +1,644 @@
+\documentclass[11pt]{article}
+\usepackage[utf8]{inputenc}
+\usepackage[T1]{fontenc}
+% lmodern omitted: not present in all TeX installs; arXiv default CM is fine
+\usepackage[margin=1in]{geometry}
+\usepackage{amsmath,amssymb}
+\usepackage{booktabs}
+\usepackage{longtable}
+\usepackage{hyperref}
+\usepackage{url}
+\usepackage{enumitem}
+\usepackage{xcolor}
+\hypersetup{colorlinks=true, linkcolor=blue!50!black, citecolor=blue!50!black,
+            urlcolor=blue!50!black}
+
+\title{\textbf{The Agentic Internet Needs a Trust Layer}\\[0.3em]
+\large XCP: Verifiable Delegation, Graded Reachability, and
+Evidence-Conditioned Settlement for the Agentic Economy}
+
+\author{Anonymous Contributors\\
+\small AGI-Gateway / XCP Project\\
+\small \texttt{https://github.com/AGI-Gateway/XCP}}
+
+\date{Working paper --- draft for comment}
+
+\begin{document}
+\maketitle
+
+\begin{abstract}
+The agentic web is technically feasible and economically imminent, but it is
+being built on an authorization model designed for humans clicking buttons.
+Agents today act with borrowed credentials, unbounded scope, and no portable
+evidence that anything was authorized. We argue that the missing layer is not
+another transport protocol but a \emph{trust layer}: a way for one party to
+verify, per request, \emph{who} is acting, \emph{on whose authority},
+\emph{within what bounds}, and \emph{with what recourse}.
+
+We present XCP, a stateless trust layer for agentic infrastructure. XCP
+contributes five mechanisms: (i) a \emph{trust lattice} that composes an agent's
+accountability with its human principal's verification, and which narrows but
+never widens authority; (ii) \emph{per-request credentials} bound to one method,
+one tool, one argument digest, and a seconds-long expiry, adapted to MCP
+2026-07-28's removal of protocol sessions; (iii) a \emph{trust firewall} that
+grades reachability rather than gating it binary, so an unknown server is
+observable but never binding; (iv) \emph{evidence-conditioned settlement}, where
+payment releases against a verifiable receipt rather than an assertion of
+delivery; and (v) \emph{federation on stable identity}, so that certificate
+rotation does not orphan peers.
+
+We report a working reference implementation: 485 tests, a black-box conformance
+suite that certifies third-party implementations, a measured trust-layer overhead
+of \textbf{0.21\,ms p50} over a bare proxy --- roughly $0.7\%$ of a single
+$30$\,ms cross-region round trip --- and a catalog of 9{,}576 endpoints whose
+trust classes are, deliberately, mostly \texttt{unknown}. We are explicit about
+what is unproven: no independent security audit, an unaudited and undeployed
+contract, and a federation that has been demonstrated between two nodes rather
+than at scale.
+
+We close by arguing that the technical layer is necessary but not sufficient.
+Drawing on recent work in normative and legal infrastructure for the agentic web,
+we sketch a research agenda for \emph{Agentic Policy} and \emph{Agentic Society}:
+how verifiable delegation might become a substrate for augmenting human
+collective intelligence rather than displacing it, and what ethical first
+principles should govern an autonomous future in which life and consciousness are
+meant to thrive.
+\end{abstract}
+
+\section{Introduction}
+
+Two claims are now widely accepted and jointly uncomfortable. The first is that
+AI agents acting on a principal's behalf across the open web are technically
+feasible today~\cite{pattison2026}. The second is that the infrastructure
+governing what those agents may do was designed for a different
+world~\cite{yang2025,zhu2026ioai}.
+
+The gap is not connectivity. The Model Context Protocol (MCP), Agent-to-Agent
+(A2A) protocols, and adjacent specifications have largely solved \emph{how} an
+agent reaches a tool. What remains unsolved is \emph{whether it should}, and how
+a counterparty could tell. Zhu's layered analysis of the Internet of Agentic
+AI names this precisely: connectivity, identity and trust, capability discovery,
+task semantics, governance, and an economic layer are distinct requirements, and
+``no single protocol can solve interoperability by itself''~\cite{zhu2026ioai}.
+Today's deployments have the first and, increasingly, the third. The middle
+layers are improvised.
+
+The improvisation has a shape. An agent is handed a long-lived API key scoped to
+everything that key can do. It presents no evidence of which human authorized it,
+under what limit, for how long. When it acts, no artifact survives that a third
+party could check. When something goes wrong, the only remedy is to revoke the
+key --- which revokes every agent using it. This is not a protocol gap; it is a
+\emph{trust} gap, and it is the reason platforms increasingly treat all automated
+traffic as hostile, blocking legitimate delegated agents alongside malicious
+bots~\cite{pattison2026}.
+
+\paragraph{Contribution.} This paper presents XCP, a trust layer designed to sit
+between an agent and the tools it calls. Our contributions are:
+
+\begin{enumerate}[leftmargin=1.4em,itemsep=0.15em]
+\item A \textbf{trust lattice} (\S\ref{sec:lattice}) composing agent
+      accountability with human verification, with a tested invariant that
+      enterprise entitlements may only \emph{narrow} authority, never widen it.
+\item \textbf{Stateless per-request credentials} (\S\ref{sec:stateless}) adapted
+      to MCP 2026-07-28, bound to method, tool, argument digest, TLS footprint,
+      and a seconds-long expiry --- so a stolen credential is worth
+      substantially less than a stolen session.
+\item A \textbf{trust firewall} (\S\ref{sec:firewall}) that grades reachability
+      across four server classes, producing obligations (sandbox, quarantine,
+      receipt) that travel with the decision.
+\item \textbf{Evidence-conditioned settlement} (\S\ref{sec:receipts}): an
+      append-only call chain and signed receipt that make payment conditional on
+      verifiable delivery rather than asserted delivery.
+\item \textbf{Federation on stable identity} (\S\ref{sec:federation}), where a
+      node's identity is a long-lived key and the certificate is bound
+      underneath it, so renewal does not orphan peers or invalidate
+      attestations.
+\end{enumerate}
+
+We also report measurements (\S\ref{sec:eval}), state limitations plainly
+(\S\ref{sec:limits}), and propose a normative research agenda
+(\S\ref{sec:future}).
+
+\section{Background and Related Work}
+
+\paragraph{The agentic web as an economic substrate.}
+Yang et al.~\cite{yang2025} characterize the Agentic Web across three
+dimensions --- intelligence, interaction, and economics --- and identify agent
+discovery, trust, billing, and governance as open infrastructure problems. Their
+framing motivates ours: if agents are to transact, the economic dimension cannot
+be bolted onto a substrate that cannot say who acted. XCP addresses the trust and
+accounting dimensions specifically, and treats discovery as a solved-enough
+problem that should not be re-solved on-chain.
+
+\paragraph{Internet-scale agent coordination.}
+Zhu's Internet of Agentic AI (IoAI)~\cite{zhu2026ioai} provides the most direct
+architectural antecedent. It enumerates the threats XCP is built against ---
+impersonation, Sybil attacks, registry poisoning, unauthorized delegation,
+cascading failures --- and argues that existing human-centric identity systems
+are insufficient for ephemeral, autonomous, cross-organizational agents. Its
+layered interoperability table maps closely onto XCP's design: we implement the
+identity-and-trust, governance, and economic rows, and deliberately do not
+reimplement connectivity or capability discovery. Zhu's companion work on the
+Internet of Agentic Things (IoAT)~\cite{zhu2026ioat} extends the same argument to
+cyber-physical settings, where a reasoning failure becomes a physical action --
+raising the stakes on exactly the authorization and reversibility distinctions
+XCP encodes.
+
+\paragraph{Normative infrastructure.}
+Pattison, Boulos, Kolt, Li, Piccardi, and Lazar~\cite{pattison2026} argue that
+the bottleneck to the agentic web is no longer technical but normative, and
+propose a triad of \emph{delegation} (a user entitled to access should be able to
+exercise it through an authorized agent), \emph{transparency} (agents identify
+themselves and their principals; platforms disclose how they treat agents), and
+\emph{proportional restriction} (restrictions address concrete harms by the least
+restrictive means).
+
+This triad is, to our reading, the clearest statement of what a trust layer
+should make \emph{checkable}. XCP's mandate gate is a delegation mechanism;
+\texttt{XCP-Agent-Identity} and the verified-by header implement bidirectional
+transparency; and graded reachability is a proportionality mechanism --- an
+unknown server is observed rather than blocked, and blocked only where a concrete
+risk is established. We regard~\cite{pattison2026} as the normative specification
+for which XCP is one candidate implementation, and we note their observation that
+agents should be able to identify themselves \emph{as authorized} without
+necessarily identifying the individual principal --- a property our lattice
+supports via tier disclosure without identity disclosure.
+
+\paragraph{Legal and adjudicative infrastructure.}
+Chaffer et al.~\cite{chaffer2026} argue for distributed legal infrastructure for
+a trustworthy agentic web, spanning identity, machine-readable constraints,
+adjudication, market policy, and portability. Their framing clarifies the
+boundary of our contribution: XCP produces the \emph{evidence} that an
+adjudicative layer would need --- tamper-evident call chains, signed receipts,
+per-request credentials --- but does not itself adjudicate. We regard evidence
+production and dispute resolution as separable, and deliberately implement only
+the former.
+
+\paragraph{Positioning.}
+Relative to this literature, XCP is narrower and more concrete. It does not
+propose a governance regime~\cite{pattison2026,chaffer2026}, a full coordination
+architecture~\cite{zhu2026ioai}, or an economic model~\cite{yang2025}. It
+proposes a mechanism layer that those agendas presuppose, and reports what
+happens when you actually build it.
+
+\section{The Trust Gap}
+
+We characterize the gap concretely, since the fix follows from the diagnosis.
+
+\paragraph{Credentials carry no principal.}
+An API key says \emph{which account} is acting, never \emph{which human
+authorized this call}. At the moment an agent spends money or touches regulated
+data, the accountable party is unrepresented in the request.
+
+\paragraph{Scope is ambient, not per-call.}
+OAuth scopes are granted at consent time and apply to every subsequent call.
+Nothing binds \emph{this} call to \emph{that} authorization. An agent that was
+authorized to read a calendar and later writes to it presents identical
+credentials.
+
+\paragraph{Sessions are worth stealing.}
+Session identifiers are bearer tokens with broad scope and long life. MCP
+2026-07-28's removal of \texttt{Mcp-Session-Id} is, in our reading, an
+opportunity rather than a loss: it forces each request to be self-describing,
+which is the precondition for making a credential cheap to steal.
+
+\paragraph{Delivery is asserted, not proven.}
+When an agent pays for work, it has the provider's word that work occurred. There
+is no artifact a third party can verify offline, which makes automated settlement
+between strangers a matter of trust rather than evidence.
+
+\paragraph{Reachability is binary.}
+Access control answers allow/deny. But an agent encountering an unknown MCP
+server does not need a binary answer; it needs to know that it may \emph{read}
+the server's output without treating it as authoritative, may not let it
+\emph{write}, and must quarantine what it returns. Binary gating forces a choice
+between paralysis and recklessness.
+
+\section{Design}
+
+XCP is organized as three planes --- identity, governance, payments --- over a
+stateless request model. We describe each mechanism and the invariant it
+enforces.
+
+\subsection{The Trust Lattice}\label{sec:lattice}
+
+Authority is composed from two independent axes rather than assigned as a role.
+
+\begin{center}
+\small
+\begin{tabular}{@{}llll@{}}
+\toprule
+& \textbf{H0} public & \textbf{H1} general SSO & \textbf{H2} enterprise IdP \\
+\midrule
+\textbf{A0} free/ephemeral   & sandbox      & sandbox     & shadowed \\
+\textbf{A1} registry-backed  & observe only & consumer commerce & constrained \\
+\textbf{A2} company-backed   & principal    & delegated   & full settlement \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The ceiling is the weaker leg, with one deliberate exception: A2$\times$H0, where
+the company is itself the accountable principal and no human verification is
+required. The lattice is not decorative --- it drives mandate templates, rail
+eligibility, receipt requirements, and (as we discuss in \S\ref{sec:abuse})
+resource quotas.
+
+\paragraph{Invariant: entitlements narrow only.}
+When an enterprise IdP asserts group membership, cost centre, or approval limit,
+those claims may \emph{reduce} what a mandate permits and may never expand it. A
+compromised or overreaching IdP therefore cannot manufacture authority. This is
+enforced in code and tested, because it is the property on which enterprise
+adoption depends: identity is not authority.
+
+\subsection{Stateless Per-Request Credentials}\label{sec:stateless}
+
+MCP 2026-07-28 removed protocol sessions and made \texttt{Mcp-Method} and
+\texttt{Mcp-Name} mandatory headers. XCP treats this as the authorization
+primitive. A request credential is an EIP-712 signature binding:
+
+\[
+\texttt{agent} \;\|\; \texttt{chain} \;\|\; \texttt{tier} \;\|\;
+\texttt{method} \;\|\; \texttt{tool} \;\|\; H(\texttt{args}) \;\|\;
+\texttt{footprint} \;\|\; \texttt{exp}
+\]
+
+with a default expiry of 60 seconds. Verification is stateless: a cold replica
+can validate without shared state. Scope derives from headers alone
+(\texttt{scope\_for(method, name)}), so a gateway can make an authorization
+decision at header speed --- measured at $0.27\,\mu$s --- before parsing a body.
+
+The security property is comparative rather than absolute. A stolen credential
+buys one tool call, on one argument set, for under a minute, over the same TLS
+channel. Replaying it against a different tool fails on scope mismatch; we test
+this directly.
+
+\subsection{Trust Firewall: Graded Reachability}\label{sec:firewall}
+
+Servers are classified into four grades --- \textsc{unknown}, \textsc{probed},
+\textsc{attested}, \textsc{contracted} --- and the decision is a function of
+caller tier $\times$ server class, producing an effect
+(\textsc{deny}/\textsc{observe}/\textsc{allow}) plus \emph{obligations} that
+travel with it.
+
+Four rules are enforced and tested:
+
+\begin{itemize}[leftmargin=1.4em,itemsep=0.1em]
+\item An \textsc{unknown} server is always \textsc{observe}: read-only,
+      sandboxed, output quarantined, nothing binding.
+\item A free agent (A0) may read the world but may not write to it, at any
+      server class.
+\item Settlement requires \textsc{attested} or better \emph{and} an accountable
+      caller.
+\item Output below \textsc{contracted} is always quarantined.
+\end{itemize}
+
+This is our reading of proportional restriction~\cite{pattison2026} in
+mechanism: the default is not exclusion but bounded engagement, and restriction
+escalates with demonstrated risk rather than with unfamiliarity.
+
+\subsection{Evidence-Conditioned Settlement}\label{sec:receipts}
+
+A \texttt{TaskSpec} commits to the work before it begins. A \texttt{CallChain}
+accumulates an append-only hash chain, $h_i = H(h_{i-1} \| d_i)$, over the calls
+actually made. A signed \texttt{Receipt} binds the two into an evidence bundle
+verifiable offline by a party who was not present.
+
+Escrow then moves \textsc{open} $\rightarrow$ \textsc{delivered} $\rightarrow$
+\textsc{accepted} $\rightarrow$ \textsc{released}. Auto-accept is off by default,
+and \emph{delivery alone does not release funds}. Every settling tier requires a
+receipt --- a tested invariant, because the alternative is an economy in which
+payment is conditioned on assertion.
+
+\subsection{Federation on Stable Identity}\label{sec:federation}
+
+An early version of this design made node identity the certificate footprint,
+$\mathrm{keccak256}(\mathrm{DER}(\mathrm{cert}))$. This was a mistake worth
+reporting: it makes identity an \emph{ephemeral credential}. With 60--90 day
+certificate renewal, every peer sees a stranger four times a year, attestations
+others issued become worthless, and revocations key to an identity that no longer
+exists. A trust network whose members lose their identity quarterly is not a
+trust network.
+
+The correction separates the two: a node's identity is a long-lived key, and the
+certificate is bound underneath it by a signed statement carrying a monotonic
+sequence number and validity window. Renewal publishes a new \emph{binding}, not
+a new node. Two properties are required to make this safe and are tested:
+\emph{overlap} (the previous certificate is accepted within a grace window, since
+both are briefly live during rotation) and \emph{anti-downgrade} (a peer refuses
+any binding whose sequence is not greater than the newest it has seen, or an
+attacker could replay a superseded binding to reinstate a rotated-away key).
+
+Federation is otherwise deliberately minimal: peer verification is three local
+checks with no third party, trust decays $0.5$ per hop capped at three hops,
+revocation gossips only from already-verified peers, and nodes may disagree
+without consensus.
+
+\subsection{Abuse Controls: Capacity Follows Authority}\label{sec:abuse}
+
+A node published in a discovery catalog, routing for callers it has never met,
+with no rate limit, is an open relay. We treat the lattice as a capacity
+allocation as well as an authority allocation: an anonymous caller receives 20
+cost units per minute and one concurrent request; an A2$\times$H2 caller receives
+30{,}000 and 64.
+
+Four limits are enforced because the failure modes differ --- rate (flooding),
+burst (legitimate spikes), concurrency (slow-loris, which a requests/second limit
+does not touch), and body size --- plus a global ceiling that binds regardless of
+tier, since a node that dies serving trusted traffic is equally down. Charges are
+cost-weighted: a multi-hop chain costs twelve units where a \texttt{tools/list}
+costs one.
+
+Two implementation notes generalize. First, the limiter fails \emph{closed}:
+failing open converts any limiter bug into an abuse bypass. Second, the
+tracked-caller table is a bounded LRU, because a limiter keyed on an
+attacker-supplied identifier is itself a memory-exhaustion vector.
+
+\subsection{Credential Custody and Erasure}
+
+Two mechanisms address the fact that a trust layer is also a data-handling layer.
+
+\paragraph{Sealed credentials.} A hosted API wrapper needs the caller's upstream
+credential. Forwarding it through the gateway means the gateway operator reads
+every user's API key --- disqualifying for a trust layer. Instead the caller
+seals the credential to the \emph{wrapper's} public key (ephemeral X25519,
+HKDF-SHA256, AES-256-GCM, with the recipient key and operation context in the
+AAD). The gateway forwards ciphertext it has no key for. The guarantee is narrow
+and we state it precisely: this removes the \emph{gateway} operator from the
+trust set, not the wrapper operator.
+
+\paragraph{Crypto-shredded erasure.} The call chain is designed so that removing
+a record changes the root --- which is exactly what makes it undeletable, and
+collides with the right to erasure. Deleting records destroys the integrity
+property; refusing erasure because a structure is append-only is not a lawful
+basis. We resolve this by never placing personal data \emph{in} the chain:
+payloads are encrypted under a per-subject key and the chain commits to the
+ciphertext digest. Erasure destroys the key. Content becomes unreadable ---
+including to the operator --- while the chain still verifies and its root is
+unchanged. We note that a hash of personal data remains personal data when
+linkable, so digesting a field does not discharge an erasure obligation; key
+destruction does.
+
+\section{Implementation and Evaluation}\label{sec:eval}
+
+The reference implementation is open source (MIT, including the specification)
+and comprises a gateway, reference server, verifier, clients, a federation node,
+and a CLI. It targets MCP 2026-07-28 and interoperates with ERC-8004 identity
+registries where present, while functioning with no chain dependency at all.
+
+\paragraph{Conformance.}
+Because a federation is a protocol rather than a program, we ship a black-box
+conformance suite: it speaks HTTP, imports nothing from the implementation under
+test, and can certify a Go, Rust, or TypeScript gateway identically. Eighteen
+clauses span core, stateless, security, and federation profiles, with MUST/SHOULD
+separation. Most checks are \emph{negative} --- a suite that only exercised happy
+paths would certify nothing, since a gateway that accepts everything passes every
+happy-path test. We validate the discrimination: the reference implementation
+certifies 15/15, while a deliberately permissive gateway fails seven clauses.
+
+\paragraph{Performance.}
+We measure against a baseline passthrough proxy with an identical upstream, since
+an absolute latency figure is not a claim about anything.
+
+\begin{center}
+\small
+\begin{tabular}{@{}lrrr@{}}
+\toprule
+& p50 & p95 & p99 \\
+\midrule
+Baseline proxy (no trust layer)        & 1.91\,ms & 2.11\,ms & 2.36\,ms \\
+XCP gateway (enforce, all controls)    & 2.12\,ms & 2.38\,ms & 2.55\,ms \\
+\textbf{Trust-layer overhead}          & \textbf{+0.21\,ms} & \textbf{+0.27\,ms} & \\
+\bottomrule
+\end{tabular}
+\end{center}
+
+The overhead is $1.11\times$ baseline, or roughly $0.7\%$ of a single $30$\,ms
+cross-region round trip. A refused call costs $0.59$\,ms and is metered
+pre-authentication, so an unauthenticated flood remains bounded. Signature
+verification dominates at $185\,\mu$s; scope derivation ($0.27\,\mu$s), lattice
+resolution ($6\,\mu$s), and rate limiting ($2.6\,\mu$s) are negligible by
+comparison.
+
+Two measurement findings are worth reporting because both are easy to
+misattribute. First, an earlier measurement showed $24$\,ms of overhead; the
+cause was the absence of upstream connection pooling, not verification work.
+$99\%$ of observed latency had nothing to do with the trust layer. Second,
+\texttt{eth-keys} names its \emph{pure-Python} ECDSA implementation
+\texttt{NativeECCBackend}; without native \texttt{libsecp256k1} bindings,
+verification costs $6{,}576\,\mu$s instead of $185\,\mu$s --- a $35\times$ penalty
+a deployment pays silently. We now pin the dependency, warn at startup, and
+expose the active backend in \texttt{/health}.
+
+\paragraph{Catalog.}
+We ship a catalog of 9{,}576 endpoints across three kinds: 158 \emph{routable}
+(remote MCP endpoints reachable today), 2{,}528 \emph{wrappable} (public REST
+APIs with OpenAPI specifications, one generator step from routable), and 6{,}869
+\emph{installable} (packages with nothing to route to until an operator runs
+one). The distinction is enforced rather than cosmetic: marking a REST API
+routable would send agents to endpoints where every call fails.
+
+Critically, verification caps trust: the shipped catalog never claims
+\textsc{attested} or \textsc{contracted}, and of the 158 routable entries only
+five are vendor-confirmed. A catalog that asserted its own trustworthiness would
+be the attack.
+
+\section{Limitations}\label{sec:limits}
+
+We state these plainly because a security claim that overstates itself is a
+defect.
+
+\begin{itemize}[leftmargin=1.4em,itemsep=0.15em]
+\item \textbf{No independent security audit.} The implementation is tested (485
+      tests across 21 suites) and enforcement contains no stubs, but no external
+      party has reviewed it.
+\item \textbf{The contract is unaudited and undeployed.} Compiling and executing
+      \texttt{NodeRegistry.sol} for the first time surfaced three real defects
+      --- a griefing vector allowing a stranger to poison a route identifier, an
+      unaccounted forfeited-stake path, and the absence of any unbond mechanism,
+      which made the bond economically unusable. All are fixed and tested. No
+      formal verification, fuzzing, or economic modelling has been performed, and
+      the reward parameters are guesses.
+\item \textbf{Federation is demonstrated, not proven at scale.} Two nodes have
+      been run against each other, which surfaced four defects --- including that
+      the federation module had no reference in the gateway at all, existing as a
+      tested library no running node could reach. Behaviour at hundreds of nodes
+      is unknown.
+\item \textbf{Optimistic claiming assumes someone challenges.} The fraud proofs
+      are sound but only bite if a party with a stake actually checks. In a
+      sparse federation that assumption is weak.
+\item \textbf{Measurements are loopback and Python.} The relative overhead is
+      flattered by the absence of network latency and penalized by the reference
+      language; a Go or Rust implementation would move the CPU-bound numbers.
+\item \textbf{Erasure does not reach peers or backups.} Key destruction removes a
+      key from a process. Copies already federated are beyond reach.
+\item \textbf{Compliance mapping is not compliance.} We map controls to the EU AI
+      Act, DORA, GDPR, NIS2, SOC 2 and others with an explicit gap register, and
+      no lawyer has reviewed it.
+\end{itemize}
+
+\section{Future Work: Agentic Policy and Agentic Society}\label{sec:future}
+
+The mechanisms above answer a narrow question --- \emph{can a counterparty verify
+this action was authorized?} --- and we think that question is prior to the
+interesting ones. We sketch four directions, in increasing order of difficulty
+and decreasing order of our confidence.
+
+\subsection{From Verifiable Delegation to Agentic Policy}
+
+Pattison et al.~\cite{pattison2026} observe that platforms and agent developers
+are locked in an arms race that burns societal value, largely because no shared
+vocabulary distinguishes a user-authorized agent from an indiscriminate scraper.
+A trust layer supplies that vocabulary, but does not by itself create the
+incentive to use it.
+
+The open problem is \emph{policy expressed as mechanism}. If proportional
+restriction is to be more than an aspiration, a platform needs to state its
+access policy in a form an agent can read, satisfy, and be held to --- and a
+regulator needs to be able to check that the stated policy is the enforced one.
+XCP's graded reachability and mandate proofs are candidate primitives; what is
+missing is a machine-readable policy language with adjudicative standing, which
+is where the legal-infrastructure agenda~\cite{chaffer2026} and the mechanism
+agenda must meet.
+
+\subsection{Economic Fairness Under Agentic Inequality}
+
+Delegated agents are not equally capable, and early evidence suggests
+better-resourced agents extract predictable gains from weaker
+counterparties~\cite{pattison2026}. Evidence-conditioned settlement makes
+transactions \emph{verifiable}; it does nothing to make them \emph{fair}.
+
+We regard this as the most urgent economic question the agentic economy poses.
+If agent-mediated commerce simply re-encodes existing resource asymmetries at
+machine speed, the promise that agents will democratize access to expertise
+inverts into a mechanism for concentrating advantage. Candidate directions
+include capability-matched negotiation (agents transact only with counterparties
+of comparable capability), baseline agent provision as a public good, and
+settlement rules that make exploitative asymmetry detectable in the evidence
+bundle itself. None of these are solved, and we do not claim XCP addresses them.
+
+\subsection{Agentic Society: Governing Emergence}
+
+Zhu frames the central design tension as \emph{controlled emergence}: harnessing
+system-level behaviour arising from local interaction while preserving
+predictability, alignment, and accountability~\cite{zhu2026ioai}. As agent
+populations grow, the object of governance shifts from individual actions to
+\emph{interaction patterns} --- collusion, cascading failure, coordinated
+behaviour that no participant intended and none can unilaterally stop.
+
+XCP's contribution here is negative but real: tamper-evident call chains make
+interaction patterns \emph{observable after the fact}, and graded reachability
+bounds how far an unknown participant's influence propagates. What is missing is
+the positive capability --- detecting emergent misalignment while it is
+happening, at population scale, without building the surveillance apparatus that
+such detection naively implies. We note the tension directly: the same evidence
+that enables accountability enables monitoring, and our privacy design (scrubbed
+telemetry, crypto-shredded erasure, commitments that publish totals but never
+counterparties) is an attempt to keep that boundary explicit rather than to
+pretend it does not exist.
+
+In cyber-physical settings this ceases to be abstract. As Zhu argues for the
+Internet of Agentic Things, a reasoning failure becomes a physical
+action~\cite{zhu2026ioat}, and an agent's authority to \emph{act} must therefore
+be narrowed by reversibility class --- a setpoint change, a door unlock, and an
+emergency shutdown should not share approval logic. XCP's obligations mechanism
+is a plausible carrier for such distinctions; we have not built them.
+
+\subsection{Ethical First Principles for an Autonomous Future}
+
+We close with the commitment that motivated this work, stated as a position
+rather than a result.
+
+The purpose of building infrastructure for autonomous agents should be to
+\emph{augment human collective intelligence}, not to substitute for it. This is a
+design constraint with teeth, and it argues for specific properties:
+
+\begin{description}[leftmargin=1.4em,itemsep=0.2em]
+\item[Principals remain human.] Authority originates with a person or an
+      accountable organization and is delegated, never generated. Our lattice
+      invariant --- entitlements narrow, never widen --- is a small technical
+      expression of this. Authority that an agent can manufacture is authority
+      no human granted.
+\item[Delegation is revocable and bounded.] Autonomy that cannot be withdrawn is
+      not delegation but abdication. Short-lived credentials, per-call scope
+      binding, and unsuppressable revocation are not merely security features;
+      they are what keeps a human in the loop of consequence even when they are
+      not in the loop of execution.
+\item[Evidence belongs to the principal.] An audit trail that only the platform
+      can read reproduces the asymmetry agents were supposed to dissolve.
+      Receipts verifiable \emph{offline}, by a party who was not present, are the
+      mechanism by which accountability flows toward the person rather than the
+      intermediary.
+\item[Pluralism over consensus.] We deliberately built a federation in which
+      nodes may disagree and no global agreement is required. A trust
+      infrastructure that forces one answer about who is trustworthy becomes a
+      chokepoint, and chokepoints get captured.
+\end{description}
+
+Whether an autonomous future is one in which life and consciousness thrive
+depends less on the capability of the agents than on whether the infrastructure
+they run on preserves the standing of the beings they act for. We think that is
+substantially an infrastructure question, which is why we have approached it as
+one. But we hold the position loosely: mechanism can make good outcomes
+\emph{possible} and bad outcomes \emph{detectable}; it cannot make good outcomes
+\emph{happen}. That requires the societal conversation
+that~\cite{pattison2026} calls for, and to which this paper is intended as a
+contribution of one part --- the part where you can check the claims by running
+the code.
+
+\section{Conclusion}
+
+The agentic economy is being built on an authorization model designed for humans
+clicking buttons. We have argued that the missing layer is a trust layer, and
+presented one: a lattice that composes agent accountability with human
+verification, per-request credentials cheap enough to be worth little when
+stolen, reachability that is graded rather than binary, settlement conditioned on
+verifiable evidence, and federation that survives certificate rotation.
+
+The measured cost is $0.21$\,ms. We think that is the wrong number to focus on.
+The right one is that a counterparty can now answer, per request, who is acting,
+on whose authority, within what bounds, and with what recourse --- and can check
+the answer without trusting us.
+
+\paragraph{Availability.}
+Source, specification, conformance suite, benchmarks, and the full gap register
+are at \url{https://github.com/AGI-Gateway/XCP} under MIT. We particularly invite
+adversarial review of the trust lattice invariants, the contract, and the
+conformance suite's negative checks --- and would rather receive a clause that
+the reference implementation \emph{fails} than one it passes.
+
+\paragraph{Status.}
+XCP and ERC-8004x are draft proposals originating in this project. MCP, A2A,
+ERC-8004, and the frameworks cited here are independent work by others.
+
+\begin{thebibliography}{9}
+
+\bibitem{yang2025}
+Y. Yang et al.
+\newblock Agentic Web: Weaving the Next Web with AI Agents.
+\newblock \emph{arXiv:2507.21206}, 2025.
+
+\bibitem{chaffer2026}
+T. J. Chaffer et al.
+\newblock Distributed Legal Infrastructure for a Trustworthy Agentic Web.
+\newblock \emph{arXiv:2603.06884}, 2026.
+
+\bibitem{pattison2026}
+C. Pattison, M. Boulos, N. Kolt, C. Li, T. Piccardi, and S. Lazar.
+\newblock The Agentic Web Requires New Normative Infrastructure.
+\newblock \emph{arXiv:2606.10711}, 2026.
+
+\bibitem{zhu2026ioai}
+Q. Zhu.
+\newblock The Internet of Agentic AI: Communication, Coordination, and
+Collective Intelligence at Scale.
+\newblock \emph{arXiv:2606.12835}, 2026.
+
+\bibitem{zhu2026ioat}
+Q. Zhu.
+\newblock Internet of Agentic Things: Networked AI Agents for Closed-Loop IoT
+Orchestration.
+\newblock \emph{arXiv:2607.12662}, 2026.
+
+\end{thebibliography}
+
+\end{document}

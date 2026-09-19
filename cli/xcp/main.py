@@ -1,0 +1,899 @@
+#!/usr/bin/env python3
+"""
+xcp — the self-serve command line for XCP.
+
+Everything an organisation needs to stand up a verified agent endpoint and get
+it discoverable, without talking to anybody:
+
+    xcp init                 scaffold xcp.toml for this project
+    xcp doctor               check the local environment and config
+    xcp tier                 show the trust lattice / resolve your envelope
+    xcp certs                generate a local mTLS dev PKI
+    xcp up                   run the stack (verifier + gateway + server)
+    xcp publish              generate ai-catalog.json + MCP registry manifest
+    xcp verify <url>         probe an endpoint's XCP posture before trusting it
+    xcp receipt <bundle>     verify a proof-of-delivery evidence bundle
+    xcp catalog              inspect and search the discovery catalog
+    xcp wrap <api>           generate an MCP server from a public API spec
+    xcp conform <url>        test an implementation against the spec
+    xcp triage <url>         diagnose a live node
+    xcp config               every setting, risky ones marked
+    xcp privacy map          data map, retention and erasure
+    xcp compliance gaps      control mapping, gaps and covenants
+
+Zero third-party dependencies — standard library only, so `xcp` runs anywhere
+Python 3.10+ does.
+
+Status: XCP and ERC-8004x are draft proposals.
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import pathlib
+import subprocess
+import sys
+import time
+import urllib.error
+import urllib.request
+from pathlib import Path
+from typing import Any, Optional
+
+REPO = Path(__file__).resolve().parent.parent.parent
+sys.path.insert(0, str(REPO))
+
+CONFIG_NAME = "xcp.toml"
+
+# ── tiny TOML reader (stdlib tomllib on 3.11+, minimal fallback otherwise) ──
+try:
+    import tomllib  # py3.11+
+
+    def _load_toml(p: Path) -> dict:
+        with open(p, "rb") as fh:
+            return tomllib.load(fh)
+except ImportError:                                   # pragma: no cover
+    def _load_toml(p: Path) -> dict:
+        cfg: dict[str, Any] = {}
+        section = cfg
+        for raw in p.read_text().splitlines():
+            line = raw.split("#", 1)[0].strip()
+            if not line:
+                continue
+            if line.startswith("[") and line.endswith("]"):
+                section = cfg.setdefault(line[1:-1], {})
+            elif "=" in line:
+                k, v = (x.strip() for x in line.split("=", 1))
+                if v.startswith(("'", '"')) and v.endswith(("'", '"')):
+                    v = v[1:-1]
+                elif v in ("true", "false"):
+                    v = v == "true"
+                elif v.lstrip("-").isdigit():
+                    v = int(v)
+                section[k] = v
+        return cfg
+
+
+# ── output helpers ─────────────────────────────────────────────────────────
+
+def _c(code: str, s: str) -> str:
+    return s if os.getenv("NO_COLOR") else f"\033[{code}m{s}\033[0m"
+
+
+def ok(s: str) -> None:    print(f"  {_c('32', 'ok')}    {s}")
+def warn(s: str) -> None:  print(f"  {_c('33', 'warn')}  {s}")
+def bad(s: str) -> None:   print(f"  {_c('31', 'fail')}  {s}")
+def info(s: str) -> None:  print(f"  {_c('36', '·')}     {s}")
+def head(s: str) -> None:  print(f"\n{_c('1', s)}\n{'─' * len(s)}")
+
+
+def find_config(start: Optional[Path] = None) -> Optional[Path]:
+    d = (start or Path.cwd()).resolve()
+    for cand in [d, *d.parents]:
+        p = cand / CONFIG_NAME
+        if p.exists():
+            return p
+    return None
+
+
+def load_config() -> dict:
+    p = find_config()
+    if not p:
+        bad(f"no {CONFIG_NAME} found — run `xcp init` first")
+        sys.exit(1)
+    return _load_toml(p)
+
+
+# ── commands ───────────────────────────────────────────────────────────────
+
+TEMPLATE = """# xcp.toml — XCP project configuration
+# docs: https://github.com/AGI-Gateway/XCP/blob/main/docs/self-serve.md
+
+[project]
+name        = "{name}"
+description = "{desc}"
+
+[publisher]
+# Your domain is the identity anchor for discovery — catalogs are trusted
+# because they are served from a domain you demonstrably control.
+domain  = "{domain}"
+name    = "{org}"
+contact = ""
+
+[trust]
+# Trust lattice position. Start where you are; `xcp tier --upgrade` shows the
+# next step.  agent: free | registry | company     human: public | general_sso | enterprise
+agent = "free"
+human = "public"
+
+[gateway]
+url       = "http://localhost:8080"
+posture   = "enforce"          # enforce | observe
+upstreams = {{ }}                # name -> MCP url, e.g. {{ research = "http://localhost:9001/mcp" }}
+
+[[resource]]
+name        = "{name}"
+description = "{desc}"
+kind        = "mcp-server"     # mcp-server | a2a-agent | openapi
+endpoint    = "https://{domain}/mcp"
+tags        = []
+"""
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    target = Path.cwd() / CONFIG_NAME
+    if target.exists() and not args.force:
+        bad(f"{CONFIG_NAME} already exists (use --force to overwrite)")
+        return 1
+    name = args.name or Path.cwd().name
+    domain = args.domain or "example.com"
+    target.write_text(TEMPLATE.format(
+        name=name, desc=args.description or f"{name} capabilities",
+        domain=domain, org=args.org or domain))
+    head("Project initialised")
+    ok(f"wrote {CONFIG_NAME}")
+    info("next:  xcp doctor     — check your environment")
+    info("       xcp tier       — see what authority your tier grants")
+    info("       xcp up         — run the stack locally")
+    return 0
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    head("Environment")
+    py = sys.version_info
+    (ok if py >= (3, 10) else bad)(f"python {py.major}.{py.minor}.{py.micro}")
+    for mod, why in [("fastapi", "gateway + server"), ("httpx", "client"),
+                     ("eth_account", "mandate signing"), ("cryptography", "certificates")]:
+        try:
+            __import__(mod)
+            ok(f"{mod} available ({why})")
+        except ImportError:
+            warn(f"{mod} missing — needed for {why}:  pip install -r requirements.txt")
+    if _which("openssl"):
+        ok("openssl available (cert generation)")
+    else:
+        warn("openssl missing — `xcp certs` will not work")
+    if _which("docker"):
+        ok("docker available (xcp up --docker)")
+    else:
+        info("docker not found — `xcp up` will run processes directly")
+
+    head("Configuration")
+    p = find_config()
+    if not p:
+        warn(f"no {CONFIG_NAME} — run `xcp init`")
+        return 0
+    ok(f"config at {p}")
+    cfg = _load_toml(p)
+    dom = (cfg.get("publisher") or {}).get("domain", "")
+    if not dom or dom == "example.com":
+        warn("publisher.domain is unset/placeholder — discovery needs a real domain")
+    else:
+        ok(f"publisher domain: {dom}")
+    res = cfg.get("resource") or []
+    if isinstance(res, dict):
+        res = [res]
+    (ok if res else warn)(f"{len(res)} resource(s) declared")
+
+    head("Trust")
+    try:
+        from trust.tiers import AgentTier, HumanTier, resolve, next_upgrade
+        t = cfg.get("trust") or {}
+        a = AgentTier[str(t.get("agent", "free")).upper()]
+        h = HumanTier[str(t.get("human", "public")).upper()]
+        tpl = resolve(a, h)
+        ok(f"tier {tpl.cell} ({tpl.name}) — settlement: {tpl.settlement}, ttl {tpl.ttl_seconds//3600}h")
+        up = next_upgrade(a, h)
+        if up:
+            info(f"upgrade: {up}")
+    except Exception as e:
+        warn(f"could not resolve tier: {e}")
+    return 0
+
+
+def cmd_tier(args: argparse.Namespace) -> int:
+    from trust.tiers import (AgentTier, HumanTier, Entitlements, resolve,
+                             next_upgrade, lattice_table)
+    if args.table:
+        head("The XCP trust lattice")
+        print(f"  {'cell':<7} {'name':<21} {'ttl':>5}  {'settle':<8} {'cap':>9}  scopes")
+        for row in lattice_table():
+            cap = row["spend_cap_minor"]
+            print(f"  {row['cell']:<7} {row['name']:<21} "
+                  f"{row['ttl_seconds']//3600:>4}h  {row['settlement']:<8} "
+                  f"{('none' if cap == 0 else str(cap)):>9}  {len(row['scopes'])} scope patterns")
+        print("\n  ceiling = the weaker leg, except A2xH0 (the company is the principal).")
+        return 0
+
+    cfg = load_config() if not (args.agent and args.human) else {}
+    t = cfg.get("trust") or {}
+    a = AgentTier[(args.agent or t.get("agent", "free")).upper()]
+    h = HumanTier[(args.human or t.get("human", "public")).upper()]
+    ent = Entitlements(approval_limit_minor=args.limit) if args.limit is not None else None
+    tpl = resolve(a, h, ent)
+
+    head(f"Trust envelope — {tpl.cell} · {tpl.name}")
+    info(f"agent      {a.label}")
+    info(f"human      {h.label}")
+    print()
+    ok(f"session ttl      {tpl.ttl_seconds // 3600}h")
+    ok(f"posture          {tpl.posture}")
+    ok(f"settlement       {tpl.settlement}"
+       + (f" (receipt required)" if tpl.requires_receipt else ""))
+    ok(f"rails            {', '.join(tpl.rails_list()) or 'none'}")
+    ok(f"spend cap        {'no protocol cap' if tpl.spend_cap_minor == 0 else tpl.spend_cap_minor}")
+    ok(f"scopes           {', '.join(tpl.scopes)}")
+    if tpl.notes:
+        print()
+        info(tpl.notes)
+    up = next_upgrade(a, h)
+    if up:
+        print()
+        print(f"  {_c('1', 'upgrade')} {up}")
+    if args.json:
+        print()
+        print(tpl.to_json())
+    return 0
+
+
+def cmd_publish(args: argparse.Namespace) -> int:
+    from discovery.ard import (Publisher, Resource, build_catalog, validate_catalog,
+                               build_mcp_manifest, write_catalog, WELL_KNOWN_PATH)
+    cfg = load_config()
+    pub_cfg = cfg.get("publisher") or {}
+    if not pub_cfg.get("domain"):
+        bad("publisher.domain is required to publish (it is your identity anchor)")
+        return 1
+    publisher = Publisher(domain=pub_cfg["domain"], name=pub_cfg.get("name", pub_cfg["domain"]),
+                          contact=pub_cfg.get("contact", ""))
+    res_cfg = cfg.get("resource") or []
+    if isinstance(res_cfg, dict):
+        res_cfg = [res_cfg]
+    if not res_cfg:
+        bad("no [[resource]] entries in xcp.toml — nothing to publish")
+        return 1
+
+    tier = ""
+    try:
+        from trust.tiers import AgentTier, HumanTier, resolve
+        t = cfg.get("trust") or {}
+        tier = resolve(AgentTier[str(t.get("agent", "free")).upper()],
+                       HumanTier[str(t.get("human", "public")).upper()]).cell
+    except Exception:
+        pass
+
+    gw = (cfg.get("gateway") or {}).get("url", "")
+    resources = []
+    for rc in res_cfg:
+        tools: list[dict] = []
+        if args.introspect:
+            tools = _introspect_tools(rc.get("endpoint", ""))
+            info(f"introspected {len(tools)} tool(s) from {rc.get('name')}")
+        resources.append(Resource(
+            name=rc.get("name", "unnamed"), description=rc.get("description", ""),
+            endpoint=rc.get("endpoint", ""), kind=rc.get("kind", "mcp-server"),
+            tags=list(rc.get("tags") or []), tools=tools,
+            trust_tier=tier, xcp_gateway=gw))
+
+    cat = build_catalog(publisher, resources)
+    problems = validate_catalog(cat)
+
+    head("Catalog")
+    outdir = Path(args.out)
+    (outdir / ".well-known").mkdir(parents=True, exist_ok=True)
+    cat_path = outdir / ".well-known" / "ai-catalog.json"
+    write_catalog(cat, str(cat_path))
+    ok(f"wrote {cat_path}")
+    info(f"host it at  https://{publisher.domain}{WELL_KNOWN_PATH}")
+    for r, res in zip(res_cfg, resources):
+        man = build_mcp_manifest(publisher, res)
+        mp = outdir / f"server-{res.name}.json"
+        mp.write_text(json.dumps(man, indent=2) + "\n")
+        ok(f"wrote {mp}  (MCP Registry manifest)")
+
+    if problems:
+        print()
+        for p in problems:
+            warn(p)
+    else:
+        ok("catalog passes local validation")
+    print()
+    info("ARD is a draft spec — validate against the published schema before you rely on it.")
+    info("`/.well-known/*` must be served unauthenticated (RFC 8615).")
+    return 0
+
+
+def cmd_verify(args: argparse.Namespace) -> int:
+    """Probe an endpoint's XCP posture before trusting it."""
+    url = args.url.rstrip("/")
+    head(f"Probing {url}")
+    health = _get_json(f"{url}/health")
+    if health:
+        ok(f"reachable — {json.dumps(health)[:120]}")
+        if health.get("posture"):
+            ok(f"posture: {health['posture']}")
+        if health.get("requiresVerified"):
+            ok("server requires gateway-verified identity")
+    else:
+        warn("no /health endpoint")
+    anon = _post_json(f"{url}/v1/a2t/call", {"server": "x", "tool": "y", "arguments": {}})
+    if anon is None:
+        ok("anonymous call refused (or endpoint absent) — good")
+    elif isinstance(anon, dict) and anon.get("error"):
+        ok(f"anonymous call rejected: {str(anon['error'])[:70]}")
+    else:
+        bad("anonymous call was ACCEPTED — this endpoint is unauthenticated")
+    cat = _get_json(f"{url}/.well-known/ai-catalog.json")
+    if cat:
+        ok(f"publishes an ARD catalog ({len(cat.get('entries', []))} entries)")
+    else:
+        info("no ARD catalog at /.well-known/ai-catalog.json")
+    return 0
+
+
+def cmd_certs(args: argparse.Namespace) -> int:
+    script = REPO / "deploy" / "gen-certs.sh"
+    if not script.exists():
+        bad(f"missing {script}")
+        return 1
+    env = {**os.environ, "AGENT_ID": str(args.agent_id)}
+    head("Generating local mTLS PKI")
+    r = subprocess.run(["bash", str(script)], env=env, capture_output=True, text=True)
+    print(r.stdout.strip() or r.stderr.strip())
+    return r.returncode
+
+
+def cmd_up(args: argparse.Namespace) -> int:
+    cfg = load_config()
+    gw = cfg.get("gateway") or {}
+    ups = gw.get("upstreams") or {}
+    if args.docker:
+        head("Starting the stack with docker compose")
+        return subprocess.run(["docker", "compose", "-f",
+                               str(REPO / "deploy" / "docker-compose.yml"), "up", "--build"]).returncode
+    head("Starting the stack")
+    info("verifier :8500   gateway :8080   server :9001")
+    info("stop with Ctrl-C")
+    env = {**os.environ,
+           "XCP_POSTURE": gw.get("posture", "enforce"),
+           "XCP_UPSTREAMS": json.dumps(ups or {"research": "http://127.0.0.1:9001/mcp"}),
+           "REQUIRE_VERIFIED": "1"}
+    return subprocess.run([sys.executable, str(REPO / "examples" / "end_to_end.py")],
+                          env=env).returncode
+
+
+
+def cmd_receipt(args: argparse.Namespace) -> int:
+    """Verify an evidence bundle — the third-party check anyone can run."""
+    from receipts import verify_bundle
+    path = Path(args.bundle)
+    if not path.exists():
+        bad(f"no such file: {path}")
+        return 1
+    try:
+        bundle = json.loads(path.read_text())
+    except Exception as e:
+        bad(f"not valid JSON: {e}")
+        return 1
+    head(f"Verifying {path.name}")
+    task = bundle.get("task", {})
+    rec = bundle.get("receipt", {})
+    chain = bundle.get("callChain", {})
+    info(f"task        {task.get('task_id','?')} — {str(task.get('description',''))[:52]}")
+    info(f"parties     payer {task.get('payer_agent')} → payee {task.get('payee_agent')}")
+    info(f"amount      {task.get('amount_minor')} {task.get('currency','')} via {task.get('rail','')}")
+    info(f"evidence    {chain.get('count', 0)} recorded call(s)")
+    if bundle.get("outputRef"):
+        info(f"output      {bundle['outputRef']}")
+    print()
+    problems = verify_bundle(bundle)
+    if problems:
+        for p in problems:
+            bad(p)
+        print()
+        warn("this bundle does NOT verify — do not settle against it")
+        return 2
+    ok("task digest matches the receipt")
+    ok("call chain is intact (no edits, reorders or deletions)")
+    ok("payee signature recovers")
+    if rec.get("acceptance_sig"):
+        ok("payer acceptance signature recovers")
+    else:
+        info("not yet accepted by the payer")
+    print()
+    ok("bundle verifies")
+    info("this proves the work was performed and the artifact is exactly this one.")
+    info("it does NOT prove the output is good — that is still your call.")
+    return 0
+
+
+def cmd_catalog(args: argparse.Namespace) -> int:
+    """Inspect, search and refresh the discovery catalog."""
+    from connectors import GlobalCatalog
+    cat = GlobalCatalog()
+    cat.load_curated()
+    if not args.no_snapshot:
+        cat.load_snapshot()
+    if args.categories:
+        head("Catalog by category")
+        cats = cat.categories()
+        print(f"  {'category':<20}{'total':>7}{'routable':>10}{'installable':>13}  what it covers")
+        from connectors.taxonomy import describe
+        for k, v in cats.items():
+            print(f"  {k:<20}{v['total']:>7}{v['routable']:>10}{v['installable']:>13}  {describe(k)[:44]}")
+        print()
+        info("browse one:   xcp catalog --category dev-tools")
+        info("only usable:  xcp catalog --category dev-tools --kind routable")
+        return 0
+
+    if args.category:
+        head(f"{args.category} — {__import__('connectors.taxonomy', fromlist=['describe']).describe(args.category)}")
+        rows = cat.by_category(args.category, kind=args.kind, limit=args.limit)
+        if not rows:
+            info("nothing in that category (see: xcp catalog --categories)")
+        for r in rows:
+            k = "curated" if r.get("curated") else r.get("kind", "?")
+            target = r.get("docs") or r.get("endpoint") or r.get("installRef") or ""
+            v = r.get("validated", "")
+            flag = {"alive": "ok", "archived": "archived", "gone": "GONE",
+                    "reachable": "live", "unreachable": "DOWN"}.get(v, "")
+            print(f"  {r.get('id','')[:34]:<36} {k:<12} {flag:<9} {target[:46]}")
+        return 0
+
+    if args.search:
+        head(f"Search: {args.search}")
+        rows = cat.search(args.search, limit=args.limit)
+        if not rows:
+            info("no matches")
+        for r in rows:
+            kind = "curated" if r.get("curated") else r.get("kind", "?")
+            target = r.get("endpoint") or r.get("installRef") or ""
+            print(f"  {r.get('id','')[:38]:<40} {kind:<12} {target[:52]}")
+        return 0
+    s = cat.stats()
+    head("Catalog")
+    ok(f"curated      {s['curated']:>6}   verified core, promotable")
+    ok(f"discovered   {s['ingested']:>6}   harvested, unverified")
+    print()
+    info(f"routable     {s['routable']:>6}   remote endpoints an agent can reach now")
+    info(f"installable  {s['ingestedByKind'].get('installable', 0):>6}   packages — routable once a node runs them")
+    info(f"total        {s['total']:>6}")
+    print()
+    vs = cat.validation_summary()
+    for k in ("alive", "archived", "gone", "reachable", "unreachable", "unchecked"):
+        if vs.get(k):
+            info(f"{k:<12} {vs[k]:>6}")
+    print()
+    for k, v in s["curatedByStatus"].items():
+        info(f"curated/{k:<12} {v}")
+    print()
+    info("refresh with: python scripts/build-snapshot.py --fetch")
+    return 0
+
+
+def cmd_wrap(args: argparse.Namespace) -> int:
+    """Generate a deployable MCP server from a public API's OpenAPI spec."""
+    from connectors.wrap import (parse_openapi, generate, WrapError,
+                                 CredentialSource)
+    from connectors import GlobalCatalog
+
+    spec_url = args.spec
+    api_id = args.id or ""
+    if not spec_url:
+        cat = GlobalCatalog(); cat.load_curated(); cat.load_snapshot()
+        match = [e for e in cat.ingested.values()
+                 if e.kind.value == "wrappable" and args.api and args.api in e.id]
+        if not match:
+            bad(f"no wrappable API matching {args.api!r} "
+                "(try: xcp catalog --kind wrappable)")
+            return 1
+        spec_url, api_id = match[0].spec_url, match[0].id.replace("api-", "")
+        info(f"using {match[0].name} — {spec_url}")
+
+    head("Fetching specification")
+    try:
+        from security.xcpsec.argfirewall import ssrf_guard
+        ssrf_guard(spec_url)
+    except ImportError:
+        pass
+    except PermissionError as e:
+        bad(str(e)); return 1
+    try:
+        with urllib.request.urlopen(spec_url, timeout=45) as r:
+            raw = r.read(16 * 1024 * 1024).decode("utf-8", "replace")
+    except Exception as e:
+        bad(f"could not fetch the spec: {e}")
+        return 1
+    try:
+        import yaml
+        doc = yaml.safe_load(raw)
+    except Exception:
+        try:
+            doc = json.loads(raw)
+        except Exception as e:
+            bad(f"spec is neither YAML nor JSON: {e}")
+            return 1
+
+    try:
+        spec = parse_openapi(doc, api_id=api_id,
+                             include_destructive=args.include_destructive,
+                             max_operations=args.max_operations,
+                             credential_source=CredentialSource(
+                                 args.credential_source))
+    except WrapError as e:
+        bad(str(e)); return 1
+
+    ok(f"{spec.title}  —  {len(spec.operations)} operations")
+    info(f"upstream  {spec.base_url}")
+    info(f"auth      {spec.auth_scheme}")
+    info(f"credential {spec.credential_source.value}")
+    if spec.credential_source.value == "session":
+        info("           the CALLER supplies their own key per request; this")
+        info("           wrapper stores nothing and is safe to host for others")
+    elif spec.secret_ref:
+        info(f"credentials {args.credentials}")
+    if args.credentials == "operator":
+        info(f"secret    {spec.secret_ref}")
+    else:
+        info("callers supply their own key; this wrapper stores none")
+    if not args.include_destructive:
+        info("DELETE operations excluded (pass --include-destructive to add them)")
+
+    out = pathlib.Path(args.out or f"mcp_{spec.id.replace('-', '_')}.py")
+    out.write_text(generate(spec, module_name=out.stem,
+                            credential_source=args.credentials))
+    print()
+    ok(f"wrote {out}")
+    info("read it before deploying, then:")
+    info(f"  uvicorn {out.stem}:app --port 9100")
+    info("register it with your gateway — it becomes ROUTABLE at YOUR url, not the vendor's.")
+    return 0
+
+
+def cmd_conform(args: argparse.Namespace) -> int:
+    """Run the conformance suite against any XCP endpoint."""
+    from conformance import run, format_report, Profile
+    profiles = ([Profile(p) for p in args.profile.split(",")] if args.profile
+                else [Profile.CORE, Profile.STATELESS, Profile.SECURITY])
+    rep = run(args.url, profiles)
+    if args.json:
+        print(json.dumps(rep.to_dict(), indent=2))
+    else:
+        print(format_report(rep))
+    if args.out:
+        pathlib.Path(args.out).write_text(json.dumps(rep.to_dict(), indent=2))
+        info(f"report written to {args.out}")
+    return 0 if rep.conformant else 1
+
+
+def cmd_privacy(args: argparse.Namespace) -> int:
+    """Data map, retention sweep, or an erasure request."""
+    from privacy import data_map, CLASSES, erasable, KeyRing, erase
+    if args.action == "map":
+        m = data_map()
+        if args.json:
+            print(json.dumps(m, indent=2)); return 0
+        head("Data map")
+        info(m["controllerRole"])
+        print()
+        print(f"  {'class':<22}{'subject':<10}{'basis':<20}{'days':>6}  erasable")
+        for c in m["classes"]:
+            print(f"  {c['id']:<22}{c['subject']:<10}{c['basis']:<20}"
+                  f"{c['retentionDays']:>6}  {'yes' if c['erasableOnRequest'] else 'NO'}")
+        print()
+        warn(m["notLegalAdvice"])
+        return 0
+
+    if args.action == "reconcile":
+        from compliance import reconcile_retention, apply_ai_act_floor
+        head("Retention conflicts")
+        info("EU AI Act Art. 19/26(6) sets a FLOOR; GDPR Art. 5(1)(e) sets a "
+             "CEILING. Both bind the same records.")
+        print()
+        for c in reconcile_retention(not args.no_ai_act):
+            mark = "ok  " if c.resolved else "GAP "
+            print(f"  {mark}{c.data_class:<18}{c.configured_days:>4}d"
+                  f"  floor {c.floor_days}d")
+            print(f"      {c.guidance}")
+        if not args.no_ai_act:
+            print()
+            info(f"overrides for a high-risk deployment: {apply_ai_act_floor()}")
+        print()
+        warn("Surfaces the conflict; it does not resolve it for you. Record the "
+             "reasoning where an auditor will look.")
+        return 0
+
+    if args.action == "erase":
+        if not args.subject:
+            bad("--subject is required"); return 1
+        ring = KeyRing()
+        held = [(c, int(time.time())) for c in (args.classes or "").split(",") if c] or None
+        rep = erase(ring, args.subject, held=held)
+        print(rep.human_summary())
+        if args.json:
+            print(); print(json.dumps(rep.to_dict(), indent=2))
+        return 0 if rep.complete else 2
+
+    head("Retention")
+    for cid, c in CLASSES.items():
+        ok, reason = erasable(cid)
+        print(f"  {cid:<22}{'erasable' if ok else 'RETAINED':<10} {reason[:60]}")
+    return 0
+
+
+def cmd_compliance(args: argparse.Namespace) -> int:
+    """Control mapping, gap register, and the covenants that carry the rest."""
+    import compliance.frameworks as F
+    from compliance import (coverage_statement, contract_annex, COVENANTS,
+                            Owes, recovery_plan, degradation_scenarios)
+    if args.action == "covenants":
+        owes = Owes(args.owner) if args.owner else None
+        if args.annex:
+            print(contract_annex(owes)); return 0
+        head("Covenants — what the software cannot discharge")
+        for c in COVENANTS:
+            if owes and c.owes is not owes and c.owes is not Owes.BOTH:
+                continue
+            print(f"  {c.id}  [{c.owes.value}] {c.frequency}")
+            print(f"      {c.commitment}")
+            print(f"      evidence: {c.evidence}")
+            print(f"      refs: {'; '.join(c.clauses)}")
+        print()
+        info("--annex prints these as contract clauses")
+        return 0
+
+    if args.action == "gaps":
+        head("Gap register")
+        for c in F.CONTROLS:
+            if c.coverage.value in ("gap", "operator"):
+                print(f"  {c.framework.value:<12}{c.reference[:40]:<42}{c.gap_note[-46:]}")
+        return 0
+
+    if args.action == "recovery":
+        p = recovery_plan()
+        head("State that must survive a restart")
+        for s in p["state"]:
+            print(f"  {s['name']:<26} RPO {s['rpoSeconds']:>7}s  RTO {s['rtoSeconds']:>5}s")
+            print(f"      {s['lossImpact'][:88]}")
+        print()
+        warn(f"unrecoverable if lost: {', '.join(p['unrecoverable'])}")
+        info(p["note"])
+        return 0
+
+    if args.action == "scenarios":
+        head("Resilience scenarios")
+        for s in degradation_scenarios():
+            print(f"  {s['scenario']}")
+            print(f"      expected: {s['expected']}")
+        return 0
+
+    s = coverage_statement()
+    head("Coverage")
+    for k, v in s["controlCoverage"].items():
+        info(f"{k:<14}{v}")
+    print()
+    info(f"covenants: {s['covenants']}  {s['byOwner']}")
+    print()
+    warn(s["position"])
+    return 0
+
+
+def cmd_triage(args: argparse.Namespace) -> int:
+    """Diagnose a live node: the first five minutes, automated."""
+    from ops import triage, report, worst, Sev
+    findings = triage(args.url)
+    if args.json:
+        print(json.dumps([f.to_dict() for f in findings], indent=2))
+    else:
+        print(report(args.url, findings))
+    w = worst(findings)
+    return 2 if w is Sev.CRITICAL else (1 if w is Sev.HIGH else 0)
+
+
+def cmd_config(args: argparse.Namespace) -> int:
+    """Every setting, with the ones that weaken a control marked."""
+    from ops.config import table, SETTINGS, Role, unsafe, secrets
+    if args.json:
+        print(json.dumps([s.to_dict() for s in SETTINGS], indent=2)); return 0
+    role = Role(args.role) if args.role else None
+    head("Configuration")
+    print(table(role, only_unsafe=args.unsafe))
+    if not args.unsafe and not role:
+        print()
+        warn(f"{len(unsafe())} settings weaken a control when set — "
+             "`xcp config --unsafe` lists only those")
+        info(f"{len(secrets())} are secrets: keep them in a secret backend, "
+             "never in an image or a compose file")
+    return 0
+
+
+# ── small helpers ──────────────────────────────────────────────────────────
+
+def _which(binary: str) -> bool:
+    from shutil import which
+    return which(binary) is not None
+
+
+def _get_json(url: str, timeout: float = 5) -> Optional[dict]:
+    try:
+        with urllib.request.urlopen(url, timeout=timeout) as r:
+            return json.loads(r.read())
+    except Exception:
+        return None
+
+
+def _post_json(url: str, body: dict, timeout: float = 5) -> Optional[dict]:
+    req = urllib.request.Request(url, data=json.dumps(body).encode(),
+                                 headers={"Content-Type": "application/json"},
+                                 method="POST")
+    try:
+        with urllib.request.urlopen(req, timeout=timeout) as r:
+            return json.loads(r.read())
+    except urllib.error.HTTPError as e:
+        try:
+            return json.loads(e.read())
+        except Exception:
+            return {"error": f"HTTP {e.code}"}
+    except Exception:
+        return None
+
+
+def _introspect_tools(endpoint: str) -> list[dict]:
+    if not endpoint:
+        return []
+    res = _post_json(endpoint, {"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+    if not res:
+        return []
+    return ((res.get("result") or {}).get("tools")) or []
+
+
+# ── entry point ────────────────────────────────────────────────────────────
+
+def build_parser() -> argparse.ArgumentParser:
+    p = argparse.ArgumentParser(
+        prog="xcp", description="Self-serve command line for XCP.")
+    sub = p.add_subparsers(dest="cmd", required=True)
+
+    i = sub.add_parser("init", help="scaffold xcp.toml")
+    i.add_argument("--name"); i.add_argument("--domain"); i.add_argument("--org")
+    i.add_argument("--description"); i.add_argument("--force", action="store_true")
+    i.set_defaults(fn=cmd_init)
+
+    d = sub.add_parser("doctor", help="check environment and config")
+    d.set_defaults(fn=cmd_doctor)
+
+    t = sub.add_parser("tier", help="show the trust lattice / your envelope")
+    t.add_argument("--agent", choices=["free", "registry", "company"])
+    t.add_argument("--human", choices=["public", "general_sso", "enterprise"])
+    t.add_argument("--limit", type=int, help="entitlement approval limit (minor units)")
+    t.add_argument("--table", action="store_true", help="print the whole lattice")
+    t.add_argument("--json", action="store_true")
+    t.set_defaults(fn=cmd_tier)
+
+    pub = sub.add_parser("publish", help="generate ARD catalog + MCP manifest")
+    pub.add_argument("--out", default="dist", help="output directory (default: dist)")
+    pub.add_argument("--introspect", action="store_true",
+                     help="call tools/list on each endpoint to enrich the catalog")
+    pub.set_defaults(fn=cmd_publish)
+
+    v = sub.add_parser("verify", help="probe an endpoint's XCP posture")
+    v.add_argument("url")
+    v.set_defaults(fn=cmd_verify)
+
+    c = sub.add_parser("certs", help="generate a local mTLS dev PKI")
+    c.add_argument("--agent-id", type=int, default=42001)
+    c.set_defaults(fn=cmd_certs)
+
+    rc = sub.add_parser("receipt", help="verify a proof-of-delivery evidence bundle")
+    rc.add_argument("bundle", help="path to an evidence bundle JSON file")
+    rc.set_defaults(fn=cmd_receipt)
+
+    cat = sub.add_parser("catalog", help="inspect and search the discovery catalog")
+    cat.add_argument("--search", help="find connectors by name or tag")
+    cat.add_argument("--limit", type=int, default=20)
+    cat.add_argument("--categories", action="store_true",
+                     help="list every category with counts")
+    cat.add_argument("--category", help="browse one category")
+    cat.add_argument("--kind", choices=["routable", "installable"],
+                     help="filter by whether it can be reached today")
+    cat.add_argument("--no-snapshot", action="store_true",
+                     help="curated entries only")
+    cat.set_defaults(fn=cmd_catalog)
+
+    w = sub.add_parser("wrap", help="generate an MCP server from a public API spec")
+    w.add_argument("api", nargs="?", help="catalog id fragment, e.g. stripe")
+    w.add_argument("--spec", help="OpenAPI URL (skips the catalog)")
+    w.add_argument("--id", help="override the generated id")
+    w.add_argument("--out", help="output file")
+    w.add_argument("--credentials", choices=["operator", "session", "sealed"],
+                   default="operator",
+                   help="whose upstream key the wrapper uses; 'sealed' for hosting")
+    w.add_argument("--max-operations", type=int, default=400)
+    w.add_argument("--credential-source", default="operator",
+                   choices=["operator", "session", "none"],
+                   help="operator = your key (self-host); session = the caller's "
+                        "key per request (multi-tenant safe)")
+    w.add_argument("--include-destructive", action="store_true",
+                   help="also expose DELETE operations")
+    w.set_defaults(fn=cmd_wrap)
+
+    cf = sub.add_parser("conform",
+                        help="test any XCP endpoint against the conformance suite")
+    cf.add_argument("url")
+    cf.add_argument("--profile", help="core,stateless,security,federation")
+    cf.add_argument("--json", action="store_true")
+    cf.add_argument("--out", help="write the report to a file")
+    cf.set_defaults(fn=cmd_conform)
+
+    cp = sub.add_parser("compliance",
+                        help="control mapping, gaps, covenants, recovery")
+    cp.add_argument("action",
+                    choices=["coverage", "gaps", "covenants", "recovery",
+                             "scenarios"], default="coverage", nargs="?")
+    cp.add_argument("--owner", choices=["operator", "deployer", "application"])
+    cp.add_argument("--annex", action="store_true",
+                    help="print covenants as contract clauses")
+    cp.set_defaults(fn=cmd_compliance)
+
+    pv = sub.add_parser("privacy", help="data map, retention, erasure requests")
+    pv.add_argument("action",
+                    choices=["map", "retention", "erase", "reconcile"],
+                    default="map", nargs="?")
+    pv.add_argument("--no-ai-act", action="store_true",
+                    help="this deployment does not front a high-risk AI system")
+    pv.add_argument("--subject", help="pseudonymous subject id to erase")
+    pv.add_argument("--classes", help="comma-separated data classes held")
+    pv.add_argument("--json", action="store_true")
+    pv.set_defaults(fn=cmd_privacy)
+
+    cg = sub.add_parser("config", help="every setting, and which ones are risky")
+    cg.add_argument("--role", choices=["gateway", "server", "verifier", "node",
+                                       "wrapper", "telemetry", "tooling"])
+    cg.add_argument("--unsafe", action="store_true",
+                    help="only settings that weaken a control")
+    cg.add_argument("--json", action="store_true")
+    cg.set_defaults(fn=cmd_config)
+
+    tr = sub.add_parser("triage", help="diagnose a live node")
+    tr.add_argument("url")
+    tr.add_argument("--json", action="store_true")
+    tr.set_defaults(fn=cmd_triage)
+
+    u = sub.add_parser("up", help="run the stack locally")
+    u.add_argument("--docker", action="store_true")
+    u.set_defaults(fn=cmd_up)
+    return p
+
+
+def main(argv: Optional[list[str]] = None) -> int:
+    args = build_parser().parse_args(argv)
+    try:
+        return args.fn(args)
+    except KeyboardInterrupt:
+        print("\ninterrupted")
+        return 130
+
+
+if __name__ == "__main__":
+    sys.exit(main())

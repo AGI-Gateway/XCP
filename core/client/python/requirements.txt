@@ -1,0 +1,4 @@
+httpx>=0.27
+eth-account>=0.13
+eth-utils>=4.0
+cryptography>=42.0

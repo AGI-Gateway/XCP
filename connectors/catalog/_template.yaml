@@ -1,0 +1,42 @@
+# Template — copy this to add an MCP endpoint for a SaaS.
+# Nothing here is secret. Credentials are vault:// REFERENCES resolved at runtime.
+id: example-saas
+name: Example SaaS
+vendor: Example Inc.
+homepage: https://example.com
+description: What this connector lets an agent do.
+
+endpoint:
+  url: https://mcp.example.com/mcp
+  transport: streamable_http        # streamable_http | stdio | websocket
+  mcp_spec: "2026-07-28"
+
+auth:
+  # oauth2_auth_code | oauth2_client_creds | oauth2_device | oidc
+  # | api_key | jwt_bearer | hmac | mtls | none
+  method: oauth2_auth_code
+  scopes: [read, write]
+  # Secret REFERENCES. Put real values in your secret backend, never here.
+  secrets:
+    client_id:     vault://env/connectors/example-saas#client_id
+    client_secret: vault://env/connectors/example-saas#client_secret
+  token_url: https://example.com/oauth/token
+  authorize_url: https://example.com/oauth/authorize
+  refresh: true
+  # RFC 8707: bind the token to this resource so it is useless elsewhere.
+  resource_indicator: https://mcp.example.com/mcp
+
+trust:
+  # unknown | probed | attested | contracted — see trustfirewall
+  class: unknown
+  # Minimum lattice cell allowed to reach this connector at all.
+  min_tier: A0xH0
+  # Minimum cell allowed to perform mutating calls.
+  min_write_tier: A1xH1
+
+scopes_exposed:
+  - mcp:tools/example.read
+  - mcp:tools/example.write
+
+tags: [example]
+maintainer: anonymous
