@@ -1,0 +1,113 @@
+/* XCP docs — the same visual language as the specs and decks.
+   Cold near-black, teal/violet/magenta accents, monospace as the protocol voice. */
+
+@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@400;500;600;700&family=Space+Mono:wght@400;700&family=Sora:wght@600;700;800&display=swap');
+
+[data-md-color-scheme="slate"] {
+  --md-hue: 225;
+  --md-default-bg-color:        #05070d;
+  --md-default-bg-color--light: #0b0f1a;
+  --md-default-fg-color:        #c9d2ec;
+  --md-default-fg-color--light: #8893b5;
+  --md-default-fg-color--lighter:#646f93;
+  --md-primary-fg-color:        #05070d;
+  --md-accent-fg-color:         #4DFFD2;
+  --md-typeset-a-color:         #4DFFD2;
+  --md-code-bg-color:           #0b0f1a;
+  --md-code-fg-color:           #c9d2ec;
+  --xcp-teal:    #4DFFD2;
+  --xcp-violet:  #7B61FF;
+  --xcp-magenta: #FF4D8B;
+  --xcp-gold:    #FFB84D;
+  --xcp-blue:    #4D9FFF;
+  --xcp-line:    #222a42;
+}
+
+.md-typeset h1,
+.md-typeset h2 {
+  font-family: 'Sora', sans-serif;
+  font-weight: 800;
+  letter-spacing: -.02em;
+  color: #eef2ff;
+}
+.md-typeset h3, .md-typeset h4 {
+  font-family: 'Space Grotesk', sans-serif;
+  font-weight: 600;
+  color: #eef2ff;
+}
+.md-typeset h2 {
+  border-top: 1px solid var(--xcp-line);
+  padding-top: 1.2rem;
+  margin-top: 2.2rem;
+}
+
+/* the header wordmark reads like the decks */
+.md-header, .md-tabs { background: #05070d; border-bottom: 1px solid var(--xcp-line); }
+.md-header__title { font-family: 'Sora', sans-serif; font-weight: 700; letter-spacing: -.01em; }
+
+/* code + inline mono is the protocol's native voice */
+.md-typeset code, .md-typeset pre > code { font-family: 'Space Mono', monospace; font-size: .78rem; }
+.md-typeset pre > code { border: 1px solid var(--xcp-line); border-radius: 10px; }
+.md-typeset :not(pre) > code { color: var(--xcp-teal); background: rgba(77,255,210,.07); }
+
+/* tables: dark panel, teal header rule */
+.md-typeset table:not([class]) {
+  border: 1px solid var(--xcp-line);
+  border-radius: 10px;
+  overflow: hidden;
+  font-size: .76rem;
+}
+.md-typeset table:not([class]) th {
+  background: #101524;
+  color: #eef2ff;
+  font-family: 'Space Mono', monospace;
+  font-size: .68rem;
+  letter-spacing: .06em;
+  text-transform: uppercase;
+  border-bottom: 1px solid var(--xcp-teal);
+}
+.md-typeset table:not([class]) td { border-top: 1px solid var(--xcp-line); }
+
+/* admonitions in brand colours */
+.md-typeset .admonition, .md-typeset details {
+  border-radius: 11px;
+  border-left-width: 3px;
+  background: #101524;
+  font-size: .78rem;
+}
+.md-typeset .admonition.warning { border-left-color: var(--xcp-gold); }
+.md-typeset .admonition.danger  { border-left-color: var(--xcp-magenta); }
+.md-typeset .admonition.note    { border-left-color: var(--xcp-blue); }
+.md-typeset .admonition.tip     { border-left-color: var(--xcp-teal); }
+
+/* the footprint rail — signature device, reused as a section divider */
+.xcp-footprint {
+  font-family: 'Space Mono', monospace;
+  font-size: .62rem;
+  letter-spacing: .05em;
+  color: #2f3a5c;
+  white-space: nowrap;
+  overflow: hidden;
+  margin: 2rem 0 1rem;
+}
+.xcp-footprint b { color: var(--xcp-teal); font-weight: 400; }
+.xcp-footprint i { color: var(--xcp-violet); font-style: normal; }
+.xcp-footprint s { color: var(--xcp-magenta); text-decoration: none; }
+
+/* draft badge for anything not yet standardised */
+.xcp-draft {
+  display: inline-block;
+  font-family: 'Space Mono', monospace;
+  font-size: .6rem;
+  letter-spacing: .12em;
+  text-transform: uppercase;
+  color: var(--xcp-gold);
+  border: 1px solid rgba(255,184,77,.4);
+  border-radius: 5px;
+  padding: 2px 7px;
+  vertical-align: middle;
+}
+
+/* lattice grid used on the trust page */
+.xcp-lattice td:first-child { font-family: 'Space Mono', monospace; color: var(--xcp-violet); }
+.xcp-lattice td strong { color: #eef2ff; }

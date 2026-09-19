@@ -1,0 +1,39 @@
+
+# Go
+# Java
+# Node
+# OS / editor
+# Python
+# certs & secrets (never commit)
+# never commit resolved secrets or local vault material
+# self-serve build output
+*.class
+*.egg-info/
+*.key
+*.p12
+*.pem
+*.pfx
+*.py[cod]
+*.swp
+.DS_Store
+.env
+.idea/
+.pytest_cache/
+.secrets/
+.venv/
+.vscode/
+/client/go/vendor/
+__pycache__/
+deploy/certs/*.crt
+deploy/certs/*.key
+deploy/certs/*.srl
+dist/
+node_modules/
+paper/*.pdf
+secrets.yaml
+secrets.yml
+site/
+vault/**/*.secret
+vault/local/
+venv/
+xcp.toml.local

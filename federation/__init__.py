@@ -1,0 +1,36 @@
+"""
+federation — a web of XCP nodes with no central authority.
+
+    from federation import Federation, NodeRecord, verify_node_record
+
+A node proves itself with a domain and a TLS certificate. Peers verify it
+directly. Trust travels transitively with decay. No registry, no chain, no
+vendor — see federation/README.md for what IS still depended on.
+"""
+from .node import (protocol_incompatible, NodeRecord, Peer, Attestation, Federation, PeerTrust,
+                   build_node_record, verify_node_record, digest, canonical,
+                   FederationError, NODE_RECORD_PATH, NODE_SPEC_VERSION,
+                   DECAY_PER_HOP, MAX_HOPS)
+
+from .identity import (sign_revocation, verify_revocation, NodeIdentity, CertBinding, BindingSet, IdentityError,
+                       sign_binding, verify_binding, rotate, accept,
+                       node_id_from_address, ROTATION_GRACE)
+from .transport import (TransportReceipt, EpochCommitment, RoutingLedger,
+                        RouteClass, sign_receipt, verify_receipt, merkle_root,
+                        merkle_proof, verify_proof, bucket_count,
+                        prove_bad_signature, prove_not_in_tree,
+                        prove_double_claim, prove_total_mismatch,
+                        TransportError, EPOCH_SECONDS, CHALLENGE_WINDOW)
+
+__all__ = ["sign_revocation", "verify_revocation", "NodeIdentity", "CertBinding", "BindingSet", "IdentityError",
+           "sign_binding", "verify_binding", "rotate", "accept",
+           "node_id_from_address", "ROTATION_GRACE",
+           "TransportReceipt", "EpochCommitment", "RoutingLedger", "RouteClass",
+           "sign_receipt", "verify_receipt", "merkle_root", "merkle_proof",
+           "verify_proof", "bucket_count", "prove_bad_signature",
+           "prove_not_in_tree", "prove_double_claim", "prove_total_mismatch",
+           "TransportError", "EPOCH_SECONDS", "CHALLENGE_WINDOW",
+           "NodeRecord", "Peer", "Attestation", "Federation", "PeerTrust",
+           "build_node_record", "verify_node_record", "digest", "canonical",
+           "FederationError", "NODE_RECORD_PATH", "NODE_SPEC_VERSION",
+           "DECAY_PER_HOP", "MAX_HOPS"]

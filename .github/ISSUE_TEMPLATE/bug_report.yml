@@ -1,0 +1,24 @@
+name: Bug report
+description: Something doesn't work as documented
+labels: [bug]
+body:
+  - type: textarea
+    id: what
+    attributes: {label: What happened, description: What you expected vs what occurred}
+    validations: {required: true}
+  - type: textarea
+    id: repro
+    attributes:
+      label: Reproduction
+      description: Minimal steps. `xcp doctor` output helps a lot.
+      render: shell
+    validations: {required: true}
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      options: [gateway, verifier, server, client, cli, trust lattice, discovery/ARD, xcpsec, contracts, docs]
+    validations: {required: true}
+  - type: input
+    id: version
+    attributes: {label: Version / commit}

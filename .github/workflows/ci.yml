@@ -1,0 +1,141 @@
+name: ci
+on:
+  push: {branches: [main]}
+  pull_request:
+
+jobs:
+  selfserve:
+    name: Self-serve layer (lattice + discovery + CLI)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Lattice + discovery tests (no deps needed)
+        run: python tests/test_selfserve.py
+      - name: Trust firewall + receipts
+        run: |
+          pip install eth-account eth-utils
+          python tests/test_providers.py
+          python tests/test_federation.py
+          python tests/test_identity.py
+          python tests/test_transport.py
+          python tests/test_limits.py
+          python tests/test_packaging.py
+          python tests/test_security_audit.py
+          python tests/test_version.py
+          python tests/test_performance.py
+          python tests/test_telemetry.py
+          python tests/test_config_drift.py
+          python tests/test_oauth_bridge.py
+          python tests/test_delegation.py
+          python tests/test_privacy.py
+          python tests/test_covenants.py
+          pip install pyyaml
+          python tests/test_vault.py
+          python tests/test_trustfirewall.py
+          python tests/test_receipts.py
+      - name: CLI smoke
+        run: |
+          ./xcp tier --table
+          mkdir -p /tmp/p && cd /tmp/p
+          $GITHUB_WORKSPACE/xcp init --domain ci.example --org CI
+          $GITHUB_WORKSPACE/xcp tier
+          $GITHUB_WORKSPACE/xcp publish
+          test -f dist/.well-known/ai-catalog.json
+
+  core:
+    name: Core protocol
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r requirements.txt
+      - name: Compile
+        run: find . -name '*.py' -not -path './.git/*' -exec python -m py_compile {} +
+      - name: End-to-end
+        run: python tests/test_e2e.py
+      - name: Binding digest fuzzing
+        run: pip install hypothesis && python security/analysis/fuzz_binding.py
+      - name: Two real nodes federating
+        run: python tests/test_two_node.py
+      - name: Triage and runbook
+        run: python tests/test_triage.py
+      - name: Conformance suite (reference must certify)
+        run: python tests/test_conformance.py
+
+  security:
+    name: xcpsec
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install eth-account eth-utils cryptography
+      - run: python security/tests/test_xcpsec.py
+      - run: python security/tests/test_sandbox.py
+
+  proto:
+    name: Proto compile
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install grpcio-tools
+      - run: python -m grpc_tools.protoc -Icore/proto --python_out=/tmp --grpc_python_out=/tmp core/proto/xcp_streams.proto
+
+  second-implementation:
+    name: Node gateway must pass the conformance suite
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install -r requirements.txt
+      - name: Conformance against an independent implementation
+        run: |
+          XCP_PORT=8840 XCP_UPSTREAMS='{"research":"http://127.0.0.1:9999/mcp"}' \
+            node core/gateway-ts/gateway.mjs &
+          sleep 3
+          python -c "
+          from conformance import run, format_report, Profile
+          r = run('http://127.0.0.1:8840', [Profile.CORE, Profile.STATELESS, Profile.SECURITY])
+          print(format_report(r))
+          raise SystemExit(0 if r.conformant else 1)"
+
+  contracts:
+    name: Contracts compile, deploy and behave
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - name: Install solc 0.8.24
+        run: |
+          curl -sL -o /usr/local/bin/solc \
+            https://github.com/ethereum/solidity/releases/download/v0.8.24/solc-static-linux
+          chmod +x /usr/local/bin/solc
+          solc --version
+      - run: pip install "web3<8" eth-tester py-evm
+      - name: ABIs must match the sources
+        run: |
+          python scripts/compile-contracts.py
+          git diff --exit-code core/contracts/build/ \
+            || (echo "committed ABIs are stale — run make contracts" && exit 1)
+      - run: python tests/test_contracts.py
+      - name: Deployment path
+        run: python scripts/deploy-contracts.py
+
+  chain:
+    name: On-chain verifier path
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install web3 eth-tester py-evm eth-account eth-utils fastapi
+      - run: python core/contracts/deploy_mock_registry.py

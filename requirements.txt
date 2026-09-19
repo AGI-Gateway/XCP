@@ -1,0 +1,31 @@
+# XCP — full stack.
+# The `xcp` CLI, trust lattice and discovery modules need NO dependencies
+# (standard library only). These are for running the gateway/server/verifier.
+fastapi>=0.110
+uvicorn[standard]>=0.27
+httpx>=0.27
+eth-account>=0.13
+# Native libsecp256k1 bindings. WITHOUT THIS, eth-keys falls back to a
+# pure-Python ECDSA implementation and every signature verification on the hot
+# path costs ~6.5 ms instead of ~0.19 ms — a 35x penalty a deployment would
+# otherwise pay silently. Measured; see bench/.
+coincurve>=19.0
+eth-utils>=4.0
+cryptography>=42.0
+prometheus-client>=0.20
+
+# optional — on-chain verifier + contract tests:
+# web3>=7.0
+# eth-tester>=0.12
+# py-evm>=0.10
+
+# docs site (optional):
+# mkdocs-material>=9.5
+pyyaml>=6.0
+
+# optional — OpenTelemetry. Without these, every instrumentation call is a
+# no-op and the node runs identically. See telemetry/attributes.py before
+# raising XCP_OTEL_DETAIL: telemetry is a data-export path.
+# opentelemetry-api>=1.20
+# opentelemetry-sdk>=1.20
+# opentelemetry-exporter-otlp-proto-http>=1.20

@@ -1,0 +1,1451 @@
+
+
+
+
+Network Working Group                                   XCP Working Grou
+Internet-Draft                                              AGI-Gateway
+Intended status: Standards Track                    September 20, 2026
+Expires: March 24, 2027
+
+
+        The eXtended Context Protocol (XCP): A Trust Encapsulation
+                   Layer for Delegated Agent Actions
+                        draft-xcp-trust-envelope-00
+
+Abstract
+
+   This document specifies the eXtended Context Protocol (XCP), a shim
+   protocol that encapsulates application-layer requests with a
+   cryptographically bound authorization context.  Where Transport Layer
+   Security (TLS) establishes the authenticity and confidentiality of a
+   CHANNEL, XCP establishes the authority and accountability of an
+   ACTION taken over that channel.
+
+   XCP defines a Trust Envelope: a header set that commits to the
+   encapsulated payload through a binding digest, such that the
+   authorization cannot be detached from the request it authorizes.  The
+   envelope carries the identity of the acting agent, the human or
+   organizational principal on whose authority it acts, the scope that
+   authority covers, and an expiry measured in seconds.
+
+   XCP is an increment on OAuth 2.0 rather than an alternative to it.
+   OAuth establishes, once, that a client may act for a resource owner
+   within a scope; XCP establishes, per request, that a particular
+   action with particular arguments falls within that scope, and leaves
+   evidence a third party can check.  DPoP binds a proof to an HTTP
+   method and URI; XCP binds to method, target and request body,
+   because an agent's authority is frequently a property of its
+   arguments rather than of its endpoint.
+
+   XCP is transport-agnostic and is specified here over HTTP/1.1,
+   HTTP/2, and HTTP/3 running on TLS 1.3.  It does not replace
+   application protocols; it encapsulates them.
+
+Status of This Memo
+
+   This Internet-Draft is submitted in full conformance with the
+   provisions of BCP 78 and BCP 79.
+
+   Internet-Drafts are working documents of the Internet Engineering
+   Task Force (IETF).  Note that other groups may also distribute
+   working documents as Internet-Drafts.
+
+   Internet-Drafts are draft documents valid for a maximum of six months
+   and may be updated, replaced, or obsoleted by other documents at any
+   time.  It is inappropriate to use Internet-Drafts as reference
+   material or to cite them other than as "work in progress."
+
+   This draft describes an experimental protocol and reflects a single
+   reference implementation.  It has not been reviewed by the IETF and
+   carries no consensus.
+
+
+
+XCP Working Group        Expires March 24, 2027                 [Page 1]
+
+Internet-Draft              XCP Trust Envelope            September 2026
+
+
+Table of Contents
+
+   1.  Introduction
+   2.  Terminology
+   3.  Architectural Position
+   3.3.  Relationship to OAuth 2.0
+
+   XCP is not an alternative to OAuth 2.0 [RFC6749] and does not define
+   a grant type, an authorization server, or a token format.  It binds
+   the EXERCISE of an authority that OAuth has already granted.
+
+   The distinction is the whole of XCP's contribution and is easily
+   lost.  OAuth answers a question asked once, at consent time: may this
+   client act for this resource owner, within this scope?  It does not,
+   and was never intended to, answer the question asked on every
+   subsequent request: is THIS call, with THESE arguments, over THIS
+   channel, within that scope -- and can a third party establish that
+   afterwards?
+
+   For a human clicking a button, the gap between those two questions is
+   small, because the human is present at both moments.  For an
+   autonomous agent the two moments may be separated by weeks and
+   thousands of actions the resource owner never saw.
+
+   XCP is therefore the third step in an established progression, and
+   claims no more novelty than that position affords:
+
+      [RFC6749]  OAuth 2.0    who may act, for whom, within what scope
+                              -- established once, at grant time
+
+      [RFC9449]  DPoP         the presenter holds the key
+                              -- established per request
+
+      This doc  XCP           this exact action, on these arguments,
+                              is within that scope
+                              -- established per request, body-bound
+
+   [RFC9449] binds a proof to an HTTP method and target URI.  XCP binds
+   to method, target and REQUEST BODY, because an agent's authority is
+   frequently a property of its arguments rather than of its endpoint:
+   the same tool invoked with a different amount, recipient or record
+   identifier is a different action in every sense that matters to the
+   principal, and identical in every sense visible to a URI.
+
+3.3.1.  Deriving a Mandate From an OAuth Grant
+
+   An implementation SHOULD derive the mandate of Section 5.2 from an
+   existing OAuth grant rather than establishing a parallel authority.
+   The natural mapping is:
+
+      OAuth 2.0                     XCP mandate
+      --------------------------    ----------------------------------
+      "scope" [RFC6749]             "mandateScope"
+      "sub" [RFC9068]               "principal"
+      token expiry                  "notAfter" (or sooner)
+      "act" actor chain [RFC8693]   delegation path (Section 3.3.2)
+
+   An implementation MUST NOT permit a mandate to convey authority
+   beyond the grant it derives from.  XCP narrows; it does not widen.
+   A mechanism that can enlarge an existing grant is a privilege
+   escalation path irrespective of what it is called.
+
+   The practical consequence is deployment cost.  An organisation that
+   already operates OAuth infrastructure does not need to establish a
+   second authority to adopt XCP; it needs to bind the authority it has
+   to the requests that exercise it.
+
+3.3.2.  Delegation Chains and Actor Splicing
+
+   Where an agent delegates to another agent, [RFC8693] represents the
+   chain through nested "act" claims.  That representation is vulnerable
+   to SPLICING: an attacker who can insert an entry into the chain
+   acquires the authority of the entry above it, and nothing in the
+   claim structure prevents the insertion.
+
+   An implementation of this document MUST bind the entire delegation
+   path into the authenticated data of the credential, such that
+   altering, truncating or extending the recorded path invalidates it.
+   Binding each hop to its neighbour is insufficient on its own: an
+   attacker who controls one hop can then re-form a valid-looking pair.
+
+   Implementations SHOULD additionally refuse a path in which any
+   identity appears more than once, since a repeated identity indicates
+   either a loop or an attempt to launder a step.
+
+3.4.  Relationship to Secure Asset Transfer
+
+   The Secure Asset Transfer Protocol working group has specified a
+   gateway-mediated protocol for sharing views of ledger state across
+   system boundaries [SATP-DATA].  Although its subject matter is
+   distributed ledgers rather than agents, its architecture and this
+   document's arrive at the same shape, and the convergence is worth
+   making explicit rather than leaving for a reader to notice.
+
+   Both place a GATEWAY at a domain boundary, and both insist that the
+   gateway be minimally trusted.  [SATP-DATA] states the requirement
+   directly: the integrity of the protocol should not depend on the
+   reliability of either gateway.  Its two mechanisms for achieving that
+   are the two this document specifies:
+
+      [SATP-DATA] Section 5.9      This document
+      -------------------------    ------------------------------------
+      signatures over requests     the binding digest (Section 4.2),
+      and responses so gateways    which a gateway cannot alter without
+      cannot tamper undetected     invalidating the credential
+
+      end-to-end encryption so     credentials sealed to the origin, so
+      gateways cannot exfiltrate   a relaying gateway forwards
+      view contents                ciphertext it holds no key for
+
+   Two further correspondences are exact.  [SATP-DATA] separates an
+   ACCESS policy held by the source from a VERIFICATION policy held by
+   the destination; this document separates the mandate, which bounds
+   what a caller may request, from graded reachability (Section 9),
+   which bounds what a consumer will accept.  And both fail closed on an
+   absent policy: [SATP-DATA] applies least privilege and rejects the
+   request, as Section 8 of this document requires.
+
+   The differences are equally worth stating.  [SATP-DATA] specifies a
+   BILATERAL protocol and explicitly defers the multi-party case.  This
+   document specifies transitive trust with decay across a bounded
+   number of hops, which is a harder problem and a weaker guarantee.
+
+   [SATP-DATA] also requires that a protocol avoid reliance on a global
+   clock and use purely asynchronous message transfer.  This document
+   does not meet that requirement: credential expiry (Section 5.3)
+   assumes loosely synchronised clocks within the skew tolerance stated
+   there.  An implementation serving both protocols should be aware that
+   the two make different assumptions, and Section 5.3 offers the
+   server-issued nonce of [RFC9449] where skew cannot be bounded.
+
+3.4.1.  A Contribution to an Open Problem
+
+   [SATP-DATA] records remote gateway discovery as an open issue: how a
+   gateway finds the gateways acting for a remote system is unresolved,
+   and is there compared to the routing problem in packet networking.
+   Global identification of systems and their public keys is recorded as
+   a second open issue.
+
+   Section 11 of this document addresses both, for its own domain, by
+   mechanisms that are not specific to it: an unauthenticated well-known
+   resource carrying a node record, a long-lived node identity distinct
+   from any certificate, and a signed binding between the two carrying a
+   monotonic sequence so that certificate rotation neither changes the
+   identity nor permits replay of a superseded binding.
+
+   That construction is offered as a candidate answer rather than a
+   claim of one.  It has been demonstrated between two nodes and not at
+   scale, and the authors have not established that it satisfies the
+   trust assumptions of a ledger system, which differ from those of an
+   agent gateway in ways this document has not analysed.
+
+4.  The Trust Envelope
+   5.  Header Field Definitions
+   6.  Channel Binding
+   7.  Scope Derivation
+   8.  Verifier Behaviour
+   9.  Graded Reachability
+   10. Error Signalling
+   11. Discovery
+   12. IANA Considerations
+   13. Security Considerations
+   14. Privacy Considerations
+   15. Centralization Considerations
+   16. References
+
+1.  Introduction
+
+1.1.  Problem Statement
+
+   An autonomous software agent acting on a principal's behalf presents,
+   today, exactly what a script presents: a bearer credential.  The
+   credential identifies an account, not the human who authorized this
+   particular action; it carries ambient scope granted at consent time
+   rather than scope bound to this call; and it leaves no artifact a
+   third party can verify afterwards.
+
+   Consequently a service receiving automated traffic cannot distinguish
+   an agent acting under a named person's explicit instruction from an
+   indiscriminate harvester.  The observable response has been blanket
+   restriction of automated access, which penalises both.
+
+   The missing element is not transport security.  TLS [RFC8446]
+   establishes that a channel terminates where it claims to and that its
+   contents are confidential.  It says nothing about whether the party
+   at the far end is permitted to take the action being requested, on
+   whose authority, or within what bounds.
+
+1.2.  Approach
+
+   XCP encapsulates an application-layer request in a Trust Envelope
+   whose header commits to the encapsulated payload.  The commitment is
+   what makes this encapsulation rather than annotation: the
+   authorization cannot be lifted from one request and applied to
+   another, because the binding digest covers the request's method,
+   target, and body.
+
+
+
+
+XCP Working Group        Expires March 24, 2027                 [Page 2]
+
+Internet-Draft              XCP Trust Envelope            September 2026
+
+
+2.  Terminology
+
+   The key words "MUST", "MUST NOT", "REQUIRED", "SHALL", "SHALL NOT",
+   "SHOULD", "SHOULD NOT", "RECOMMENDED", "NOT RECOMMENDED", "MAY", and
+   "OPTIONAL" in this document are to be interpreted as described in
+   BCP 14 [RFC2119] [RFC8174] when, and only when, they appear in all
+   capitals, as shown here.
+
+   Agent:      An autonomous software process that originates requests.
+
+   Principal:  The natural person or organization on whose authority an
+               Agent acts.  An Agent always has a Principal; an Agent
+               that cannot name one is unaccountable by definition.
+
+   Mandate:    A signed statement by a Principal delegating a bounded
+               set of capabilities to an Agent for a bounded period.
+
+   Envelope:   The XCP header set plus the encapsulated payload.
+
+   Gateway:    An intermediary that verifies Envelopes and forwards
+               permitted requests.  A Gateway is a verifier and a
+               router.  It is NOT a custodian: it holds neither the
+               Principal's credentials nor their funds.
+
+   Verifier:   The component evaluating an Envelope.  It MAY be
+               co-located with the Gateway or reached over a network.
+
+3.  Architectural Position
+
+3.1.  Relationship to the OSI Reference Model
+
+   XCP occupies a position directly analogous to that of TLS.  TLS is
+   not cleanly assignable to a single OSI layer; it is conventionally
+   described as a shim between transport and application.  XCP is a
+   second such shim, layered above TLS:
+
+      +---------------------------------------------+
+      |  Application    MCP, A2A, HTTP semantics     |
+      +---------------------------------------------+
+      |  XCP            authority of the ACTION      |  <- this document
+      +---------------------------------------------+
+      |  TLS            authenticity of the CHANNEL  |
+      +---------------------------------------------+
+      |  TCP / QUIC     reliable delivery            |
+      +---------------------------------------------+
+      |  IP             reachability                 |
+      +---------------------------------------------+
+
+   The parallel is exact in one respect worth stating.  Before TLS, a
+   connection's authenticity was asserted by the application and
+
+
+
+XCP Working Group        Expires March 24, 2027                 [Page 3]
+
+Internet-Draft              XCP Trust Envelope            September 2026
+
+
+   unverifiable by anyone else; TLS moved that property below the
+   application and made it checkable by a third party.  XCP proposes the
+   same move for authority.
+
+3.2.  On "Layer 8"
+
+   The term "Layer 8" has an established informal meaning in operational
+   practice: it denotes the human, and is used when a fault lies with a
+   person or an organization rather than with equipment.
+
+   This document does not propose adding a Layer 8.  Layer 8 already
+   exists, has always existed, and is where authority actually
+   originates.  What has been missing is any means of ADDRESSING it: no
+   protocol field has ever named the human on whose behalf a packet was
+   sent.  Authority entered the stack as an unverifiable assertion at
+   the application layer, if at all.
+
+   XCP's contribution is therefore more modest and more precise than
+   "a new layer".  It makes the existing Layer 8 machine-legible: the
+   Principal becomes a named, bounded, revocable participant in the
+   protocol rather than an assumption behind it.
+
+   OAuth 2.0 [RFC6749] is the closest thing the stack already has to a
+   Layer 8 protocol, and it is worth being exact about what it did and
+   did not achieve.  It carries a human decision -- a grant -- into
+   machine systems, and it is deployed at enormous scale.  What it does
+   not do is make that decision checkable at the moment of any
+   particular action: the token presented on the ten-thousandth request
+   is indistinguishable from the token presented on the first, and
+   neither reveals whether the action being taken is one the Principal
+   would recognise.
+
+   The incremental step this document proposes is therefore small and
+   specific.  Layer 8 is not new, and OAuth already addresses it.  What
+   is added is per-action verifiability of an authority OAuth already
+   established, bound cryptographically to the request that exercises
+   it.  A reader who takes nothing else from Section 3 should take
+   this: XCP is an increment on OAuth, positioned below the application
+   and above TLS, and it is defensible only as such.
+
+   Implementers are cautioned against the stronger claim.  A protocol
+   that declared itself a new OSI layer without an encapsulation
+   relationship would be making an architectural assertion it could not
+   support.  The encapsulation described in Section 4 is what earns the
+   layering claim, and it is the only basis on which this document makes
+   it.
+
+3.3.  Relationship to OAuth 2.0
+
+   XCP is not an alternative to OAuth 2.0 [RFC6749] and does not define
+   a grant type, an authorization server, or a token format.  It binds
+   the EXERCISE of an authority that OAuth has already granted.
+
+   The distinction is the whole of XCP's contribution and is easily
+   lost.  OAuth answers a question asked once, at consent time: may this
+   client act for this resource owner, within this scope?  It does not,
+   and was never intended to, answer the question asked on every
+   subsequent request: is THIS call, with THESE arguments, over THIS
+   channel, within that scope -- and can a third party establish that
+   afterwards?
+
+   For a human clicking a button, the gap between those two questions is
+   small, because the human is present at both moments.  For an
+   autonomous agent the two moments may be separated by weeks and
+   thousands of actions the resource owner never saw.
+
+   XCP is therefore the third step in an established progression, and
+   claims no more novelty than that position affords:
+
+      [RFC6749]  OAuth 2.0    who may act, for whom, within what scope
+                              -- established once, at grant time
+
+      [RFC9449]  DPoP         the presenter holds the key
+                              -- established per request
+
+      This doc  XCP           this exact action, on these arguments,
+                              is within that scope
+                              -- established per request, body-bound
+
+   [RFC9449] binds a proof to an HTTP method and target URI.  XCP binds
+   to method, target and REQUEST BODY, because an agent's authority is
+   frequently a property of its arguments rather than of its endpoint:
+   the same tool invoked with a different amount, recipient or record
+   identifier is a different action in every sense that matters to the
+   principal, and identical in every sense visible to a URI.
+
+3.3.1.  Deriving a Mandate From an OAuth Grant
+
+   An implementation SHOULD derive the mandate of Section 5.2 from an
+   existing OAuth grant rather than establishing a parallel authority.
+   The natural mapping is:
+
+      OAuth 2.0                     XCP mandate
+      --------------------------    ----------------------------------
+      "scope" [RFC6749]             "mandateScope"
+      "sub" [RFC9068]               "principal"
+      token expiry                  "notAfter" (or sooner)
+      "act" actor chain [RFC8693]   delegation path (Section 3.3.2)
+
+   An implementation MUST NOT permit a mandate to convey authority
+   beyond the grant it derives from.  XCP narrows; it does not widen.
+   A mechanism that can enlarge an existing grant is a privilege
+   escalation path irrespective of what it is called.
+
+   The practical consequence is deployment cost.  An organisation that
+   already operates OAuth infrastructure does not need to establish a
+   second authority to adopt XCP; it needs to bind the authority it has
+   to the requests that exercise it.
+
+3.3.2.  Delegation Chains and Actor Splicing
+
+   Where an agent delegates to another agent, [RFC8693] represents the
+   chain through nested "act" claims.  That representation is vulnerable
+   to SPLICING: an attacker who can insert an entry into the chain
+   acquires the authority of the entry above it, and nothing in the
+   claim structure prevents the insertion.
+
+   An implementation of this document MUST bind the entire delegation
+   path into the authenticated data of the credential, such that
+   altering, truncating or extending the recorded path invalidates it.
+   Binding each hop to its neighbour is insufficient on its own: an
+   attacker who controls one hop can then re-form a valid-looking pair.
+
+   Implementations SHOULD additionally refuse a path in which any
+   identity appears more than once, since a repeated identity indicates
+   either a loop or an attempt to launder a step.
+
+3.4.  Relationship to Secure Asset Transfer
+
+   The Secure Asset Transfer Protocol working group has specified a
+   gateway-mediated protocol for sharing views of ledger state across
+   system boundaries [SATP-DATA].  Although its subject matter is
+   distributed ledgers rather than agents, its architecture and this
+   document's arrive at the same shape, and the convergence is worth
+   making explicit rather than leaving for a reader to notice.
+
+   Both place a GATEWAY at a domain boundary, and both insist that the
+   gateway be minimally trusted.  [SATP-DATA] states the requirement
+   directly: the integrity of the protocol should not depend on the
+   reliability of either gateway.  Its two mechanisms for achieving that
+   are the two this document specifies:
+
+      [SATP-DATA] Section 5.9      This document
+      -------------------------    ------------------------------------
+      signatures over requests     the binding digest (Section 4.2),
+      and responses so gateways    which a gateway cannot alter without
+      cannot tamper undetected     invalidating the credential
+
+      end-to-end encryption so     credentials sealed to the origin, so
+      gateways cannot exfiltrate   a relaying gateway forwards
+      view contents                ciphertext it holds no key for
+
+   Two further correspondences are exact.  [SATP-DATA] separates an
+   ACCESS policy held by the source from a VERIFICATION policy held by
+   the destination; this document separates the mandate, which bounds
+   what a caller may request, from graded reachability (Section 9),
+   which bounds what a consumer will accept.  And both fail closed on an
+   absent policy: [SATP-DATA] applies least privilege and rejects the
+   request, as Section 8 of this document requires.
+
+   The differences are equally worth stating.  [SATP-DATA] specifies a
+   BILATERAL protocol and explicitly defers the multi-party case.  This
+   document specifies transitive trust with decay across a bounded
+   number of hops, which is a harder problem and a weaker guarantee.
+
+   [SATP-DATA] also requires that a protocol avoid reliance on a global
+   clock and use purely asynchronous message transfer.  This document
+   does not meet that requirement: credential expiry (Section 5.3)
+   assumes loosely synchronised clocks within the skew tolerance stated
+   there.  An implementation serving both protocols should be aware that
+   the two make different assumptions, and Section 5.3 offers the
+   server-issued nonce of [RFC9449] where skew cannot be bounded.
+
+3.4.1.  A Contribution to an Open Problem
+
+   [SATP-DATA] records remote gateway discovery as an open issue: how a
+   gateway finds the gateways acting for a remote system is unresolved,
+   and is there compared to the routing problem in packet networking.
+   Global identification of systems and their public keys is recorded as
+   a second open issue.
+
+   Section 11 of this document addresses both, for its own domain, by
+   mechanisms that are not specific to it: an unauthenticated well-known
+   resource carrying a node record, a long-lived node identity distinct
+   from any certificate, and a signed binding between the two carrying a
+   monotonic sequence so that certificate rotation neither changes the
+   identity nor permits replay of a superseded binding.
+
+   That construction is offered as a candidate answer rather than a
+   claim of one.  It has been demonstrated between two nodes and not at
+   scale, and the authors have not established that it satisfies the
+   trust assumptions of a ledger system, which differ from those of an
+   agent gateway in ways this document has not analysed.
+
+4.  The Trust Envelope
+
+4.1.  Structure
+
+   An Envelope consists of the XCP header fields defined in Section 5
+   and the encapsulated payload, which is the application-layer request
+   body:
+
+      +----------------------------------------------+
+      |  XCP-Agent-Identity                          |
+      |  XCP-Mandate                                 |   Envelope header
+      |  XCP-Request-Credential   <-- commits below  |
+      +----------------------------------------------+
+      |                                              |
+      |  Encapsulated payload (opaque to XCP)        |   Envelope body
+      |                                              |
+      +----------------------------------------------+
+
+   XCP does not parse the payload.  A Verifier MUST be able to reach a
+   decision without doing so; see Section 7.
+
+
+
+
+XCP Working Group        Expires March 24, 2027                 [Page 4]
+
+Internet-Draft              XCP Trust Envelope            September 2026
+
+
+4.2.  The Binding Digest
+
+   The header commits to the payload through a binding digest:
+
+      bind = H( method || 0x00 || target || 0x00 || H(payload) )
+
+   where H is the hash algorithm named in the credential, "method" is
+   the application-layer method name, and "target" is the application-
+   layer object name.  The null separators prevent ambiguity between
+   adjacent fields.
+
+   Fields carried in the digest MUST be transmitted in canonical form.
+   A
+   Verifier MUST reject a field carrying leading or trailing whitespace
+   or a control character, and MUST NOT normalise it.
+
+   This requirement is not stylistic.  Normalisation assumes every
+   parser
+   in the chain normalises identically, and differential testing of two
+   independent implementations of this document showed that they do not:
+   [RFC9110] treats optional whitespace around a field value as not part
+   of the value, so one HTTP stack stripped it before the application
+   saw
+   it and another did not.  Both implementations were arguably
+   conforming, and they disagreed about whether the same bytes named the
+   same tool.
+
+   Refusing non-canonical input removes the disagreement rather than
+   resolving it in one direction.
+
+   The binding digest is covered by the credential signature.
+   Consequently:
+
+   o  A credential captured from one request and replayed against a
+      different method, target, or body MUST fail verification.
+
+   o  A Gateway that alters the payload invalidates the credential, so
+      modification in transit is detectable rather than merely
+      discouraged.
+
+   o  An empty payload is permitted and hashes to H(""), so the
+      construction is uniform across requests with and without bodies.
+
+4.3.  Statelessness
+
+   An Envelope MUST be self-describing.  A Verifier MUST NOT require
+   state established by a prior request in the same connection or
+   session in order to evaluate it.
+
+   This is a deliberate constraint rather than an implementation
+   convenience.  Session identifiers are long-lived bearer tokens of
+   broad scope: valuable to steal and slow to revoke.  A credential
+   bound to one method, one target, one payload, and an expiry measured
+   in seconds is worth substantially less to an attacker and requires no
+   session affinity across Gateway replicas.
+
+5.  Header Field Definitions
+
+5.1.  XCP-Agent-Identity
+
+   Identifies the Agent and the channel it is bound to.
+
+      XCP-Agent-Identity = agent-id ";" realm-id ";" channel-binding
+
+      agent-id         = 1*DIGIT
+      realm-id         = 1*DIGIT
+      channel-binding  = "0x" 64HEXDIG
+
+   The channel-binding value is defined in Section 6.  A Verifier MUST
+
+
+
+XCP Working Group        Expires March 24, 2027                 [Page 5]
+
+Internet-Draft              XCP Trust Envelope            September 2026
+
+
+   reject an Envelope whose channel-binding does not correspond to the
+   TLS connection over which it arrived.
+
+5.2.  XCP-Mandate
+
+   Carries the Principal's delegation, as a JSON object [RFC8259]:
+
+      {
+        "mandateId":    <string>,
+        "principal":    <string>,
+        "mandateScope": [ <scope> ... ],
+        "notAfter":     <integer, seconds since epoch>,
+        "proof":        [ <string> ... ],
+        "signature":    <string>
+      }
+
+   "mandateScope" enumerates the capabilities delegated.  A Verifier
+   MUST reject an Envelope whose derived scope (Section 7) is not
+   covered.
+
+   Attributes asserted by an identity provider MAY narrow the effective
+   mandate.  They MUST NOT widen it.  An implementation that permits
+   widening allows a compromised identity provider to manufacture
+   authority that no Principal granted.
+
+5.3.  XCP-Request-Credential
+
+   A signed assertion binding the Agent, the channel, the derived scope,
+   the binding digest, and an expiry.  It is the element that makes the
+   Envelope an encapsulation.
+
+      XCP-Request-Credential = base64url( credential )
+
+   The credential object contains at minimum:
+
+      agent-id, realm-id, channel-binding, scope, bind, exp, nonce, alg,
+      signer, sig
+
+   "exp" SHOULD be no more than 60 seconds after issuance and MUST NOT
+   exceed 300 seconds.  Verifiers MUST reject expired credentials and
+   MUST NOT apply clock skew tolerance exceeding 30 seconds in either
+   direction.
+
+   These figures follow OAuth 2.0 Demonstrating Proof of Possession
+   [RFC9449], which solves a closely related problem: binding a
+   per-request proof to an HTTP method and target URI so that a captured
+   proof cannot be reused elsewhere.  RFC 9449 declines to fix a
+   lifetime, observing only that clock offsets should be accommodated
+   "on the order of seconds or minutes"; deployed implementations have
+   converged on a 60-second acceptance window with roughly 30 seconds of
+   skew tolerance.  This document adopts that convergence rather than
+   asserting an independent figure.
+
+   Implementations SHOULD also observe the wider guidance in [RFC9700],
+   which consolidates a decade of deployed OAuth experience and treats
+   short-lived, sender-constrained credentials as the baseline rather
+   than a hardening step.
+
+   Where clock skew cannot be bounded, implementations SHOULD prefer a
+   server-issued nonce over a client-supplied timestamp, as described in
+   [RFC9449], Section 8.  A nonce carrying the server's own time yields
+   the same result under arbitrarily large skew.
+
+   The signature algorithm is carried in "alg" so that the construction
+   is not bound to a single signature scheme.  Implementations MUST
+   support at least one algorithm providing 128-bit security.
+
+5.4.  XCP-Verified-By
+
+   Set by a Gateway on requests it forwards, naming itself.  A receiving
+   application uses it to distinguish verified traffic from direct
+
+
+
+XCP Working Group        Expires March 24, 2027                 [Page 6]
+
+Internet-Draft              XCP Trust Envelope            September 2026
+
+
+   access.
+
+   An origin server that accepts requests both through a Gateway and
+   directly MUST NOT treat this header as evidence in the direct case,
+   since a client can set it.  Trust in this header derives from network
+   position, not from the header itself.
+
+6.  Channel Binding
+
+   The channel-binding value binds the Envelope to the TLS connection,
+   so that a captured Envelope cannot be replayed over a different
+   channel.
+
+   Implementations MUST use one of:
+
+   o  The TLS exporter [RFC5705] with label "EXPORTER-XCP-channel", 32
+      octets.  This is RECOMMENDED for new deployments.
+
+   o  H(DER-encoded client certificate), where mutual TLS is in use.
+
+   The exporter method is preferred because it binds to the specific TLS
+   session rather than to a credential that may be reused across
+   sessions.  The certificate method is retained because it is
+   deployable where the exporter is not exposed by the TLS stack.
+
+   A Verifier MUST NOT accept an Envelope whose channel-binding it
+   cannot independently compute from the connection.
+
+7.  Scope Derivation
+
+   Scope MUST be derivable from header fields alone, without parsing the
+   payload.  Where the encapsulated protocol carries method and target
+   in headers, the derivation is:
+
+      scope = protocol-tag ":" method "/" target
+
+   A Verifier that must parse a payload to determine scope cannot make
+   an authorization decision at header speed, and cannot make one at all
+   for payloads it does not understand.  Requiring header-derivable
+   scope keeps the Verifier independent of the application protocols it
+   protects.
+
+   Wildcards in mandate scope are RECOMMENDED to be limited to a
+   trailing "/*".  Unconstrained wildcards defeat the purpose of scoping
+   while appearing to satisfy it.
+
+
+
+
+
+
+
+XCP Working Group        Expires March 24, 2027                 [Page 7]
+
+Internet-Draft              XCP Trust Envelope            September 2026
+
+
+8.  Verifier Behaviour
+
+   A Verifier MUST evaluate, in this order, and MUST reject on the first
+   failure:
+
+   1.  The channel-binding corresponds to this TLS connection.
+
+   2.  The credential signature verifies under the named algorithm.
+
+   3.  The credential has not expired.
+
+   4.  The binding digest matches the method, target, and payload
+       actually received.
+
+   5.  The derived scope is covered by the mandate.
+
+   6.  The mandate has not expired and has not been revoked.
+
+   The ordering is normative.  Checking scope before signature would
+   perform work on behalf of an unauthenticated party; checking the
+   binding digest before expiry would hash a payload for a credential
+   already known to be stale.
+
+   A Verifier MUST fail closed.  If any check cannot be completed, the
+   Envelope MUST be rejected.  In particular, an implementation MUST NOT
+   treat the unavailability of a revocation source as evidence of non-
+   revocation.
+
+9.  Graded Reachability
+
+   An Agent frequently encounters origin servers about which nothing is
+   known.  Binary admission forces a choice between refusing useful work
+   and extending unearned trust.
+
+   This document deliberately does not specify how an origin comes to be
+   classified.  That separation follows the Remote ATtestation
+   procedureS
+   architecture [RFC9334], which defines roles and their interactions
+   while leaving evidence formats and appraisal policies to separate
+   documents.  The precedent is sound for the same reason here:
+   classification mechanisms vary by deployment and evolve faster than
+   the protocol that consumes their output.
+
+   Implementations SHOULD adopt the RATS vocabulary, which maps onto XCP
+   roles as follows:
+
+      RATS role [RFC9334]      XCP counterpart
+      ---------------------    -----------------------------------------
+      Attester                 an origin presenting evidence about
+                               itself
+      Verifier                 the component appraising that evidence
+                               against an Appraisal Policy for Evidence
+      Relying Party            the Gateway, applying its own policy to
+                               the resulting classification
+
+   The distinction RATS draws between appraising evidence and acting on
+   the result is load-bearing here.  A Gateway is a Relying Party: it
+   consumes a classification and applies its own policy to it.  It is
+   not obliged to accept a classification it did not ask for, and it
+   MUST NOT treat an origin's self-description as evidence of its own
+   trustworthiness.
+
+   A Gateway MAY classify origins and apply graded treatment.  Where it
+   does:
+
+   o  An unclassified origin MUST NOT be permitted to cause state change
+      at the Agent's Principal, and its responses MUST be marked such
+      that downstream processing does not treat them as authoritative.
+
+   o  Settlement or other irreversible effects MUST require both an
+      accountable Agent and a classified origin.
+
+   This section is deliberately permissive about classification
+   mechanism and strict about its consequences.  How trust is
+   established varies; what unearned trust may do should not.
+
+
+
+
+
+XCP Working Group        Expires March 24, 2027                 [Page 8]
+
+Internet-Draft              XCP Trust Envelope            September 2026
+
+
+9.1.  Deployment Profiles
+
+   This document defines two profiles.  An implementation MUST declare
+   which it operates in.
+
+   The DEVELOPMENT profile permits self-asserted identity and optional
+   hardening.  It MUST NOT be used to serve traffic on behalf of
+   principals other than the operator's own.
+
+   The PRODUCTION profile MUST satisfy all of the following, and an
+   implementation MUST refuse to start if any is unmet:
+
+   o  enforcement posture, not observation;
+   o  an externally authenticated identity source.  Self-registration
+      MUST NOT be available, since possession of the endpoint would
+      otherwise be sufficient to assert an identity;
+   o  argument filtering and related hardening enabled;
+   o  rate limiting enabled and failing closed;
+   o  authenticated administrative access;
+   o  peer enrolment refused over unauthenticated transport.
+
+   Refusing to start is normative rather than advisory.  A profile that
+   is claimed and not enforced is worse than one that was never claimed,
+   because it is relied upon.
+
+9.2.  Revocation Semantics
+
+   Federation has no global consensus by design.  Revocation therefore
+   provides EVENTUAL CONVERGENCE, not globally synchronous withdrawal of
+   trust: a revoked peer may remain trusted by nodes that have not yet
+   received the revocation.
+
+   The bound on that exposure is credential lifetime, not propagation
+   speed.  Implementations MUST NOT rely on revocation reaching a peer
+   before a credential expires, and SHOULD shorten credential lifetimes
+   rather than lengthen revocation timeouts where an action is
+   irreversible.
+
+9.3.  Delegation Is Not Delivery
+
+   Authorisation to delegate an action to another agent MUST NOT be
+   reported as, or relied upon as, evidence that the action was
+   delivered.  The destination identity MUST authenticate independently
+   before execution is considered to have occurred.
+
+   An implementation that returns a success indication on the strength
+   of the initiating agent's authority alone is signalling a property it
+   has not established.
+
+9.4.  Forwarded Credentials
+
+   Where an implementation relays a credential intended for an origin
+   server, it MUST NOT read, log or persist the value; MUST bound its
+   size; and MUST bind it to a single destination, refusing to relay a
+   credential offered for one origin to another.  In the PRODUCTION
+   profile the intended destination MUST be stated explicitly.
+
+   An unbounded, unbound pass-through field is a confused-deputy
+   surface: the relay holds a credential it cannot read and forwards it
+   wherever the caller directs.
+
+10.  Error Signalling
+
+   Verification failures map to HTTP status codes as follows:
+
+      401  Envelope absent, malformed, expired, or unverifiable
+      403  Envelope valid but scope not covered by the mandate
+      413  Payload exceeds the limit for the Agent's classification
+      429  Rate limit exceeded
+      502  Verification succeeded; the origin was unreachable
+
+   Responses SHOULD carry a machine-readable reason.  A rejection
+   without a reason is not contestable, and an uncontestable decision is
+   not governance.
+
+   Implementations MUST NOT vary error detail in a way that reveals
+   whether an identifier exists.  In particular, "no such Agent" and
+   "signature invalid" MUST produce indistinguishable responses.
+
+11.  Discovery
+
+   An implementation MAY publish its capabilities at the well-known URI
+   "/.well-known/xcp-node.json" [RFC8615], served without
+   authentication.  A peer must be able to read it before any
+   relationship exists.
+
+   The document SHOULD carry the protocol versions supported, the
+   features implemented, and a signed binding of the current TLS
+   certificate to a long-lived node identity.
+
+   An implementation MUST NOT assign verified trust to a peer on the
+   basis of a domain the peer's own record declares.  The record MUST be
+   bound to the authenticated TLS endpoint it was retrieved from before
+   any trust is assigned, and where no certificate is available,
+   verified trust MUST NOT be reachable.
+
+   A node MUST NOT assign mutual trust on the basis of metadata supplied
+   by the party seeking it.  Mutual trust means each party verified the
+   other; the second half cannot be self-asserted.
+
+   Node identity SHOULD NOT be the certificate itself.  Certificates
+   rotate; an identity that rotates with them is lost several times a
+   year, taking with it every attestation any peer has made.
+
+12.  IANA Considerations
+
+12.1.  HTTP Field Name Registrations
+
+   This document requests registration of the following in the "HTTP
+   Field Name Registry":
+
+      +-------------------------+-----------+-----------------------+
+      | Field Name              | Status    | Reference             |
+      +-------------------------+-----------+-----------------------+
+      | XCP-Agent-Identity      | permanent | This document, 5.1    |
+      | XCP-Mandate             | permanent | This document, 5.2    |
+      | XCP-Request-Credential  | permanent | This document, 5.3    |
+      | XCP-Verified-By         | permanent | This document, 5.4    |
+      +-------------------------+-----------+-----------------------+
+
+
+
+
+XCP Working Group        Expires March 24, 2027                 [Page 9]
+
+Internet-Draft              XCP Trust Envelope            September 2026
+
+
+12.2.  Well-Known URI Registration
+
+   This document requests registration of "xcp-node.json" in the "Well-
+   Known URIs" registry, per [RFC8615].
+
+12.3.  TLS Exporter Label
+
+   This document requests registration of "EXPORTER-XCP-channel" in the
+   "TLS Exporter Labels" registry, per [RFC5705].
+
+13.  Security Considerations
+
+13.1.  What XCP Provides
+
+   XCP binds an authorization to a specific action over a specific
+   channel for a bounded period.  A credential captured in transit is
+   usable only for the exact request it accompanied, only over the same
+   TLS session, and only until it expires.
+
+13.2.  What XCP Does Not Provide
+
+   XCP does not establish that a Principal's delegation was wise, that
+   an Agent will behave as intended, or that an origin server is honest.
+   It establishes that an action was authorized and by whom, which is a
+   precondition for accountability and not a substitute for it.
+
+   XCP does not protect against a compromised Gateway.  A Gateway sees
+   every Envelope it verifies.  Deployments requiring confidentiality
+   from the Gateway must encrypt payloads to the origin independently.
+
+   XCP does not defend against a compromised Principal.  Authority
+   delegated by a compromised Principal is validly delegated.
+
+13.3.  Replay
+
+   Replay is bounded rather than eliminated.  A credential replayed
+   within its lifetime, over the same channel, for the identical
+   request, will verify -- because it is indistinguishable from the
+   original.  Origin servers requiring exactly-once semantics MUST
+   maintain nonce state; XCP deliberately does not, as doing so would
+   reintroduce the session state Section 4.3 removes.
+
+   This is the same position taken by [RFC9449], Section 11.1, which
+   places replay rejection on the resource server rather than in the
+   proof mechanism, and accepts that a captured proof remains usable for
+   the duration of its acceptance window.  Deployments requiring
+   stronger guarantees should combine XCP with the server-issued nonce
+   mechanism of [RFC9449], Section 8.
+
+13.4.  Denial of Service
+
+   Signature verification is more expensive than the parsing that
+   precedes it.  Implementations MUST apply rate limiting BEFORE
+   verification, and SHOULD meter unauthenticated requests separately,
+   since rejecting a request still consumes resources.
+
+
+
+
+XCP Working Group        Expires March 24, 2027                [Page 10]
+
+Internet-Draft              XCP Trust Envelope            September 2026
+
+
+   A Verifier keyed on a caller-supplied identifier is itself a memory
+   exhaustion vector.  Implementations MUST bound the number of tracked
+   callers.  [RFC9449], Section 11.1 gives the same warning for servers
+   tracking "jti" values, and recommends rejecting oversized identifiers
+   or storing only a hash.  Implementations of this document SHOULD do
+   likewise.
+
+13.5.  Downgrade
+
+   An implementation MUST NOT accept an Envelope lacking a credential on
+   the grounds that the peer appears not to support one.  Absence of a
+   credential is absence of authorization.
+
+14.  Privacy Considerations
+
+   The Envelope names a Principal.  This is the protocol's purpose and
+   its principal privacy cost.
+
+   Implementations SHOULD permit an Agent to demonstrate that it is
+   authorized without disclosing which individual authorized it.  A
+   classification carrying the assurance level of the Principal,
+   without the Principal's identity, is sufficient for most
+   authorization decisions and discloses materially less.
+
+   Mandates SHOULD carry the narrowest scope that permits the intended
+   work.  A broad mandate is a standing disclosure of what its holder
+   may do.
+
+   Audit records generated from Envelopes constitute personal data in
+   most jurisdictions.  Implementations SHOULD commit to ciphertext
+   rather than plaintext in tamper-evident structures, so that content
+   can be rendered unreadable without invalidating the structure.
+
+15.  Centralization Considerations
+
+   [RFC9518] observes that standards bodies have a limited ability to
+   prevent centralization but can make contributions that assist
+   decentralization, and that a specification's structural choices
+   determine which outcome it makes easy.  A trust layer deserves that
+   scrutiny more than most protocols, because a component that decides
+   what is trustworthy is an unusually attractive thing to control.
+
+   This section states the risks rather than the mitigations, because
+   the mitigations are weaker than the risks.
+
+15.1.  How This Protocol Could Centralize
+
+   Three paths are foreseeable.
+
+   The first is operational.  Running a verifying gateway is work, and
+   the economics of operating infrastructure favour consolidation.  A
+   deployment in which most agents route through gateways operated by a
+   handful of providers would satisfy every requirement in this document
+   while placing those providers between most agents and most tools.
+   Nothing here prevents that outcome.
+
+   The second is definitional.  Section 9 permits graded reachability
+   but does not say who classifies an origin.  If classification
+   converges on a small number of authorities, those authorities decide
+   what the agentic web can reach, and the protocol will have moved a
+   power it was designed to distribute.
+
+   The third is the registry.  Where an implementation anchors identity
+   or revocation in a shared registry, whoever controls that registry
+   controls admission.  This document treats such anchoring as optional
+   for that reason, and an implementation that requires it should
+   understand that it has chosen a chokepoint.
+
+15.2.  What This Document Does About It
+
+   [RFC9518] notes that well-defined, stable interfaces create the
+   opportunity to use different providers for a function, and that
+   encryption can enforce boundaries by limiting which parties can
+   access content.  Both apply here, and both are implemented rather
+   than asserted:
+
+   o  The envelope is specified independently of any implementation, and
+      a conformance suite exists that tests an implementation as a black
+      box.  A second, independently written implementation passes it
+      (Appendix A).  Substitutability is therefore demonstrated rather
+      than claimed, which is the property [RFC9518] identifies as
+      load-bearing.
+
+   o  Credentials sealed to an origin remove the gateway operator from
+      the set of parties who can read what passes through them
+      (Section 3.4).  A gateway that cannot read the traffic it carries
+      is a less valuable position to occupy.
+
+   o  Federation requires no consensus.  Nodes may hold differing views
+      of who is trustworthy, trust decays with distance, and no global
+      agreement is needed for the protocol to function.  A design that
+      forced one answer about trustworthiness would be a chokepoint by
+      construction.
+
+   o  A node operating with no registry, no chain and no peers is
+      conformant.  The floor is a single operator answerable to nobody
+      but themselves.
+
+15.3.  What It Does Not Do
+
+   None of the above prevents the first path in Section 15.1, and the
+   authors do not believe any specification could.  Market
+   concentration in the operation of infrastructure is not a problem
+   that protocol design solves, and a document claiming otherwise would
+   be making the error [RFC9518] warns against: treating a structural
+   outcome as a technical one.
+
+   The honest position is that this document makes decentralized
+   operation possible and does not make it likely.  Whether it occurs
+   depends on decisions outside the protocol, and readers evaluating the
+   proposal on decentralization grounds should weigh it accordingly.
+
+16.  References
+
+15.1.  Normative References
+
+   [RFC2119]  Bradner, S., "Key words for use in RFCs to Indicate
+              Requirement Levels", BCP 14, RFC 2119, March 1997.
+
+   [RFC5705]  Rescorla, E., "Keying Material Exporters for Transport
+              Layer Security (TLS)", RFC 5705, March 2010.
+
+   [RFC8174]  Leiba, B., "Ambiguity of Uppercase vs Lowercase in RFC
+              2119 Key Words", BCP 14, RFC 8174, May 2017.
+
+   [RFC8259]  Bray, T., Ed., "The JavaScript Object Notation (JSON)
+              Data Interchange Format", STD 90, RFC 8259, December 2017.
+
+   [RFC8446]  Rescorla, E., "The Transport Layer Security (TLS) Protocol
+              Version 1.3", RFC 8446, August 2018.
+
+
+
+
+XCP Working Group        Expires March 24, 2027                [Page 11]
+
+Internet-Draft              XCP Trust Envelope            September 2026
+
+
+   [RFC8615]  Nottingham, M., "Well-Known Uniform Resource Identifiers
+              (URIs)", RFC 8615, May 2019.
+
+   [RFC6749]  Hardt, D., Ed., "The OAuth 2.0 Authorization Framework",
+              RFC 6749, October 2012.
+
+   [RFC8693]  Jones, M., Nadalin, A., Campbell, B., Ed., Bradley, J.,
+              and C. Mortimore, "OAuth 2.0 Token Exchange", RFC 8693,
+              January 2020.
+
+   [RFC9068]  Bertocci, V., "JSON Web Token (JWT) Profile for OAuth 2.0
+              Access Tokens", RFC 9068, October 2021.
+
+   [RFC9449]  Fett, D., Campbell, B., Bradley, J., Lodderstedt, T.,
+              Jones, M., and D. Waite, "OAuth 2.0 Demonstrating Proof of
+              Possession (DPoP)", RFC 9449, September 2023.
+
+15.2.  Informative References
+
+   [RFC9518]  Nottingham, M., "Centralization, Decentralization, and
+              Internet Standards", RFC 9518, December 2023.
+
+   [SATP-DATA]
+              Ramakrishna, V., Pandit, V., Abebe, E., Nishad, S., and
+              D. Vinayagamurthy, "Protocol for Requesting and Sharing
+              Views across Networks", Work in Progress, Internet-Draft,
+              draft-ramakrishna-satp-data-sharing, September 2026.
+
+   [RFC3552]  Rescorla, E. and B. Korver, "Guidelines for Writing RFC
+              Text on Security Considerations", BCP 72, RFC 3552,
+              July 2003.
+
+   [RFC9110]  Fielding, R., Ed., Nottingham, M., Ed., and J. Reschke,
+              Ed., "HTTP Semantics", STD 97, RFC 9110, June 2022.
+
+   [RFC9334]  Birkholz, H., Thaler, D., Richardson, M., Smith, N., and
+              W. Pan, "Remote ATtestation procedureS (RATS)
+              Architecture", RFC 9334, January 2023.
+
+   [RFC9700]  Lodderstedt, T., Bradley, J., Labunets, A., and D. Fett,
+              "Best Current Practice for OAuth 2.0 Security",
+              BCP 240, RFC 9700, January 2025.
+
+   [MCP]      Model Context Protocol, "Specification 2026-07-28",
+              July 2026.
+
+Appendix A.  Implementation Status
+
+   Two independent implementations exist at the time of writing:
+
+   o  A reference implementation in Python.
+
+   o  A second implementation in Node, written against this document
+      rather than ported from the first, which passes the conformance
+      suite for the core, stateless, and security profiles.
+
+   The second implementation is the only evidence available that this
+   specification is implementable from the document alone.  Readers
+   evaluating the draft are encouraged to weight it accordingly and to
+   treat any divergence between the two as a defect in this text.
+
+   Measured overhead of verification against an equivalent unprotected
+   proxy is approximately 0.21 ms at the median, dominated by signature
+   verification.
+
+Appendix B.  Security Validation Evidence
+
+B.1.  Methodology and Its Limits
+
+   Three mechanisms have been applied: attack-oriented regression tests,
+   protocol conformance tests, and source-level security review.
+
+   Two of the three were conducted by the authors and are therefore
+   self-assessment.  The third was conducted independently by a party
+   with no involvement in the design, working from the published source
+   tree.  That distinction is load-bearing and is preserved throughout
+   this appendix: findings are attributed, and self-assessment is not
+   presented as independent evidence.
+
+   None of this constitutes a penetration test, a formal verification,
+   or a commissioned third-party audit.
+
+B.2.  Resolution of the -00 Open Issues
+
+B.2.1.  Credential Lifetime
+
+   RESOLVED.  Section 5.3 follows [RFC9449], which addresses a closely
+   related problem and deliberately declines to fix a lifetime, noting
+   only that clock offsets arise "on the order of seconds or minutes".
+   Deployed DPoP implementations have converged on a 60-second window
+   with roughly 30 seconds of skew tolerance; this document adopts that
+   convergence.
+
+   Residual: no analysis establishes 60 seconds as optimal, here or in
+   [RFC9449].  The figure reflects operational convergence and this
+   document claims nothing more for it.
+
+B.2.2.  Classification Mechanism
+
+   RESOLVED by deferral.  [RFC9334] establishes the pattern of
+   specifying roles while leaving evidence formats and appraisal
+   policies to separate documents.  Section 9 adopts RATS vocabulary so
+   a future classification document can be written against established
+   terminology.
+
+B.2.3.  Independent Security Analysis
+
+   ADDRESSED.  An independent source-level review has been performed by
+   a party outside the design, and its findings are recorded in
+   Section B.4.  The item is no longer open in the sense it was written.
+
+   It is not, however, closed in the stronger sense.  The review was
+   static and source-based, and by the reviewer's own statement was not
+   a dynamic penetration test.
+
+B.3.  Findings From Automated Adversarial Analysis
+
+   Methods that do not depend on a reviewer's judgment were applied:
+   falsifiable search over the binding digest, and differential
+   execution of two independently written implementations.  These found
+   five defects, four in the reference implementation and one in this
+   document:
+
+   o  The binding digest normalised its inputs, so two distinct tool
+      names produced one digest.  Section 4.2 now requires canonical
+      form and refusal rather than normalisation.
+
+   o  A mandate with no expiry was accepted as never expiring.
+
+   o  A mandate with a malformed scope list was accepted as permitting.
+
+   o  Identity fields were parsed coercively in one implementation and
+      strictly in another.
+
+   o  [RFC9110] optional-whitespace handling differs between conforming
+      HTTP stacks, so two implementations disagreed about whether the
+      same octets named the same tool.  This was a defect in this
+      document.
+
+B.4.  Findings From Independent Review
+
+   The following were identified by a reviewer outside the design team.
+   Each has been verified against the source and carries a regression
+   test.
+
+B.4.1.  Peer Enrolment Did Not Bind Records to Certificates
+        (High, RESOLVED)
+
+   The reference implementation contained a function binding a node
+   record to the certificate a peer actually presented.  The HTTP
+   enrolment path never called it.  Enrolment accepted the record's
+   self-declared domain as sufficient, so an unauthenticated caller
+   controlling both the domain field and the URL could have an arbitrary
+   record promoted to verified trust.
+
+   This is the same class of defect as several others found during
+   development: a correct, tested library that no running code reached.
+   It had survived the authors' own security audit.
+
+   Normative consequence, now reflected in Section 11: an implementation
+   MUST NOT assign verified trust to a peer on the basis of a record's
+   self-declared domain.  The record MUST be bound to the authenticated
+   TLS endpoint before any trust is assigned.  Where no certificate is
+   available, verified trust MUST NOT be reachable.
+
+B.4.2.  Mutual Trust Was Self-Assertable (High, RESOLVED)
+
+   Mutual peering status was taken from a field in the initiating
+   caller's request.  Mutual trust means that each party verified the
+   other; the second half cannot be asserted by the party seeking it.
+
+   Normative consequence: a node MUST NOT assign mutual status on the
+   basis of caller-supplied metadata.  Mutual status MUST derive from
+   independently authenticated evidence from both participants.
+
+B.4.3.  Self-Asserted Bindings in Standalone Mode (RESOLVED)
+
+   Where no external verifier is configured, the reference gateway
+   creates identity bindings from a request.  This is a development
+   affordance and is documented as such, but the document did not
+   previously forbid it in production.
+
+   Normative consequence: a production profile MUST require an
+   externally authenticated identity.  Self-registration MUST NOT be
+   available in that profile.
+
+B.4.4.  Two Generations of Authorization Coexist (DOCUMENTED)
+
+   The implementation contains both the session-binding model and the
+   request-credential model this document specifies.  The reference
+   gateway has not fully converged on the latter.
+
+   This document specifies the request credential as canonical.  Readers
+   should not infer from the existence of a reference implementation
+   that the reference implementation is wholly conformant; Appendix A
+   states what has been demonstrated.
+
+B.4.5.  A2A and T2T Are Delegation Paths, Not Channels (RESOLVED)
+
+   The agent-to-agent path authorises delegation but does not establish
+   an authenticated destination channel.  The tool-to-tool path
+   validates chaining semantics rather than executing across
+   independently authenticated tools.
+
+   Normative consequence: an implementation MUST NOT treat
+   authorisation to delegate as delivery.  The destination identity MUST
+   authenticate independently before execution.
+
+B.4.6.  Credential Pass-Through Needs Bounds (RESOLVED)
+
+   Forwarded upstream credentials are relayed without inspection, which
+   is correct for confidentiality and incomplete as a specification.
+   Bounds on size, audience, destination binding, lifetime, persistence
+   and logging belong in this document rather than in deployment advice.
+
+B.4.7.  Hardening Is Optional (RESOLVED)
+
+   Argument filtering and related controls are enabled by configuration.
+   A reader may otherwise attribute their properties to the protocol.
+   This document should distinguish a core profile from a hardened
+   deployment profile.
+
+B.4.8.  Revocation Is Eventually Consistent (SPECIFIED)
+
+   Federation has no global consensus by design.  Revocation converges;
+   it is not globally synchronous.  Short credential lifetimes bound the
+   exposure window, and this should be stated as a security property
+   rather than left implicit -- particularly for irreversible actions.
+
+B.5.  Maturity Statement
+
+   The reference implementation is a working security reference with
+   attack-oriented regression coverage and identified hardening gaps.
+   It is not independently audited production security software.
+
+   An independent third-party audit, formal review of the federation
+   trust model, and multi-node adversarial testing at scale remain
+   appropriate and have not been performed.
+
+   The strongest claim this document supports is that its principal
+   mechanisms have been attacked by several methods and by one party
+   outside the design, that every defect found has been fixed and pinned
+   by a regression test, and that the process found defects the authors'
+   own audit did not.
+
+   All findings from the -00 review cycle are closed.  That is a
+   statement about a finite list, not about the absence of defects, and
+   the reviewer's own characterisation should be carried forward: the
+   review was static and source-based and was not a penetration test.
+
+   Positioning note: this document now situates itself against OAuth 2.0
+   (Section 3.3) and Secure Asset Transfer (Section 3.4) rather than
+   presenting itself as unprecedented.  Both comparisons narrow the
+   novelty claim, and both were added because narrowing it makes the
+   remainder easier to evaluate.
+
+   What would materially raise confidence, in order: a commissioned
+   third-party audit, formal analysis of the federation trust model,
+   adversarial testing across more than two nodes, and a third
+   independent implementation.  None has been performed.
+
+Authors' Addresses
+
+   XCP Working Group
+   AGI-Gateway
+
+   Email: research@agi-gateway.org
+   URI:   https://github.com/AGI-Gateway/XCP
