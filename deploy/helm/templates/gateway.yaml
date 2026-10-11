@@ -31,15 +31,34 @@ spec:
             {{- if .Values.verifier.enabled }}
             - {name: XCP_VERIFY_URL, value: "http://{{ .Release.Name }}-verifier:{{ .Values.verifier.service.port }}"}
             {{- end }}
+            {{- if .Values.privateFederation.enabled }}
+            {{- if .Values.privateFederation.peerCidrs }}
+            - {name: XCP_PRIVATE_PEER_CIDRS, value: {{ join "," .Values.privateFederation.peerCidrs | quote }}}
+            {{- end }}
+            {{- if .Values.privateFederation.peerCaSecretName }}
+            - {name: XCP_PEER_CA_BUNDLE, value: "/etc/xcp/peer-ca/{{ .Values.privateFederation.peerCaKey }}"}
+            {{- end }}
+            {{- end }}
           readinessProbe: {httpGet: {path: /health, port: http}, initialDelaySeconds: 3}
           livenessProbe:  {httpGet: {path: /health, port: http}, initialDelaySeconds: 10}
           resources: {{- toYaml .Values.gateway.resources | nindent 12 }}
-          {{- if .Values.mtls.enabled }}
-          volumeMounts: [{name: tls, mountPath: /etc/xcp/tls, readOnly: true}]
-          {{- end }}
-      {{- if .Values.mtls.enabled }}
-      volumes: [{name: tls, secret: {secretName: {{ .Values.mtls.secretName }}}}]
-      {{- end }}
+          volumeMounts:
+            {{- if .Values.mtls.enabled }}
+            - {name: tls, mountPath: /etc/xcp/tls, readOnly: true}
+            {{- end }}
+            {{- if and .Values.privateFederation.enabled .Values.privateFederation.peerCaSecretName }}
+            # The federation trust anchor, mounted separately from the mTLS
+            # material even when both come from the same CA: one says who may
+            # connect to this gateway, the other who may be a peer.
+            - {name: peer-ca, mountPath: /etc/xcp/peer-ca, readOnly: true}
+            {{- end }}
+      volumes:
+        {{- if .Values.mtls.enabled }}
+        - {name: tls, secret: {secretName: {{ .Values.mtls.secretName }}}}
+        {{- end }}
+        {{- if and .Values.privateFederation.enabled .Values.privateFederation.peerCaSecretName }}
+        - {name: peer-ca, secret: {secretName: {{ .Values.privateFederation.peerCaSecretName }}}}
+        {{- end }}
 ---
 apiVersion: v1
 kind: Service

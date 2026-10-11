@@ -19,6 +19,7 @@ test: ## run every test suite
 	@echo "── federation ──"         && $(PY) tests/test_federation.py
 	@echo "── node identity ──"      && $(PY) tests/test_identity.py
 	@echo "── two real nodes ──"     && $(PY) tests/test_two_node.py
+	@echo "── private federation ──" && $(PY) tests/test_private_federation.py
 	@echo "── performance ──"        && $(PY) tests/test_performance.py
 	@echo "── triage + runbook ──"   && $(PY) tests/test_triage.py
 	@echo "── telemetry ──"          && $(PY) tests/test_telemetry.py

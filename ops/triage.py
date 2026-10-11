@@ -15,6 +15,7 @@ than solved it.
 from __future__ import annotations
 
 import json
+import os
 import time
 import urllib.error
 import urllib.request
@@ -53,9 +54,28 @@ class Finding:
         return s
 
 
+def _tls_context():
+    """
+    Verify against the same anchor the node uses for peers.
+
+    Without this, triage against an internal node whose certificate is signed
+    by the organisation's own CA reports every check as unreachable — a
+    diagnostic tool that misdiagnoses the deployment it was written to debug.
+    """
+    bundle = os.getenv("XCP_PEER_CA_BUNDLE", "").strip()
+    if not bundle:
+        return None
+    try:
+        import ssl
+        return ssl.create_default_context(cafile=bundle)
+    except Exception:
+        return None
+
+
 def _get(url: str, timeout: float = 6) -> tuple[int, Any]:
     try:
-        with urllib.request.urlopen(url, timeout=timeout) as r:
+        with urllib.request.urlopen(url, timeout=timeout,
+                                    context=_tls_context()) as r:
             return r.status, json.loads(r.read())
     except urllib.error.HTTPError as e:
         try:
@@ -199,6 +219,33 @@ def triage(base: str) -> list[Finding]:
     else:
         out.append(Finding(Sev.MEDIUM, "federation",
                            f"peers endpoint returned {fstatus}"))
+
+    # ── private federation ──
+    # The posture an operator most often gets half-right: ranges declared but
+    # no internal trust anchor, so peers are reachable and unverifiable.
+    pf = h.get("privateFederation") or {}
+    ranges, anchor = pf.get("declaredRanges", 0), pf.get("peerTrustAnchor", "")
+    if ranges and anchor != "declared":
+        out.append(Finding(
+            Sev.MEDIUM, "private federation",
+            f"{ranges} internal range(s) declared, peers verified against the "
+            f"public trust store",
+            "If internal peers carry certificates from your own CA, their "
+            "chains will not verify and peering fails at the certificate "
+            "binding. Set XCP_PEER_CA_BUNDLE. If your internal gateways use "
+            "publicly-issued certificates, this is fine as it is."))
+    elif anchor == "declared" and not ranges:
+        out.append(Finding(
+            Sev.MEDIUM, "private federation",
+            "an internal trust anchor is configured but no internal ranges are "
+            "declared",
+            "A peer on a private address is still unreachable: the egress "
+            "guard refuses it before the certificate is ever retrieved. "
+            "Declare the ranges in XCP_PRIVATE_PEER_CIDRS."))
+    elif ranges:
+        out.append(Finding(
+            Sev.OK, "private federation",
+            f"{ranges} internal range(s), peer trust anchored on your own CA"))
 
     # ── protocol version ──
     if not h.get("protocolVersions"):

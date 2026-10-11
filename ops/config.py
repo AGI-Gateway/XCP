@@ -78,10 +78,38 @@ SETTINGS: tuple[Setting, ...] = (
             "surface that defaults to open is worse than one that does not "
             "exist. Compared in constant time.", secret=True),
     Setting("XCP_ALLOW_INSECURE_PEERS", R.NODE, "0",
-            "Permit peering over plain HTTP and to private or loopback "
-            "addresses. This disables the SSRF guard on the peer-record fetch "
+            "Permit peering over plain HTTP and to ANY private or loopback "
+            "address. This disables the SSRF guard on the peer-record fetch "
             "and is for local development only; on a reachable node it lets a "
-            "caller make the gateway fetch internal services.", unsafe=True),
+            "caller make the gateway fetch internal services. The production "
+            "profile refuses to start with it set. For a private federation "
+            "use XCP_PRIVATE_PEER_CIDRS, which is the scoped half of this and "
+            "does not waive TLS.", unsafe=True),
+    Setting("XCP_PRIVATE_PEER_CIDRS", R.NODE, "",
+            "Comma-separated internal ranges that may hold federation peers, "
+            'e.g. "10.40.0.0/16,fd00:dc1::/48". Without this a peer on a '
+            "private address is unreachable, which made a private federation "
+            "across datacentres impossible to run under the production "
+            "profile. Narrower than XCP_ALLOW_INSECURE_PEERS in two ways: a "
+            "host that resolves outside every declared range is still refused, "
+            "and loopback, link-local and cloud-metadata addresses stay "
+            "refused even when a declaration contains them. TLS is still "
+            "required. Declarations broader than /8 (IPv4) or /7 (IPv6) are "
+            "refused as a disguised bypass, and a malformed entry stops the "
+            "node starting rather than silently narrowing what you declared.",
+            unsafe=True),
+    Setting("XCP_PEER_CA_BUNDLE", R.NODE, "",
+            "PEM bundle of the certificate authorities that sign THIS "
+            "federation's peers. When set it REPLACES the public trust store "
+            "for peer-record fetches and certificate-footprint retrieval — and "
+            "for those only, so upstream tool calls keep public trust. Needed "
+            "for a private federation using an internal CA: chain validation "
+            "ran against the system store and failed before the footprint "
+            "binding was reached. A mixed deployment concatenates the public "
+            "roots it needs into the same file, which keeps the trust decision "
+            "in one auditable place. An unreadable or empty bundle stops the "
+            "node starting; falling back to the public store would leave the "
+            "operator believing peers are verified against their own CA."),
 
     Setting("XCP_POLICY", R.GATEWAY, "",
             "Path to a policy document. When set, every governed call is "

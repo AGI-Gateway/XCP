@@ -39,6 +39,29 @@ mtls:
   enabled: true
   secretName: xcp-tls   # must contain ca.crt, tls.crt, tls.key
 
+# Several datacentres inside one organisation. Without this, a peer on a
+# private address is unreachable and a peer signed by an internal CA cannot be
+# verified — so a production-profile node cannot federate internally at all.
+# See docs/runbook.md, "Private federation".
+privateFederation:
+  enabled: false
+  # Internal ranges that may hold peers. Declare the ranges that actually hold
+  # gateways, not the whole of 10.0.0.0/8: this is the scope of what peering
+  # can reach. Anything outside is still refused, and loopback, link-local,
+  # cloud-metadata and CGNAT addresses stay refused even inside a declaration.
+  # Declarations broader than /8 (IPv4) or /7 (IPv6) are refused outright.
+  peerCidrs: []
+  #  - 10.40.0.0/16
+  #  - fd00:dc1::/48
+
+  # Secret holding the PEM authorities that sign this federation's peers. It
+  # REPLACES the public trust store for peer verification — and only for that,
+  # so upstream tool calls keep public trust. A mixed federation puts the
+  # public roots it needs in the same file. An unreadable or empty bundle stops
+  # the pod, rather than silently verifying peers against the public store.
+  peerCaSecretName: ""        # e.g. xcp-internal-roots
+  peerCaKey: ca.pem           # key within that secret
+
 podSecurityContext:
   runAsNonRoot: true
   runAsUser: 10001

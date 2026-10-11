@@ -135,12 +135,29 @@ class _Bucket:
 
     def __init__(self, burst: int) -> None:
         self.tokens = float(burst)
-        self.updated = time.monotonic()
+        # NOT time.monotonic(). A bucket must take its reference point from the
+        # clock that drives it, and `take()` is handed `now` by its caller. A
+        # caller on its own clock -- a test, a replay, a simulation -- got an
+        # elapsed time measured against this PROCESS'S UPTIME, so the bucket
+        # drained by refill_per_sec for every second the process had been
+        # running. At the global ceiling's refill rate that is billions of
+        # tokens, and the node reported "at capacity" on its first request.
+        #
+        # It presented as a flaky test: it passed on a machine up for less than
+        # the timestamp the caller happened to pass, and failed on one up for
+        # longer. Set on first use instead.
+        self.updated: Optional[float] = None
         self.inflight = 0
 
     def take(self, cost: int, a: Allowance, now: float) -> tuple[bool, int]:
+        if self.updated is None:
+            self.updated = now
+        # A clock that goes backwards must not drain the bucket. An NTP step or
+        # a stale timestamp would otherwise empty the global ceiling and take
+        # the node to "at capacity" -- availability lost to clock skew.
+        elapsed = max(0.0, now - self.updated)
         self.tokens = min(float(a.burst),
-                          self.tokens + (now - self.updated) * a.refill_per_sec)
+                          self.tokens + elapsed * a.refill_per_sec)
         self.updated = now
         if self.tokens >= cost:
             self.tokens -= cost

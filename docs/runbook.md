@@ -160,6 +160,8 @@ before restarting.
 | `XCP_NODE_URL` | `—` | Public gateway URL published to peers. |
 | `XCP_NODE_CERT_FOOTPRINT` | `—` | keccak256(DER(cert)) of the certificate currently served. scripts/rotate-cert.py maintains this. |
 | `XCP_NODE_OPERATOR` | `anonymous` | Operator name published in the node record. |
+| `XCP_PRIVATE_PEER_CIDRS` **!** | `—` | Comma-separated internal ranges that may hold peers, e.g. `10.40.0.0/16,fd00:dc1::/48`. Required for a private federation: without it a peer on a private address is unreachable. Narrower than `XCP_ALLOW_INSECURE_PEERS` — an undeclared range is still refused, loopback and cloud-metadata addresses stay refused even inside a declaration, and TLS is still required. Declarations broader than /8 (IPv4) or /7 (IPv6) are refused, and a malformed entry stops the node. |
+| `XCP_PEER_CA_BUNDLE` | `—` | PEM bundle of the authorities that sign this federation's peers. REPLACES the public trust store for peer fetches and footprint retrieval, and for those only — upstream tool calls keep public trust. An unreadable or empty bundle stops the node. |
 
 **wrapper**
 
@@ -195,9 +197,108 @@ curl -H "Authorization: Bearer $XCP_ADMIN_TOKEN" https://your-node/admin/revoke 
     revoke any agent on the node.
 
 `XCP_ALLOW_INSECURE_PEERS=1` disables the SSRF guard on peer-record fetches,
-permitting plain HTTP and private or loopback addresses. **Local development
-only.** On a reachable node it lets a caller make your gateway fetch internal
-services it can reach and you cannot.
+permitting plain HTTP and **any** private or loopback address. **Local
+development only.** On a reachable node it lets a caller make your gateway fetch
+internal services it can reach and you cannot. The production profile refuses to
+start with it set. If you reached for it because your peers are on internal
+addresses, you want `XCP_PRIVATE_PEER_CIDRS` — see below.
+
+## Private federation — peers inside your own network
+
+For several datacentres inside one organisation, peering over internal
+addresses with certificates from your own CA.
+
+Two settings, and they answer different questions. **Where** your peers are:
+
+```bash
+XCP_PRIVATE_PEER_CIDRS=10.40.0.0/16,10.41.0.0/16,fd00:dc1::/48
+```
+
+and **who signs** them:
+
+```bash
+XCP_PEER_CA_BUNDLE=/etc/xcp/internal-roots.pem
+```
+
+!!! warning "Do not reach for XCP_ALLOW_INSECURE_PEERS here"
+    It used to be the only way to reach a private peer, and it is the wrong
+    one. It also accepts plain-HTTP peering, and the production profile refuses
+    to start with it set — so a private federation could not run the profile at
+    all. `XCP_PRIVATE_PEER_CIDRS` is the half of it that is safe in production.
+
+### What declaring a range does and does not buy
+
+A declaration makes a peer **reachable**. It changes nothing else:
+
+- a host resolving outside every declared range is still refused, so a
+  hostname an attacker controls cannot aim your gateway anywhere new;
+- loopback, link-local, cloud-metadata (`169.254.169.254`) and CGNAT addresses
+  stay refused **even if a declaration contains them**;
+- every address a name resolves to must pass, so a name answering with one
+  declared and one undeclared address is refused;
+- TLS is still required, and the certificate footprint binding still runs.
+
+Declare the ranges that actually hold gateways, not the whole of `10.0.0.0/8`.
+The declaration is the scope of what peering can reach, so it is worth the ten
+minutes with whoever owns the address plan.
+
+### Certificates
+
+Issue peer certificates from your internal CA as you would for any internal
+service, with the gateway's domain in the SAN. Then put the root — and only the
+roots you actually need — in the bundle:
+
+```bash
+cat /etc/pki/internal-root.pem > /etc/xcp/internal-roots.pem
+# a mixed federation adds the public roots it needs to the SAME file:
+# cat /etc/ssl/certs/ISRG_Root_X1.pem >> /etc/xcp/internal-roots.pem
+```
+
+The bundle **replaces** the public trust store for peer verification rather than
+adding to it. That is deliberate: setting the variable is a statement about who
+signs your peers, and leaving 150-odd public roots trusted contradicts it. A
+mis-issuance for an internal name would otherwise be accepted on a **first**
+peering — the one moment the footprint binding cannot help, because there is no
+prior footprint to compare against.
+
+The scope is federation only. Upstream tool calls keep the public trust store,
+so declaring an internal CA does not break the external APIs your agents reach.
+
+### Confirming the posture
+
+```bash
+curl -s https://dc1-gw.internal.example/health | jq .privateFederation
+# { "declaredRanges": 3, "peerTrustAnchor": "declared" }
+
+curl -s -H "Authorization: Bearer $XCP_ADMIN_TOKEN" \
+  https://dc1-gw.internal.example/v1/federation/trust | jq
+```
+
+`/health` publishes counts only. The ranges themselves are a map of where your
+gateways live, so `/v1/federation/trust` needs the admin token — same reasoning
+as the peer list.
+
+`xcp triage` honours `XCP_PEER_CA_BUNDLE`, so run it with the same environment
+as the node or every check reports unreachable.
+
+### When peering fails
+
+| symptom | cause |
+|---|---|
+| `host does not resolve to a permitted address` | the peer's address is outside every declared range, or it is loopback / metadata / CGNAT, which no declaration re-admits |
+| `plain HTTP is refused` | the peer URL is `http://`. Declaring a range does not waive TLS |
+| `could not bind the peer record to its certificate` | the chain did not verify. The peer's issuer is not in your bundle, or the SAN does not cover the name you peered to |
+| gateway will not start, naming `XCP_PRIVATE_PEER_CIDRS` | a malformed entry, or a declaration broader than /8. It stops rather than silently dropping the entry |
+| gateway will not start, naming `XCP_PEER_CA_BUNDLE` | the file is missing or holds no authorities. It stops rather than falling back to the public store, which would leave you believing peers are verified against your CA |
+
+### What this does not yet do
+
+Reachability and trust anchoring, not the rest of a private federation. Still
+outstanding: off-chain cluster membership (`cluster_id` currently anchors to
+`NodeRegistry.sol`), a membership-gated node record, destination authentication
+for cross-boundary A2A — `/v1/a2a/delegate` returns `delivered: false` and
+authorises a delegation rather than opening a channel — and datacentre locality
+in route selection. See `ROADMAP.md`.
 
 ## Severity, and what it actually means
 

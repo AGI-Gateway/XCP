@@ -61,6 +61,11 @@ jobs:
         run: pip install hypothesis && python security/analysis/fuzz_binding.py
       - name: Two real nodes federating
         run: python tests/test_two_node.py
+      - name: Private federation across datacentres
+        # Needs `cryptography` for the internal CA it issues, and boots the
+        # gateway in the production profile, so it belongs in this job rather
+        # than the dependency-light one.
+        run: python tests/test_private_federation.py
       - name: Triage and runbook
         run: python tests/test_triage.py
       - name: Conformance suite (reference must certify)

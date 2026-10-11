@@ -12,7 +12,7 @@ The properties that matter:
 """
 from __future__ import annotations
 
-import sys, threading
+import sys, threading, time
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parent.parent
@@ -134,6 +134,39 @@ def test_bucket_refills_over_time():
         pass
     assert lim.check(agent_key="a", tier="A0xH0", method="tools/call",
                      now=t + 120).allowed, "the bucket should refill"
+
+
+def test_a_caller_on_its_own_clock_does_not_arrive_pre_drained():
+    """
+    Buckets used to initialise `updated` from time.monotonic() while take() ran
+    on the caller's `now`, so the elapsed time was measured against process
+    uptime and the bucket drained by refill_per_sec for every second the
+    process had been running. The test above passed only while the machine's
+    uptime was below the timestamp it happens to pass, which looked like
+    flakiness and was a real defect: at the global ceiling's rate the node
+    reported "at capacity" on its first request.
+    """
+    lim = _lim()
+    for now in (0.0, 1.0, 1000.0, 10.0 ** 9, time.monotonic() * 2):
+        d = RateLimiter(global_rate_per_min=10 ** 9, global_burst=10 ** 9,
+                        global_concurrency=10 ** 6).check(
+            agent_key="a", tier="A2xH2", method="tools/call", now=now)
+        assert d.allowed, f"a fresh limiter refused the first call at now={now}"
+
+
+def test_a_clock_going_backwards_does_not_empty_the_bucket():
+    """
+    An NTP step or a stale timestamp would otherwise drain the global ceiling
+    and take the node to "at capacity" -- availability lost to clock skew, from
+    a direction no attacker even has to arrange.
+    """
+    lim = _lim()
+    assert lim.check(agent_key="a", tier="A2xH2", method="tools/call",
+                     now=5000.0).allowed
+    for backwards in (4999.0, 2500.0, 0.0):
+        assert lim.check(agent_key="a", tier="A2xH2", method="tools/call",
+                         now=backwards).allowed, \
+            f"the clock moving back to {backwards} drained the bucket"
 
 
 # ── the global ceiling ─────────────────────────────────────────────────────

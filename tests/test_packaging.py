@@ -99,6 +99,41 @@ def test_helm_can_pin_by_digest():
     assert re.search(r"^\s*digest:", v, re.M)
 
 
+def test_the_chart_can_deploy_a_private_federation():
+    """
+    Kubernetes across datacentres is where a private federation most likely
+    runs, so the chart has to carry both settings. Checked against values.yaml
+    as well as the template: a key the template reads and values.yaml does not
+    declare renders cleanly and silently never reaches the pod, which surfaces
+    later as peering that refuses every internal address for no visible reason.
+    """
+    import yaml
+    t = (ROOT / "deploy" / "helm" / "templates" / "gateway.yaml").read_text()
+    v = yaml.safe_load((ROOT / "deploy" / "helm" / "values.yaml").read_text())
+
+    pf = v.get("privateFederation")
+    assert isinstance(pf, dict), "values.yaml declares no privateFederation block"
+    for key in ("enabled", "peerCidrs", "peerCaSecretName", "peerCaKey"):
+        assert key in pf, f"values.yaml is missing privateFederation.{key}"
+    assert pf["enabled"] is False, "private federation must be opt-in"
+
+    for ref in re.findall(r"\.Values\.privateFederation\.(\w+)", t):
+        assert ref in pf, \
+            f"gateway.yaml reads privateFederation.{ref}, undeclared in values.yaml"
+
+    assert "XCP_PRIVATE_PEER_CIDRS" in t and "XCP_PEER_CA_BUNDLE" in t
+    # The env var points at the mount, so the two must agree.
+    assert "/etc/xcp/peer-ca/" in t
+    assert t.count("name: peer-ca") == 2, \
+        "the peer CA secret must be both mounted and declared as a volume"
+
+
+def test_the_peer_trust_anchor_is_mounted_read_only():
+    t = (ROOT / "deploy" / "helm" / "templates" / "gateway.yaml").read_text()
+    i = t.index("mountPath: /etc/xcp/peer-ca")
+    assert "readOnly: true" in t[i:i + 80]
+
+
 def test_release_workflow_signs_what_it_publishes():
     wf = (ROOT / ".github" / "workflows" / "release.yml").read_text()
     assert "cosign sign" in wf, "unsigned images while demanding signed manifests"

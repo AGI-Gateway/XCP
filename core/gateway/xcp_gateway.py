@@ -257,7 +257,15 @@ if _PROFILE == "production":
     if not os.getenv("XCP_ADMIN_TOKEN", ""):
         _missing.append("XCP_ADMIN_TOKEN must be set")
     if os.getenv("XCP_ALLOW_INSECURE_PEERS", "0") == "1":
-        _missing.append("XCP_ALLOW_INSECURE_PEERS must not be 1")
+        # Still refused, and now with somewhere to go. This used to be the only
+        # way to reach a peer on a private address, so a private federation
+        # across datacentres could not run this profile at all: the flag it
+        # needed was the flag the profile rejects. XCP_PRIVATE_PEER_CIDRS is the
+        # production-safe half of what that flag used to do.
+        _missing.append(
+            "XCP_ALLOW_INSECURE_PEERS must not be 1. For a private federation "
+            "declare the internal ranges in XCP_PRIVATE_PEER_CIDRS instead; "
+            "that permits private peers without accepting plain-HTTP peering")
     if _missing:
         raise RuntimeError(
             "XCP_PROFILE=production but the deployment cannot enforce it:\n  - "
@@ -269,6 +277,68 @@ else:
           "and hardening is optional. NOT for production.", flush=True)
 
 PRODUCTION = _PROFILE == "production"
+
+
+# ── private federation ─────────────────────────────────────────────────────
+# Two settings decide whether this node can peer inside an organisation:
+# XCP_PRIVATE_PEER_CIDRS (which internal ranges hold peers) and
+# XCP_PEER_CA_BUNDLE (who signs their certificates). Both are validated HERE,
+# at startup, rather than on the first peering attempt.
+#
+# The reason is the failure mode. A malformed CIDR discovered mid-request is
+# reported as a refused peer, which sends the operator looking at the peer. An
+# unreadable CA bundle discovered mid-request is worse: the obvious handling is
+# to fall back to the system trust store, and then the node verifies peers
+# against every public root while its operator believes it verifies them
+# against their own CA. Neither is a condition a running node should be in.
+import sys as _sys, pathlib as _pathlib
+_sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[2]))
+
+PRIVATE_PEER_CIDRS: tuple = ()
+PEER_TRUST: dict[str, Any] = {"anchor": "system", "bundle": "", "authorities": 0}
+
+try:
+    from security.xcpsec.egress import (private_networks_from_env as _parse_cidrs,
+                                        EgressConfigError as _CidrError)
+except ImportError:
+    _parse_cidrs = None
+if _parse_cidrs is None:
+    # A setting the code cannot honour must not be silently ignored: the
+    # operator would believe private peers are reachable and scoped.
+    if os.getenv("XCP_PRIVATE_PEER_CIDRS", ""):
+        raise RuntimeError(
+            "XCP_PRIVATE_PEER_CIDRS is set but security.xcpsec is unavailable, "
+            "so the egress guard cannot honour it. Refusing to start.")
+else:
+    try:
+        PRIVATE_PEER_CIDRS = _parse_cidrs()
+    except _CidrError as _e:
+        raise RuntimeError(f"XCP_PRIVATE_PEER_CIDRS is unusable: {_e}\n"
+                           "Refusing to start.")
+
+try:
+    from federation.peerfetch import (validate_config as _validate_peer_trust,
+                                      trust_summary as _trust_summary,
+                                      PeerTrustConfigError as _TrustError)
+except ImportError:
+    _validate_peer_trust = None
+if _validate_peer_trust is None:
+    if os.getenv("XCP_PEER_CA_BUNDLE", ""):
+        raise RuntimeError(
+            "XCP_PEER_CA_BUNDLE is set but the federation package is "
+            "unavailable, so peers would be verified against the public trust "
+            "store instead. Refusing to start.")
+else:
+    try:
+        _validate_peer_trust()
+        PEER_TRUST = _trust_summary()
+    except _TrustError as _e:
+        raise RuntimeError(str(_e))
+
+PRIVATE_FEDERATION = bool(PRIVATE_PEER_CIDRS) or PEER_TRUST["anchor"] == "declared"
+if PRIVATE_FEDERATION:
+    print(f"[gateway] private federation: {len(PRIVATE_PEER_CIDRS)} declared "
+          f"range(s), peer trust anchor={PEER_TRUST['anchor']}", flush=True)
 
 # FOUND BY INDEPENDENT REVIEW (B.4.6). XCP-Upstream-Credential is relayed
 # without inspection, which is right for confidentiality and incomplete as a
@@ -965,7 +1035,9 @@ async def federation_peer(request: Request) -> JSONResponse:
     # The URL comes from an unauthenticated caller, so it is attacker-controlled
     # until proven otherwise. Validate the RESOLVED address, not the string.
     try:
-        from security.xcpsec.egress import check_url, EgressDenied, MAX_FETCH_BYTES
+        from security.xcpsec.egress import check_url, EgressDenied
+        # check_url consults XCP_PRIVATE_PEER_CIDRS, so a peer inside a declared
+        # internal range passes while an undeclared one is still refused.
         check_url(url)
     except EgressDenied as e:
         _fed_audit(f"peer fetch refused for {domain}: {e}")
@@ -976,21 +1048,23 @@ async def federation_peer(request: Request) -> JSONResponse:
     try:
         from federation import (NodeRecord, protocol_incompatible,
                                 verify_node_record, digest as _fp_digest)
-        import httpx
         # TLS verification stays ON. It was disabled here, which meant a peer
         # record fetched over https could be substituted by anyone on the path
         # — and peering is precisely where trust is established.
-        async with httpx.AsyncClient(timeout=10, follow_redirects=False) as hc:
-            r = await hc.get(url.rstrip("/") + "/.well-known/xcp-node.json")
-        if r.status_code >= 300:
+        #
+        # The trust ANCHOR now comes from federation.peerfetch, so a node whose
+        # peers carry certificates from the organisation's own CA can verify
+        # them. The client used to take the ambient system store, which failed
+        # an internal chain before the footprint binding below was ever
+        # reached: a private federation could not peer at all.
+        from federation.peerfetch import fetch_node_record
+        fetched = await fetch_node_record(url)
+        if fetched.status >= 300:
             # Redirects are refused rather than followed: an open redirector on
             # a benign host would otherwise defeat the egress check above.
             return JSONResponse({"error": "peer record must be served directly"},
                                 status_code=502)
-        if len(r.content) > MAX_FETCH_BYTES:
-            return JSONResponse({"error": "peer record is too large"},
-                                status_code=502)
-        doc = r.json()
+        doc = json.loads(fetched.body or b"{}")
         rec = NodeRecord(**{k: v for k, v in doc.items()
                             if k in NodeRecord.__dataclass_fields__})
     except Exception:
@@ -1021,13 +1095,13 @@ async def federation_peer(request: Request) -> JSONResponse:
     tls_verified = False
     if url.startswith("https://"):
         try:
-            import socket, ssl as _ssl
-            from urllib.parse import urlparse as _up
-            u = _up(url)
-            ctx_ssl = _ssl.create_default_context()
-            with socket.create_connection((u.hostname, u.port or 443), timeout=8) as sock:
-                with ctx_ssl.wrap_socket(sock, server_hostname=u.hostname) as ss:
-                    der = ss.getpeercert(binary_form=True)
+            # The certificate is retrieved through federation.peerfetch, which
+            # verifies the chain against the declared anchor (XCP_PEER_CA_BUNDLE
+            # when set, the system store otherwise) and runs the handshake off
+            # the event loop. Chain validation is not replaced by the footprint
+            # binding below; the binding is an additional check on top of it.
+            from federation.peerfetch import peer_certificate_der
+            der = await peer_certificate_der(url)
             problems = verify_node_record(rec, der, domain,
                                           known_sequence=getattr(
                                               _FED.peers.get(domain), "sequence", 0))
@@ -1042,9 +1116,15 @@ async def federation_peer(request: Request) -> JSONResponse:
                 {"error": "could not bind the peer record to its certificate"},
                 status_code=502)
     elif os.getenv("XCP_ALLOW_INSECURE_PEERS", "0") != "1":
+        # A private federation does not reach this branch. Declaring internal
+        # ranges in XCP_PRIVATE_PEER_CIDRS makes a private peer REACHABLE; it
+        # does not make it verifiable without a certificate, and an internal
+        # network is where an attacker with a foothold already sits.
         return JSONResponse(
             {"error": "peering over plain HTTP is refused; the record cannot be "
-                      "bound to a certificate"}, status_code=400)
+                      "bound to a certificate. A private federation still needs "
+                      "TLS — issue internal certificates and declare the signer "
+                      "in XCP_PEER_CA_BUNDLE"}, status_code=400)
     known = _FED.peers.get(domain)
     try:
         # FOUND BY INDEPENDENT REVIEW (GPT-5.6, finding B.2). `mutual` was
@@ -1137,6 +1217,31 @@ async def federation_revoke(request: Request) -> JSONResponse:
     return JSONResponse({"accepted": True, "nodeId": node_id})
 
 
+@app.get("/v1/federation/trust")
+async def federation_trust(request: Request) -> JSONResponse:
+    """
+    What this node accepts as a peer: which internal ranges are declared and
+    which authority signs their certificates.
+
+    Admin-gated, for the same reason the peer list is. The declared ranges are
+    a map of where this organisation keeps its gateways — the reconnaissance
+    step, not the attack — so an unauthenticated caller gets the counts that
+    /health already publishes and nothing more.
+    """
+    if not _admin_ok(request):
+        return JSONResponse(
+            {"declaredRanges": len(PRIVATE_PEER_CIDRS),
+             "peerTrustAnchor": PEER_TRUST["anchor"],
+             "detail": "redacted; requires an admin token"})
+    return JSONResponse({
+        "declaredRanges": [str(n) for n in PRIVATE_PEER_CIDRS],
+        "peerTrust": PEER_TRUST,
+        "plainHttpPeering": os.getenv("XCP_ALLOW_INSECURE_PEERS", "0") == "1",
+        "profile": _PROFILE,
+        "note": "a declared range makes a private peer reachable; it does not "
+                "waive TLS or the certificate footprint binding"})
+
+
 @app.get("/v1/federation/catalog")
 async def federation_catalog() -> JSONResponse:
     """Publish what this node knows so peers can ingest it."""
@@ -1162,4 +1267,11 @@ async def health() -> dict:
             "policy": _POLICY_ATTEST or "none configured",
             "rateLimit": _LIMITS.stats() if _LIMITS else "disabled",
             "verifier": "external" if VERIFY_URL else "local",
-            "upstreams": list(UPSTREAMS.keys())}
+            "upstreams": list(UPSTREAMS.keys()),
+            # What this node will accept as a peer, so an operator can confirm
+            # the posture rather than infer it. Counts and anchor only: the
+            # declared ranges are internal topology and stay behind the admin
+            # token on /v1/federation/trust.
+            "privateFederation": {
+                "declaredRanges": len(PRIVATE_PEER_CIDRS),
+                "peerTrustAnchor": PEER_TRUST["anchor"]}}

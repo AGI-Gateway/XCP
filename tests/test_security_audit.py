@@ -186,11 +186,56 @@ def test_filtering_happens_on_the_resolved_address_not_the_string():
 
 
 def test_redirects_are_not_followed_into_a_private_range():
-    src = (ROOT / "core" / "gateway" / "xcp_gateway.py").read_text()
-    i = src.index("async def federation_peer(")
-    body = src[i:i + 2600]
-    assert "follow_redirects=False" in body, \
-        "an open redirector on a benign host would defeat the egress check"
+    """
+    An open redirector on a permitted host would otherwise reach somewhere the
+    egress guard never checked.
+
+    Asserted on behaviour rather than on the source text. This test used to
+    grep a fixed 2600-character window of the handler for `follow_redirects`,
+    which broke the moment peer fetching moved into federation.peerfetch --
+    and a fixed window had already masked a real gap once before in this file.
+    """
+    import asyncio
+    from http.server import BaseHTTPRequestHandler, ThreadingHTTPServer
+    from threading import Thread
+    from federation.peerfetch import fetch_node_record
+
+    class Redirector(BaseHTTPRequestHandler):
+        def do_GET(self):                       # noqa: N802 - stdlib interface
+            self.send_response(302)
+            self.send_header("Location", "http://169.254.169.254/latest/meta-data")
+            self.end_headers()
+
+        def log_message(self, *a):              # keep the test output clean
+            pass
+
+    srv = ThreadingHTTPServer(("127.0.0.1", 0), Redirector)
+    Thread(target=srv.serve_forever, daemon=True).start()
+    try:
+        port = srv.server_address[1]
+        got = asyncio.run(fetch_node_record(f"http://127.0.0.1:{port}"))
+        # The redirect is returned to the caller, not followed. The gateway
+        # turns any status >= 300 into "must be served directly".
+        assert got.status == 302, \
+            "the redirect was followed; an open redirector defeats the guard"
+        assert b"meta-data" not in got.body
+    finally:
+        srv.shutdown()
+
+
+def test_the_peer_fetcher_is_the_only_federation_http_client():
+    """
+    The companion to the test above. Behaviour tests cover federation.peerfetch;
+    this one stops the handler growing a second, unguarded client beside it --
+    which is how the first one came to have TLS verification disabled.
+    """
+    body = _federation_peer_body()
+    assert "fetch_node_record(" in body, \
+        "peer records must be fetched through federation.peerfetch"
+    for direct in ("httpx.AsyncClient(", "httpx.Client(", "urlopen("):
+        assert direct not in body, \
+            f"the handler builds its own HTTP client ({direct}), bypassing the " \
+            "redirect, size and trust-anchor handling in federation.peerfetch"
 
 
 def test_the_fetch_error_is_not_an_oracle():
@@ -269,7 +314,20 @@ def test_peer_enrolment_binds_the_record_to_a_certificate():
     body = _federation_peer_body()
     assert "verify_node_record(" in body, \
         "enrolment must bind the record to the presented certificate"
-    assert "getpeercert" in body, "the certificate must be retrieved, not assumed"
+    # The retrieval moved into federation.peerfetch, so the invariant is now
+    # asserted across the call chain: the handler must delegate to the
+    # retrieval function, and that function must take the certificate off a
+    # live connection rather than from anything the caller supplied.
+    assert "peer_certificate_der(" in body, \
+        "the certificate must be retrieved, not assumed"
+    from federation import peerfetch
+    fetcher = (ROOT / "federation" / "peerfetch.py").read_text()
+    assert "getpeercert" in fetcher, \
+        "peer_certificate_der must read the certificate off the connection"
+    import inspect
+    sig = inspect.signature(peerfetch.peer_certificate_der)
+    assert "gateway_url" in sig.parameters and "cert" not in sig.parameters, \
+        "the certificate must come from the connection, not from a parameter"
 
 
 def test_plain_http_peering_cannot_reach_verified():

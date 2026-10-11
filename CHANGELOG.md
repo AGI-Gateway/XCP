@@ -12,6 +12,73 @@ semantic versioning once it reaches 1.0. Until then, minor versions may break.
 
 First public release. Everything below is new.
 
+### Private federation — reachability and trust anchoring
+
+Two controls made a private federation — several datacentres inside one
+organisation — impossible to run under the production profile. Neither was a
+missing feature; both were defences tuned for the public federation, where peers
+are mutually suspicious strangers on routable addresses.
+
+- **`XCP_PRIVATE_PEER_CIDRS`** declares the internal ranges that may hold peers.
+  Reaching a peer on a private address previously required
+  `XCP_ALLOW_INSECURE_PEERS=1`, which also accepted plain-HTTP peering and which
+  the production profile refuses to start with — so the only setting a private
+  federation could use was the one the profile rejected. The flag is now two
+  decisions, and the scoped one is safe in production.
+
+  Declaring a range is narrower than disabling the guard in ways that are
+  tested, not asserted: a host resolving outside every declared range is still
+  refused, so an attacker-controlled hostname cannot reach anywhere new; and
+  loopback, link-local, cloud-metadata and CGNAT addresses stay refused **even
+  when a declaration contains them**, so a range cannot be used to aim the
+  gateway at its own admin surface. Declarations broader than /8 (IPv4) or /7
+  (IPv6) are refused as a disguised bypass, and a malformed entry stops the node
+  rather than silently narrowing what the operator declared. TLS is unaffected.
+
+- **`XCP_PEER_CA_BUNDLE`** declares who signs this federation's peers. The
+  footprint binding in `verify_node_record()` is a pinning construction and is
+  indifferent to the signer, but chain validation ran first and ran against the
+  ambient system store — so an internal CA failed *before* pinning was reached
+  and a private federation could not peer at all.
+
+  The bundle **replaces** rather than augments the public roots. Augmenting was
+  the softer default and the wrong one: setting the variable is a statement
+  about who signs your peers, and leaving the public roots trusted would accept
+  a mis-issuance for an internal name on a first peering — the one moment
+  pinning cannot help. An unreadable or empty bundle stops the node, because
+  falling back would leave the operator believing peers are verified against
+  their own CA.
+
+- **`federation/peerfetch.py`** is now the only path to a peer. Both halves of
+  peering built their own client with the ambient trust store; the handler's
+  client is also where TLS verification was once disabled outright. The module
+  owns the trust anchor, the redirect refusal and the size cap, and the
+  certificate handshake moved off the event loop — inline, a peer that accepted
+  a connection and stalled held the whole gateway for the timeout, which
+  matters more on a private federation where peering traffic is ordinary rather
+  than rare. Scoped deliberately: upstream tool calls keep the public trust
+  store, so declaring an internal CA does not break external APIs.
+
+- `/health` reports the posture (`privateFederation`: counts only) and
+  `/v1/federation/trust` reports the detail behind the admin token — the
+  declared ranges are a map of where an organisation keeps its gateways, which
+  is the reconnaissance step. `xcp triage` honours the bundle, so diagnostics
+  no longer report every check unreachable against an internal node.
+
+### Test infrastructure
+
+- Contract tests signalled "skip" by raising `RuntimeError("SKIP: …")`, which
+  the file's standalone runner understands and pytest counts as a **failure**.
+  On any machine without `solc` or `web3` that left eleven permanently red
+  tests, which is worse than noise: it hides whether a change broke something.
+  They now skip under both runners.
+- Two security-audit tests asserted on source text — one greping a fixed
+  2600-character window of a handler — and broke when peer fetching moved into
+  its own module. The redirect test is now behavioural (a real redirecting
+  server), and the certificate-retrieval invariant is asserted across the call
+  chain. A companion test refuses a second HTTP client in the handler, which is
+  how the first one came to have verification disabled.
+
 ### Second implementation
 
 - **Node gateway** (`core/gateway-ts/`) written against the specification rather

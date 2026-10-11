@@ -54,9 +54,25 @@ def _deploy(name: str):
     return w3, w3.eth.contract(address=addr, abi=art["abi"])
 
 
+def _skip(reason: str) -> None:
+    """
+    Skip, in whichever runner is driving.
+
+    These used to raise RuntimeError("SKIP: ...") unconditionally, which the
+    standalone runner at the bottom of this file understands and pytest counts
+    as a FAILURE. On a machine without solc or web3 -- an ordinary CI container
+    -- that put eleven red tests in the suite permanently, which is worse than
+    noise: it hides whether a change broke something.
+    """
+    if "pytest" in sys.modules:
+        import pytest
+        pytest.skip(reason)
+    raise RuntimeError(f"SKIP: {reason}")
+
+
 def _skip_if_no_w3():
     if not _W3:
-        raise RuntimeError("SKIP: web3 not installed")
+        _skip("web3 not installed")
 
 
 # ── the ABI is generated, not hand-written ─────────────────────────────────
@@ -98,7 +114,7 @@ def test_generated_abi_includes_public_variable_getters():
 
 def test_sources_still_compile():
     if not SOLC:
-        raise RuntimeError("SKIP: solc not available")
+        _skip("solc not available")
     r = subprocess.run([SOLC, "--optimize", "--bin", "-o", "/tmp/_cc", "--overwrite",
                         str(ROOT / "core" / "contracts" / "NodeRegistry.sol"),
                         str(ROOT / "core" / "contracts" / "SessionRegistry.sol")],

@@ -40,3 +40,13 @@ from .routing import (Effect, PeerMetrics, Policy, Candidate, select,
 __all__ = list(globals().get("__all__", [])) + [
     "Effect", "PeerMetrics", "Policy", "Candidate", "select", "admissible",
     "score", "concentration", "RoutingError"]
+
+from .peerfetch import (CA_BUNDLE_ENV, FetchedRecord, PeerFetchError,
+                        PeerTrustConfigError, fetch_node_record,
+                        peer_ca_bundle, peer_certificate_der, peer_ssl_context,
+                        peer_verify, trust_summary)
+from .peerfetch import validate_config as validate_peer_trust
+__all__ = list(globals().get("__all__", [])) + [
+    "CA_BUNDLE_ENV", "FetchedRecord", "PeerFetchError", "PeerTrustConfigError",
+    "fetch_node_record", "peer_ca_bundle", "peer_certificate_der",
+    "peer_ssl_context", "peer_verify", "trust_summary", "validate_peer_trust"]
