@@ -44,6 +44,7 @@ has been delivered. Those are separate claims and XCP reports them separately.
 | **Discovery on-ramp** | One command generates your ARD catalog *and* MCP Registry manifest, with representative queries derived from your real tool surface. |
 | **Defence in depth** | Optional `xcpsec`: hardened mTLS, argument firewall, execution sandbox, supply-chain pinning, prompt-injection boundaries. |
 | **Private federation** | Federate your own datacentres: declared internal ranges, your own CA as the peer trust anchor, cluster membership by signed charter, and a node record that stops publishing your topology. |
+| **Authority narrows at a boundary** | An agent delegating across datacentres carries a signed ticket. The destination authenticates it independently and re-derives the tier under **its own** ceiling — so authority can shrink at a boundary and never grow. |
 | **Wraps, never replaces** | Point it at MCP servers you already run. They don't change. |
 
 ---
@@ -350,10 +351,10 @@ by others, and we don't claim otherwise.
   two HIGH issues the project's own audit missed — are resolved and recorded
   in [SECURITY-AUDIT.md](SECURITY-AUDIT.md). That is useful and it is not the
   same thing as a paid audit by people with their name on the result.
-- **Cross-boundary A2A is authorisation, not delivery.** `/v1/a2a/delegate`
-  reports `authorized` and `delivered` separately and will not claim the
-  second. See [ROADMAP.md](ROADMAP.md) for what a private federation still
-  needs.
+- `/v1/a2a/delegate` reports `authorized`, `delivered` and the destination's
+  own `admitted` as three separate facts, and will not collapse them. See
+  [ROADMAP.md](ROADMAP.md) for what a private federation still needs —
+  datacentre locality in routing, and a federated tool catalogue.
 - ARD support targets a **v0.9 draft** whose industry adoption was near zero at
   the time of writing. Publishing a catalog is a cheap option on a well-backed
   spec — not a proven traffic channel.

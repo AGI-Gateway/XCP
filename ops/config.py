@@ -123,6 +123,27 @@ SETTINGS: tuple[Setting, ...] = (
             "member removal takes effect, so an operator pinning the floor "
             "stops a rolled-back charter file re-admitting a node that was "
             "removed. Set it to the epoch you currently expect."),
+    Setting("XCP_A2A_ACCEPT", R.GATEWAY, "0",
+            "Accept delegated tasks from peer gateways at /v1/a2a/accept. OFF "
+            "by default: a node that accepts them is executing work on another "
+            "datacentre's say-so, which an operator should decide deliberately "
+            "rather than inherit from an upgrade. A ticket is still only "
+            "admitted from a verified peer, in this node's cluster, naming "
+            "this node, within its expiry, for the exact task committed to."),
+    Setting("XCP_A2A_TIER_CEILING", R.GATEWAY, "A2xH2",
+            "The most authority a cross-boundary delegation may carry HERE, "
+            "whatever the originating gateway asserted. The asserted tier is "
+            "narrowed leg by leg against this, so authority can only shrink at "
+            "a boundary. The default is the top of the lattice, meaning "
+            "'whatever the origin verified'; an operator who wants delegated "
+            "work capped lower sets e.g. A1xH1. The gateway refuses to start "
+            "on a value it cannot parse, because a ceiling nobody can read is "
+            "a ceiling that does not apply."),
+    Setting("XCP_A2A_MAX_HOPS", R.GATEWAY, "3",
+            "How many boundaries one delegation may cross. Matches the "
+            "federation's transitive-trust cap, for the same reason: beyond it "
+            "nobody in the chain can reason about what they are part of. The "
+            "originator sets the budget in the ticket and no hop can raise it."),
     Setting("XCP_NODE_RECORD_PUBLIC", R.NODE, "0",
             "Serve the FULL node record to anyone, even in a closed cluster. A "
             "closed cluster gates its record by default — publishing the "

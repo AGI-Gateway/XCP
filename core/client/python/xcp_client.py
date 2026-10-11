@@ -239,9 +239,22 @@ class XCPClient:
     # ---- A2A: agent <-> agent ----
 
     def delegate(self, peer_did: str, task: dict,
-                 mandate: Optional[Mandate] = None) -> dict:
-        """Delegate a task to a peer agent (scope a2a:delegate/<peer>)."""
-        body = {"peerDid": peer_did, "task": task}
+                 mandate: Optional[Mandate] = None,
+                 destination: str = "") -> dict:
+        """
+        Delegate a task to a peer agent (scope a2a:delegate/<peer>).
+
+        `destination` is a peer gateway's domain. Given one, this gateway mints
+        a signed delegation ticket and carries it there, and the response
+        includes the destination's OWN decision -- which may admit the
+        delegation at a narrower tier than this gateway asserted.
+
+        Without it, nothing is delivered: the response reports `authorized`
+        and `delivered: false`, and those are different claims. Read both.
+        """
+        body: dict = {"peerDid": peer_did, "task": task}
+        if destination:
+            body["destination"] = destination
         r = self._http.post(f"{self.gateway_url}/v1/a2a/delegate",
                             json=body, headers=self._headers(mandate))
         return self._handle(r)

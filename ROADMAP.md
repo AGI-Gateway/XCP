@@ -47,10 +47,13 @@ done; the rest is what a private federation still needs.
       proof. An authorization split on the one RFC 8615 resource rather than a
       second path. A removed member therefore loses discovery as well as
       peering, from the same epoch bump
-- [ ] **Cross-boundary A2A** — `/v1/a2a/delegate` authorises a delegation and
-      reports `delivered: false`; it does not open a channel. Needs a signed
-      delegation ticket the destination redeems, re-deriving the tier under its
-      own entitlements so authority narrows and never widens at the boundary
+- [x] **Cross-boundary A2A** — a signed `DelegationTicket` the destination
+      redeems: it checks the origin is a verified peer in its own cluster, that
+      the ticket names it and has not expired, that the task matches the digest
+      committed to, that the hop budget is intact with no loop, and then
+      narrows the asserted tier under its OWN ceiling, leg by leg. Authority
+      shrinks at a boundary and never widens. `delivered` now means the
+      destination answered, and `admitted` is its own decision
 - [ ] **Datacentre locality in routing** — `PeerMetrics` has `hops` and no
       region or site, so multi-datacentre latency optimisation has nothing to
       optimise against. Carries the data-residency constraint for tools too

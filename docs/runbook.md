@@ -167,6 +167,9 @@ before restarting.
 | `XCP_CLUSTER_AUTHORITY` | `—` | Address of the key allowed to sign this cluster's charters. Without it a node accepts any correctly-signed charter naming its cluster id, so anyone could mint one. Set it on every node. |
 | `XCP_CLUSTER_MIN_EPOCH` | `0` | Refuse a charter below this epoch. Raising the epoch is how a removal takes effect, so pinning the floor stops a rolled-back charter file re-admitting a removed node. |
 | `XCP_NODE_RECORD_PUBLIC` **!** | `0` | Serve the FULL node record to anyone, even in a closed cluster. A closed cluster gates it by default. Set this only for a node that must stay publicly discoverable — a public-facing gateway inside a private organisation, or one under external monitoring. It publishes this node's id, gateway URL, operator and seed peers. |
+| `XCP_A2A_ACCEPT` | `0` | Accept delegated tasks from peer gateways at `/v1/a2a/accept`. Off by default: a node that accepts them executes work on another datacentre's say-so. A ticket is still only admitted from a verified peer, in this node's cluster, naming this node, within its expiry, for the exact task committed to. |
+| `XCP_A2A_TIER_CEILING` | `A2xH2` | The most authority a cross-boundary delegation may carry here, whatever the origin asserted. Narrowed leg by leg, so authority can only shrink at a boundary. The gateway refuses to start on a value it cannot parse — a ceiling nobody can read is a ceiling that does not apply. |
+| `XCP_A2A_MAX_HOPS` | `3` | How many boundaries one delegation may cross. The originator sets the budget in the ticket and no hop can raise it. |
 
 **wrapper**
 
@@ -454,6 +457,85 @@ To keep a node publicly discoverable despite a closed cluster, set
 `XCP_NODE_RECORD_PUBLIC=1`. It only affects what the record publishes — peering
 is still members-only.
 
+## Agents talking across a boundary
+
+An agent in one datacentre asking an agent in another. `/v1/a2a/delegate` with
+a `destination` mints a signed ticket, carries it to that peer's
+`/v1/a2a/accept`, and returns the destination's own decision.
+
+```bash
+XCP_A2A_ACCEPT=1                 # on the DESTINATION. Off by default.
+XCP_A2A_TIER_CEILING=A1xH1       # the most a delegation may carry here
+```
+
+Both ends must peer with each other first, in **both** directions. Peering is
+directional — dc1 verifying dc2's record says nothing about what dc2 knows —
+and the destination is the end that checks whether a ticket's origin is a peer.
+A one-way peering fails with *"the originating node is not a verified peer"*.
+
+### Authority narrows at the boundary and never widens
+
+This is the whole point of the ticket carrying a tier rather than the
+destination simply trusting the originator. The origin asserts what it
+verified; the destination decides what that is worth **here**:
+
+```
+asserted A2xH2  ·  ceiling A2xH2  ->  A2xH2   (nothing to narrow)
+asserted A2xH2  ·  ceiling A1xH1  ->  A1xH1
+asserted A2xH2  ·  ceiling A2xH0  ->  A2xH0   (human leg capped only)
+asserted A0xH0  ·  ceiling A2xH2  ->  A0xH0   (a ceiling cannot lift)
+```
+
+Narrowing is per leg, not per cell: what backs the agent and what backs the
+human are different claims, so a destination that caps one has said nothing
+about the other. It's the same invariant the OAuth bridge enforces when a grant
+becomes a mandate, and that the lattice enforces when an employer's IdP
+attributes meet a cell — applied to the hop between datacentres, because a
+trust boundary is where a widening would be most useful to an attacker and
+least visible to you.
+
+Set `XCP_A2A_TIER_CEILING` to the most you want delegated work to carry. The
+default `A2xH2` means "whatever the origin verified", which is the right
+default for datacentres of one organisation and the wrong one if you federate
+with anybody you would not hand a local session to.
+
+### A ticket is not a credential for your tools
+
+It authorises **one task, by digest**, to one named destination, for 120
+seconds. A delegated call still passes your own mandate gate, argument
+firewall and limits — against the **narrowed** tier, so it arrives with less
+authority than a local call rather than more.
+
+### What delivered means
+
+```json
+{"authorized": true, "delivered": true,
+ "destinationDecision": {"admitted": true, "effectiveTier": "A1xH1",
+                         "narrowed": true, "ceiling": "A1xH1"}}
+```
+
+`authorized` is this gateway's answer, `delivered` means the destination
+answered, and `admitted` is the destination's own decision. They are three
+different facts and a refusal you *heard* still counts as delivered —
+conflating authorisation with delivery is the bug this path exists to stop
+making. With no `destination`, nothing is delivered and the response says so.
+
+### When a delegation is refused
+
+Every problem is reported at once rather than one per round trip.
+
+| problem | cause |
+|---|---|
+| `the originating node is not a verified peer of this node` | peer the two ends, in both directions |
+| `the originating node is not a member of this node's cluster` | closed cluster, and the origin isn't in the charter this node holds |
+| `ticket was minted for a different destination` | a ticket for dc2 presented at dc3. Working as intended |
+| `the task presented is not the task the ticket authorises` | the task changed in flight, or whoever carried the ticket chose a different one |
+| `ticket has expired` | more than 120s in flight; check clock skew between the two nodes |
+| `delegation budget exhausted` | the chain is longer than the originator permitted |
+| `this node is already on the delegation path` | a cycle. Two datacentres were passing it back and forth |
+| `ticket is not signed by the node it claims to come from` | the origin's node key does not match the `origin_node` in the ticket |
+| `this node does not accept delegated tasks` | `XCP_A2A_ACCEPT` is unset on the destination |
+
 ### Anchoring on-chain later, if you ever want to
 
 The root is byte-identical to what `NodeRegistry.upsertCluster` takes, and
@@ -464,12 +546,12 @@ the test suite asserts the two implementations agree rather than assuming it.
 
 ### What this does not yet do
 
-Reachability, trust anchoring, membership and gated discovery — not the rest of
-a private federation. Still outstanding: destination authentication for
-cross-boundary A2A (`/v1/a2a/delegate` returns `delivered: false` and authorises
-a delegation rather than opening a channel), datacentre locality in route
-selection, and a federated tool catalogue so one egress gateway can hold a
-vendor credential for the whole estate. See `ROADMAP.md`.
+Reachability, trust anchoring, membership, gated discovery and cross-boundary
+delegation. Still outstanding: datacentre locality in route selection — routing
+has a hop count and no notion of region, so there is nothing for multi-site
+latency optimisation to optimise against — and a federated tool catalogue, so
+one egress gateway can hold a vendor credential for the whole estate instead of
+every site keeping its own copy. See `ROADMAP.md`.
 
 ## Severity, and what it actually means
 

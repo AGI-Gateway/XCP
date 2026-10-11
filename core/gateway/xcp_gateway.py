@@ -880,14 +880,190 @@ async def a2a_delegate(request: Request) -> Response:
         return _deny(scope, why)
     audit(ctx, "a2a", f"peer={peer}")
     _m(M_REQ, stream="a2a", decision="allow")
-    # In a full deployment the gateway verifies the peer's session too, then
-    # bridges the two sessions. Here we echo an accepted delegation.
     # FOUND BY INDEPENDENT REVIEW (B.4.5). This previously returned
     # accepted=True, which a caller could reasonably read as delivery. The
     # initiating agent's authority to delegate says nothing about whether the
-    # destination authenticated or executed anything.
-    return JSONResponse({"authorized": True, "delivered": False, "peer": peer,
-                        "delegatedBy": ctx.agent_id, "task": body.get("task")})
+    # destination authenticated or executed anything. Reporting the two
+    # separately was the correction; what follows is the capability.
+    out: dict[str, Any] = {"authorized": True, "delivered": False,
+                           "peer": peer, "delegatedBy": ctx.agent_id,
+                           "task": body.get("task")}
+
+    dest = str(body.get("destination", "")).strip().lower()
+    if not dest:
+        # No destination named: the caller is authorising a delegation it will
+        # carry itself. Nothing has been delivered and the response says so.
+        out["note"] = ("no destination given, so nothing was delivered; pass "
+                       "`destination` (a peer domain) to have this gateway "
+                       "mint a ticket and deliver it")
+        return JSONResponse(out)
+
+    ticket = _mint_ticket(ctx, dest, peer=peer, scope=scope,
+                          task=body.get("task"))
+    if ticket is None:
+        out["note"] = ("this gateway has no node identity, so it cannot sign a "
+                       "delegation ticket; set XCP_NODE_KEY and XCP_NODE_DOMAIN")
+        return JSONResponse(out)
+    out["ticket"] = ticket.to_dict()
+
+    delivered, decision = await _deliver_ticket(dest, ticket,
+                                                body.get("task"))
+    out["delivered"] = delivered
+    out["destination"] = dest
+    if decision is not None:
+        # The destination's OWN decision, relayed rather than summarised. It
+        # may have admitted the delegation at a narrower tier than this
+        # gateway asserted, and the caller needs to see that rather than a
+        # yes/no that hides it.
+        out["destinationDecision"] = decision
+    audit(ctx, "a2a", f"peer={peer} dest={dest} delivered={delivered}")
+    return JSONResponse(out)
+
+
+def _mint_ticket(ctx: "Ctx", dest: str, *, peer: str, scope: str, task: Any):
+    """Sign a delegation ticket for one destination, or None if we cannot."""
+    if not _NODE_KEY or _NODE_RECORD is None:
+        return None
+    try:
+        from federation.delegation import mint
+        return mint(
+            _NODE_KEY, origin_node=_NODE_RECORD.node_id,
+            origin_domain=_NODE_DOMAIN, audience=dest,
+            agent_id=ctx.agent_id, chain_id=ctx.chain_id,
+            footprint=ctx.footprint,
+            # What this gateway VERIFIED, taken from the binding rather than
+            # from anything the caller said about itself.
+            asserted_tier=getattr(ctx.binding, "tier", "") or "A0xH0",
+            scope=scope, task=task, peer=peer,
+            cluster_id=(_CLUSTER.charter.cluster_id
+                        if _CLUSTER is not None and _CLUSTER.configured else ""),
+            max_hops=A2A_MAX_HOPS)
+    except Exception as e:                          # noqa: BLE001
+        _fed_audit(f"could not mint a delegation ticket: {type(e).__name__}")
+        return None
+
+
+async def _deliver_ticket(dest: str, ticket, task: Any):
+    """
+    Carry a ticket to the destination's /v1/a2a/accept.
+
+    Returns (delivered, decision). `delivered` is true only when the
+    destination answered -- not when it admitted. A refusal that we heard is
+    still a delivery, and conflating the two is the mistake this whole path
+    exists to stop making.
+    """
+    if _FED is None:
+        return False, None
+    peer_rec = _FED.peers.get(dest)
+    if peer_rec is None or not peer_rec.gateway_url:
+        return False, {"error": f"{dest} is not a peer of this node; peer with "
+                                f"it before delegating across the boundary"}
+    try:
+        from security.xcpsec.egress import check_url, EgressDenied
+        check_url(peer_rec.gateway_url)
+    except Exception:                               # noqa: BLE001
+        return False, {"error": "the peer's gateway URL is not permitted"}
+    try:
+        from federation.peerfetch import peer_verify
+        hc = httpx.AsyncClient(timeout=httpx.Timeout(10.0, connect=5.0),
+                               verify=peer_verify())
+        try:
+            r = await hc.post(
+                peer_rec.gateway_url.rstrip("/") + "/v1/a2a/accept",
+                json={"ticket": ticket.to_dict(), "task": task})
+        finally:
+            await hc.aclose()
+    except Exception as e:                          # noqa: BLE001
+        _fed_audit(f"delegation to {dest} undelivered: {type(e).__name__}")
+        return False, {"error": f"the destination could not be reached "
+                                f"({type(e).__name__})"}
+    try:
+        return True, r.json()
+    except Exception:                               # noqa: BLE001
+        return True, {"error": f"the destination answered {r.status_code} with "
+                               f"no readable body"}
+
+
+@app.post("/v1/a2a/accept")
+async def a2a_accept(request: Request) -> JSONResponse:
+    """
+    The destination half of a cross-boundary delegation.
+
+    This is where the authentication the draft requires actually happens. A
+    ticket asserts what the ORIGINATING gateway verified; this endpoint decides
+    what that is worth here, and the answer is never more than the origin
+    claimed and often less.
+
+    Six checks, all of them local: the ticket is signed by a node this one
+    already peers with, that node is in this node's cluster when the cluster is
+    closed, the ticket names this destination and has not expired, the task
+    presented is the task the ticket committed to, the hop budget is intact
+    with no loop, and the asserted tier is narrowed under this node's own
+    ceiling.
+    """
+    if not A2A_ACCEPT:
+        # Off by default. A node that accepts delegations is executing work on
+        # another datacentre's say-so, which is a decision an operator makes
+        # rather than one that arrives with an upgrade.
+        return JSONResponse(
+            {"error": "this node does not accept delegated tasks; set "
+                      "XCP_A2A_ACCEPT=1 to enable it"}, status_code=404)
+    if _FED is None or _NODE_RECORD is None:
+        return JSONResponse({"error": "federation not configured"},
+                            status_code=404)
+    limited = _fed_limit(request, "a2a-accept")
+    if limited is not None:
+        return limited
+
+    body = json.loads(await request.body() or b"{}")
+    try:
+        from federation.delegation import DelegationTicket, admit, DelegationError
+        ticket = DelegationTicket.from_dict(body.get("ticket") or {})
+    except Exception as e:                          # noqa: BLE001
+        return JSONResponse({"admitted": False,
+                             "problems": [f"malformed ticket: {e}"]},
+                            status_code=400)
+
+    origin = _FED.peers.get(ticket.origin_domain)
+    origin_is_peer = bool(origin and not origin.revoked
+                          and origin.node_id.lower() == ticket.origin_node.lower()
+                          and origin.trust >= _PeerTrust.VERIFIED)
+    in_cluster = None
+    if _CLUSTER is not None and _CLUSTER.closed:
+        # Membership of the ORIGIN, as this node's charter defines it. The
+        # ticket's own cluster_id is a claim and is checked against ours, not
+        # used in place of it.
+        in_cluster = bool(ticket.cluster_id and _CLUSTER.charter
+                          and ticket.cluster_id.lower()
+                          == _CLUSTER.charter.cluster_id.lower()
+                          and origin_is_peer)
+
+    decision = admit(
+        ticket, audience=_NODE_DOMAIN, self_node_id=_NODE_RECORD.node_id,
+        ceiling=A2A_TIER_CEILING, task=body.get("task"),
+        origin_is_peer=origin_is_peer, origin_in_cluster=in_cluster,
+        expected_cluster_id=(_CLUSTER.charter.cluster_id
+                             if _CLUSTER is not None and _CLUSTER.configured
+                             else ""))
+
+    _fed_audit(f"delegation from {ticket.origin_domain} agent={ticket.agent_id} "
+               f"asserted={ticket.asserted_tier} -> "
+               f"{decision.effective_tier or 'refused'}"
+               + (f" REFUSED: {decision.problems[0]}"
+                  if decision.problems else ""))
+    out = decision.to_dict()
+    out["ceiling"] = A2A_TIER_CEILING
+    out["origin"] = ticket.origin_domain
+    if not decision.admitted:
+        return JSONResponse(out, status_code=403)
+    # Admitted. Execution is the deployment's own concern: this node now holds
+    # a task it has decided it may run, at a tier it chose, and routes it like
+    # any local call -- through its own mandate gate, argument firewall and
+    # limits, against the NARROWED tier rather than the asserted one.
+    out["note"] = ("admitted at the effective tier; this node's own mandate "
+                   "gate, argument firewall and limits still apply to any "
+                   "call made on its behalf")
+    return JSONResponse(out)
 
 
 @app.post("/v1/t2t/pipe")
@@ -1091,6 +1267,36 @@ def _fed_audit(msg: str) -> None:
 
 
 H_CLUSTER_ACCESS = "xcp-cluster-access"
+
+# ── cross-boundary delegation ──────────────────────────────────────────────
+# Accepting delegated tasks is OFF by default. A node that accepts them is
+# executing work on another datacentre's say-so, which is a decision an
+# operator makes deliberately rather than one that arrives with an upgrade.
+A2A_ACCEPT = os.getenv("XCP_A2A_ACCEPT", "0") == "1"
+
+#: The most authority a delegation may carry HERE, whatever the originating
+#: gateway asserted. Defaults to the top of the lattice, which means "whatever
+#: the origin verified" -- an operator who wants cross-boundary work capped
+#: lower says so, and the asserted tier is narrowed leg by leg against this.
+A2A_TIER_CEILING = os.getenv("XCP_A2A_TIER_CEILING", "A2xH2").strip()
+
+A2A_MAX_HOPS = int(os.getenv("XCP_A2A_MAX_HOPS", "3"))
+
+try:
+    from federation.delegation import canonical_tier as _canon_tier
+    A2A_TIER_CEILING = _canon_tier(A2A_TIER_CEILING)
+except ImportError:
+    pass
+except Exception as _e:                             # noqa: BLE001
+    raise RuntimeError(
+        f"XCP_A2A_TIER_CEILING={A2A_TIER_CEILING!r} is not a lattice cell "
+        f"(expected something like A1xH1): {_e}\nRefusing to start, because a "
+        f"ceiling nobody can parse is a ceiling that does not apply.")
+
+try:
+    from federation import PeerTrust as _PeerTrust
+except ImportError:                                 # pragma: no cover
+    _PeerTrust = None
 
 #: A node in a closed cluster gates its record by default: publishing the full
 #: topology of a federation that only members may join is incoherent. An

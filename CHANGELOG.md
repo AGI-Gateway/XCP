@@ -163,6 +163,56 @@ peers — everything an attacker would use to map the estate.
   cluster — a public-facing gateway inside a private organisation, or one under
   external monitoring. Marked as weakening a control, because it does.
 
+### Cross-boundary A2A — authority that narrows at a boundary
+
+`/v1/a2a/delegate` authorised a delegation and returned `accepted: true`, which
+a caller could reasonably read as delivery. Independent review found it (B.4.5),
+the handler's own comment admitted *"here we echo an accepted delegation"*, and
+the fix at the time was to stop making the claim. That was a correction to a
+false claim; the capability did not exist. Now it does.
+
+- **`federation/delegation.py`** mints a `DelegationTicket` signed with the
+  originating gateway's **node** key, asserting what that gateway verified: the
+  agent, its tier, the scope, and a digest of the exact task. The destination
+  redeems it at `/v1/a2a/accept`, and redemption is where the authentication
+  the draft requires actually happens — six local checks, no third party.
+
+- **Authority narrows and never widens.** The origin asserts what it verified;
+  the destination decides what that is worth *there*. A ticket claiming A2xH2
+  gets A1xH1 at a destination whose ceiling is A1xH1, and no originating
+  datacentre can lift an agent above the destination's own ceiling. Narrowing
+  is per leg rather than per cell, because what backs the agent and what backs
+  the human are different claims — a destination that caps one has said nothing
+  about the other. This is the invariant `oauth_bridge.widens()` already
+  enforces when a grant becomes a mandate, applied to the hop between
+  datacentres, where a widening would be most useful to an attacker and least
+  visible to an operator. Tested across two processes, not just in the unit.
+
+- **A ticket authorises one task, not a shape of task.** The task digest is
+  signed, so whoever carries a ticket cannot choose what gets run. It is
+  canonical rather than byte-wise, so two honest parties that serialise the
+  same object differently still agree.
+
+- Bound to one destination (lateral replay fails on the audience), expires in
+  120 seconds, and an origin cannot mint itself a longer-lived one. The hop
+  **path** is signed, not just its length — a hop able to rewrite history would
+  hide where a delegation had been, and the loop check is only as good as the
+  path it reads. `extend()` deliberately returns an *unsigned* ticket, so a
+  caller that appends and forwards produces something `admit()` refuses.
+
+- **Accepting delegations is off by default** (`XCP_A2A_ACCEPT`). A node that
+  accepts them executes work on another datacentre's say-so, which an operator
+  decides deliberately rather than inherits from an upgrade.
+
+- `delivered` now means the destination answered — a refusal you heard is still
+  a delivery — and `destinationDecision` relays its own verdict rather than
+  summarising it, because it may have admitted at a narrower tier than this
+  gateway asserted and the caller needs to see that.
+
+- Every problem with a ticket is reported at once rather than one per round
+  trip. A refused ticket still reports the tier it *would* have been granted,
+  so an audit line tells an operator whether the ceiling is the problem.
+
 ### Test infrastructure
 
 - Contract tests signalled "skip" by raising `RuntimeError("SKIP: …")`, which

@@ -68,6 +68,8 @@ jobs:
         run: python tests/test_private_federation.py
       - name: Cluster membership (off-chain, and agreeing with the contract)
         run: python tests/test_cluster.py
+      - name: Cross-boundary A2A (two gateways, authority narrowing)
+        run: python tests/test_delegation_boundary.py
       - name: Triage and runbook
         run: python tests/test_triage.py
       - name: Conformance suite (reference must certify)

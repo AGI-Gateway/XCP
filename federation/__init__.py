@@ -41,6 +41,19 @@ __all__ = list(globals().get("__all__", [])) + [
     "Effect", "PeerMetrics", "Policy", "Candidate", "select", "admissible",
     "score", "concentration", "RoutingError"]
 
+from .delegation import (DELEGATION_SPEC_VERSION, DEFAULT_MAX_HOPS,
+                         DEFAULT_TICKET_TTL, Admission, DelegationError,
+                         DelegationHop, DelegationTicket, admit,
+                         canonical_tier, extend, format_tier, narrow_tier,
+                         parse_tier, task_digest)
+from .delegation import mint as mint_ticket
+from .delegation import widens as tier_widens
+__all__ = list(globals().get("__all__", [])) + [
+    "DELEGATION_SPEC_VERSION", "DEFAULT_MAX_HOPS", "DEFAULT_TICKET_TTL",
+    "Admission", "DelegationError", "DelegationHop", "DelegationTicket",
+    "admit", "canonical_tier", "extend", "format_tier", "narrow_tier",
+    "parse_tier", "task_digest", "mint_ticket", "tier_widens"]
+
 from .cluster import (CLUSTER_SPEC_VERSION, ClusterCharter, ClusterError,
                       ClusterPosture, MemberSet, MembershipClaim,
                       build_member_set, cluster_id_from_name, issue_claim,
