@@ -14,8 +14,22 @@ jobs:
       - name: Lattice + discovery tests (no deps needed)
         run: python tests/test_selfserve.py
       - name: Trust firewall + receipts
+        # Installs the full requirements, as the release job does. This step
+        # used to install only eth-account and eth-utils, and had been FAILING
+        # on every push since before the repository went public: the files it
+        # runs have grown real dependencies, and the step never caught up. It
+        # ran tests needing pyyaml before installing pyyaml, later in the same
+        # step; sealed credentials and crypto-shredding need `cryptography`;
+        # the gateway tests need fastapi, uvicorn and httpx; and the
+        # performance guard correctly reported the pure-Python ECDSA fallback,
+        # 35x slower, because coincurve was never installed.
+        #
+        # None of those were test failures. They were a workflow asserting a
+        # dependency-light claim that stopped being true, and a red badge
+        # nobody could act on. The step above still makes the claim that is
+        # actually true: the lattice, discovery and CLI layer needs nothing.
         run: |
-          pip install eth-account eth-utils
+          pip install -r requirements.txt
           python tests/test_providers.py
           python tests/test_federation.py
           python tests/test_identity.py
@@ -32,7 +46,6 @@ jobs:
           python tests/test_delegation.py
           python tests/test_privacy.py
           python tests/test_covenants.py
-          pip install pyyaml
           python tests/test_vault.py
           python tests/test_trustfirewall.py
           python tests/test_receipts.py

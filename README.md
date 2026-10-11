@@ -315,7 +315,12 @@ against an in-process EVM.
 
 ## Documentation
 
-- **Docs site**: https://agi-gateway.github.io/XCP/
+Everything below is in this repository and readable here. The `docs` workflow
+also publishes it as a site, which needs GitHub Pages switched on for the
+repository (Settings → Pages → Source: GitHub Actions) — until then the deploy
+step fails and there is no site, so this list points at the files rather than
+at a URL that would not resolve.
+
 - [Operator runbook](docs/runbook.md) — day zero, private federation, the
   first five minutes of an incident
 - [Internet-Draft](rfc/draft-xcp-trust-envelope-00.txt) — XCP as a wire
