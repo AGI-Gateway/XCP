@@ -28,6 +28,10 @@ deploy/certs/*.crt
 deploy/certs/*.key
 deploy/certs/*.srl
 dist/
+# `python -m build` writes here now that the project has a pyproject.toml.
+# Committing it would ship a second, stale copy of every package -- which also
+# breaks repo-wide greps, since build/lib/ mirrors the whole source tree.
+build/
 node_modules/
 paper/*.pdf
 secrets.yaml

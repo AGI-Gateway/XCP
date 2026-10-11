@@ -1,0 +1,72 @@
+{
+  "$comment": "Binding digests. A non-canonical routing field is REFUSED, not normalised: stripping made 'search' and 'search ' produce the same digest, which is a parser differential in its most dangerous shape. Inner whitespace is a value, not OWS, so 'sea rch' is a legitimate name and digests fine.",
+  "cases": [
+    {
+      "bodyUtf8": "",
+      "digest": "0x94f5dff40d26b105e6810d6eafc69ee33b351232007703fde8d9e1558bd14047",
+      "mcpMethod": "tools/call",
+      "mcpName": "search",
+      "ok": true
+    },
+    {
+      "bodyUtf8": "{\"q\":\"x\"}",
+      "digest": "0x1319882e468545cb31b53d5887aa87a899020c94290130ded2cca5e62c4ac059",
+      "mcpMethod": "tools/call",
+      "mcpName": "search",
+      "ok": true
+    },
+    {
+      "bodyUtf8": "{\"q\":\"y\"}",
+      "digest": "0x1cae3836b9c566bf8de02dd37a1c87ed826abc42b82a02483563b1a844437ad4",
+      "mcpMethod": "tools/call",
+      "mcpName": "search",
+      "ok": true
+    },
+    {
+      "bodyUtf8": "{\"q\":\"x\"}",
+      "digest": "0x08ed2c71fd29561ef096e22f69ccf6ad5bd7f1da0e26dc90fb68c8a93c66627e",
+      "mcpMethod": "tools/call",
+      "mcpName": "other",
+      "ok": true
+    },
+    {
+      "bodyUtf8": "",
+      "digest": "0x6ac089b098a1d432797186fa29a0bf4def2300145abd59d5bba2e2b2aac0ac81",
+      "mcpMethod": "tools/list",
+      "mcpName": "",
+      "ok": true
+    },
+    {
+      "bodyUtf8": "",
+      "digest": null,
+      "mcpMethod": "tools/call",
+      "mcpName": "search ",
+      "ok": false,
+      "reason": "Mcp-Name has leading or trailing whitespace; routing headers must be sent in canonical form so that every parser in the chain reads the same value"
+    },
+    {
+      "bodyUtf8": "",
+      "digest": null,
+      "mcpMethod": "tools/call",
+      "mcpName": " search",
+      "ok": false,
+      "reason": "Mcp-Name has leading or trailing whitespace; routing headers must be sent in canonical form so that every parser in the chain reads the same value"
+    },
+    {
+      "bodyUtf8": "",
+      "digest": null,
+      "mcpMethod": "tools/call ",
+      "mcpName": "search",
+      "ok": false,
+      "reason": "Mcp-Method has leading or trailing whitespace; routing headers must be sent in canonical form so that every parser in the chain reads the same value"
+    },
+    {
+      "bodyUtf8": "",
+      "digest": "0x28f95fe106566ae185d3ae610c53970a2e34740ec1c43c02b06ded14c2d32ac3",
+      "mcpMethod": "tools/call",
+      "mcpName": "sea rch",
+      "ok": true
+    }
+  ],
+  "function": "bindDigest"
+}

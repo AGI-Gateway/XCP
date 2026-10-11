@@ -1,0 +1,105 @@
+{
+  "$comment": "Version negotiation. A caller that advertises nothing gets the OLDEST version this build speaks, not the newest: assuming a silent peer is current is optimistic in the direction that breaks things. No common version is a refusal carrying the supported list, never a guess.",
+  "cases": [
+    {
+      "acceptHeader": "",
+      "downgraded": true,
+      "name": "silent caller gets the minimum",
+      "ok": true,
+      "parsed": [],
+      "version": "0.1"
+    },
+    {
+      "acceptHeader": "0.2",
+      "downgraded": false,
+      "name": "exact current",
+      "ok": true,
+      "parsed": [
+        "0.2"
+      ],
+      "version": "0.2"
+    },
+    {
+      "acceptHeader": "0.1,0.2",
+      "downgraded": false,
+      "name": "both, picks highest",
+      "ok": true,
+      "parsed": [
+        "0.1",
+        "0.2"
+      ],
+      "version": "0.2"
+    },
+    {
+      "acceptHeader": "0.2,0.1",
+      "downgraded": false,
+      "name": "reversed order, still highest",
+      "ok": true,
+      "parsed": [
+        "0.2",
+        "0.1"
+      ],
+      "version": "0.2"
+    },
+    {
+      "acceptHeader": " 0.1 , 0.2 ",
+      "downgraded": false,
+      "name": "whitespace around entries",
+      "ok": true,
+      "parsed": [
+        "0.1",
+        "0.2"
+      ],
+      "version": "0.2"
+    },
+    {
+      "acceptHeader": "9.9",
+      "downgraded": null,
+      "name": "unknown only",
+      "ok": false,
+      "parsed": [
+        "9.9"
+      ],
+      "reason": "no common protocol version: caller accepts ['9.9'], this implementation supports ['0.1', '0.2']",
+      "version": null
+    },
+    {
+      "acceptHeader": "9.9,0.1",
+      "downgraded": true,
+      "name": "unknown plus known",
+      "ok": true,
+      "parsed": [
+        "9.9",
+        "0.1"
+      ],
+      "version": "0.1"
+    },
+    {
+      "acceptHeader": "junk,0.2",
+      "downgraded": false,
+      "name": "malformed entry ignored among known",
+      "ok": true,
+      "parsed": [
+        "junk",
+        "0.2"
+      ],
+      "version": "0.2"
+    },
+    {
+      "acceptHeader": "junk",
+      "downgraded": null,
+      "name": "only malformed",
+      "ok": false,
+      "parsed": [
+        "junk"
+      ],
+      "reason": "no common protocol version: caller accepts ['junk'], this implementation supports ['0.1', '0.2']",
+      "version": null
+    }
+  ],
+  "function": "negotiate",
+  "supported": [
+    "0.1",
+    "0.2"
+  ]
+}

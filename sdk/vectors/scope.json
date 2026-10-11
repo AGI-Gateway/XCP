@@ -1,0 +1,116 @@
+{
+  "$comment": "Scope derivation from the mandatory MCP 2026-07-28 routing headers, with no reference to the body. The mapping is total: an unrecognised method still yields a scope string, so an unknown call is denied by default rather than allowed because no rule matched. Two results look like bugs and are not, so do not 'fix' either in a port. (1) The method is NOT lowercased: 'TOOLS/CALL' yields 'mcp:TOOLS/CALL', which no 'mcp:tools/*' mandate matches, so an uppercase method is denied -- normalising it would turn a refusal into an allow. (2) This function STRIPS the name, so ' search ' yields 'mcp:tools/search', while bindDigest REFUSES the same value as non-canonical. The asymmetry is deliberate on the binding side and tracked as a defect on this side; see bind_digest.json. An SDK reproduces both as given rather than making them agree.",
+  "cases": [
+    {
+      "mcpMethod": "tools/call",
+      "mcpName": "search",
+      "scope": "mcp:tools/search"
+    },
+    {
+      "mcpMethod": "tools/call",
+      "mcpName": "",
+      "scope": "mcp:tools/call"
+    },
+    {
+      "mcpMethod": "tools/list",
+      "mcpName": "",
+      "scope": "mcp:tools/list"
+    },
+    {
+      "mcpMethod": "tools/list",
+      "mcpName": "ignored",
+      "scope": "mcp:tools/list"
+    },
+    {
+      "mcpMethod": "resources/read",
+      "mcpName": "file://x",
+      "scope": "mcp:resources/read"
+    },
+    {
+      "mcpMethod": "resources/list",
+      "mcpName": "",
+      "scope": "mcp:resources/list"
+    },
+    {
+      "mcpMethod": "prompts/get",
+      "mcpName": "greet",
+      "scope": "mcp:prompts/greet"
+    },
+    {
+      "mcpMethod": "prompts/get",
+      "mcpName": "",
+      "scope": "mcp:prompts/get"
+    },
+    {
+      "mcpMethod": "prompts/list",
+      "mcpName": "",
+      "scope": "mcp:prompts/list"
+    },
+    {
+      "mcpMethod": "completion/complete",
+      "mcpName": "",
+      "scope": "mcp:completion/complete"
+    },
+    {
+      "mcpMethod": "tasks/get",
+      "mcpName": "",
+      "scope": "mcp:tasks/get"
+    },
+    {
+      "mcpMethod": "tasks/list",
+      "mcpName": "",
+      "scope": "mcp:tasks/list"
+    },
+    {
+      "mcpMethod": "",
+      "mcpName": "",
+      "scope": "mcp:unknown/"
+    },
+    {
+      "mcpMethod": "",
+      "mcpName": "search",
+      "scope": "mcp:unknown/"
+    },
+    {
+      "mcpMethod": "unknown/method",
+      "mcpName": "",
+      "scope": "mcp:unknown/method"
+    },
+    {
+      "mcpMethod": "unknown",
+      "mcpName": "",
+      "scope": "mcp:unknown/unknown"
+    },
+    {
+      "mcpMethod": "tools",
+      "mcpName": "",
+      "scope": "mcp:tools/unknown"
+    },
+    {
+      "mcpMethod": "tools/call",
+      "mcpName": " search ",
+      "scope": "mcp:tools/search"
+    },
+    {
+      "mcpMethod": "TOOLS/CALL",
+      "mcpName": "search",
+      "scope": "mcp:TOOLS/CALL"
+    },
+    {
+      "mcpMethod": "tools/call/extra",
+      "mcpName": "x",
+      "scope": "mcp:tools/call/extra"
+    },
+    {
+      "mcpMethod": "/",
+      "mcpName": "",
+      "scope": "mcp:unknown/unknown"
+    },
+    {
+      "mcpMethod": "a/b/c",
+      "mcpName": "",
+      "scope": "mcp:a/b/c"
+    }
+  ],
+  "function": "scopeFor"
+}

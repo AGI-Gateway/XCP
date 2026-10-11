@@ -37,6 +37,7 @@ jobs:
           python tests/test_transport.py
           python tests/test_limits.py
           python tests/test_packaging.py
+          python tests/test_sdk_contract.py
           python tests/test_security_audit.py
           python tests/test_version.py
           python tests/test_performance.py
@@ -87,6 +88,13 @@ jobs:
         run: python tests/test_locality.py
       - name: Triage and runbook
         run: python tests/test_triage.py
+      - name: SDK contract must match its sources
+        # Same guard as the committed ABIs: regenerate and diff. Five SDKs
+        # are built from these files, so a contract that has drifted from
+        # the implementation is five SDKs that are wrong together.
+        run: |
+          python scripts/generate-sdk-contract.py --check
+          python -m sdk
       - name: Conformance suite (reference must certify)
         run: python tests/test_conformance.py
 

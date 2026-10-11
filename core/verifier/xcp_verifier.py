@@ -61,8 +61,16 @@ try:
 except ImportError:
     _ETH = False
 
-    def _keccak(data: bytes) -> bytes:           # sha3-256 fallback (dev only)
-        return hashlib.sha3_256(data).digest()
+    # There is no fallback. This used to define _keccak as SHA3-256 and call it
+    # a dev-only convenience, which made the verifier the most dangerous place
+    # in the project to have an environment-dependent hash: the gateway asks
+    # the verifier whether a session footprint is valid, so a verifier running
+    # on SHA3-256 disagrees with every gateway that has eth_utils installed,
+    # and rejects sessions that are perfectly good. Refusing is the only safe
+    # answer -- see protocol/hashing.py.
+    def _keccak(data: bytes) -> bytes:
+        from protocol.hashing import keccak256
+        return keccak256(data)
 
 
 CHAIN_ID = int(os.getenv("CHAIN_ID", "8453"))

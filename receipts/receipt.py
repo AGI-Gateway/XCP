@@ -43,6 +43,7 @@ import json
 import time
 from dataclasses import dataclass, field, asdict
 from typing import Any, Optional
+from protocol.hashing import digest as _canonical_digest
 
 try:
     from eth_account import Account
@@ -57,9 +58,13 @@ RECEIPT_SPEC_VERSION = "0.1-draft"
 
 def digest(data: bytes) -> str:
     """keccak256 when the crypto stack is present, sha3-256 as a stand-in."""
-    if _ETH:
-        return "0x" + _keccak(data).hex()
-    return "0x" + hashlib.sha3_256(data).hexdigest()
+    # Delegated to protocol.hashing, which refuses rather than substituting
+    # SHA3-256 when keccak256 is unavailable. This function used to fall back
+    # silently, which made the digest depend on whether eth_utils happened to
+    # be importable -- so two nodes on the same version computed different
+    # digests for identical bytes and rejected each other's credentials with
+    # nothing in either log to say why. See that module's docstring.
+    return _canonical_digest(data)
 
 
 def canonical(obj: Any) -> bytes:

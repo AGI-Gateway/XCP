@@ -294,6 +294,14 @@ PRODUCTION = _PROFILE == "production"
 import sys as _sys, pathlib as _pathlib
 _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[2]))
 
+# Identity parsing is not optional the way Prometheus is. A gateway that cannot
+# parse XCP-Agent-Identity cannot authenticate anyone, so this is a module-scope
+# import that fails at startup rather than a lazy one that fails on the first
+# request. The parse itself lives in protocol.identity because the SDK
+# conformance vectors are generated from it -- see that module's docstring for
+# why one parser matters more here than for most headers.
+from protocol.identity import try_parse as _parse_identity
+
 PRIVATE_PEER_CIDRS: tuple = ()
 PEER_TRUST: dict[str, Any] = {"anchor": "system", "bundle": "", "authorities": 0}
 
@@ -692,37 +700,18 @@ class Ctx:
 
 
 def parse_ctx(request: Request) -> Ctx:
-    hdr = request.headers.get("xcp-agent-identity", "")
-    # Optional whitespace around a field VALUE is not part of the value
-    # ([RFC9110] 5.5), so it is stripped before parsing. Inner whitespace is
-    # not OWS and stays refused by the canonical-integer check below.
-    #
-    # FOUND BY DIFFERENTIAL ANALYSIS. "42001;8453;0xab…ab " answered 401 here
-    # and 403 on the Node implementation, and the disagreement was not in
-    # either parser -- both are strict. Node's HTTP server strips OWS before
-    # the application sees it, as RFC 9110 says a recipient should; uvicorn
-    # passes it through, so this gateway compared a footprint with a trailing
-    # space against the one it had registered, failed to find it, and reported
-    # an unverified session.
-    #
-    # Refusing OWS instead was not an option: a parser that never receives the
-    # whitespace cannot refuse it, so "reject non-canonical input" is
-    # unimplementable on one of the two servers and the implementations could
-    # not have converged. Stripping is what RFC 9110 already requires of a
-    # recipient, and it leaves the strictness that matters -- which bytes count
-    # as the footprint -- identical on both sides.
-    parts = hdr.strip().split(";")
-    if len(parts) != 3:
-        return Ctx(reason="missing or malformed XCP-Agent-Identity")
-    # Strict rather than coercive. int() accepts "+42001", " 42001" and
-    # "42_001", all of which differ from what another parser in the chain
-    # reads from the same bytes. Found by differential analysis against the
-    # Node implementation, which refused what this one silently normalised.
-    if not (parts[0].isdigit() and parts[1].isdigit()):
-        return Ctx(reason="identity fields must be canonical decimal integers")
-    agent_id, chain_id, footprint = int(parts[0]), int(parts[1]), parts[2]
-    ok, reason, binding = verify_session(footprint, agent_id)
-    return Ctx(agent_id=agent_id, chain_id=chain_id, footprint=footprint,
+    # One parser, in protocol.identity, shared with every SDK and generated
+    # into the conformance vectors. The OWS handling, the exactly-three-fields
+    # rule, the canonical-decimal check and the verbatim footprint all live
+    # there with the differential findings that produced each one; duplicating
+    # the rules here is how the Python and Node gateways came to disagree about
+    # the same bytes in the first place.
+    ident, reason = _parse_identity(request.headers.get("xcp-agent-identity", ""))
+    if ident is None:
+        return Ctx(reason=reason)
+    ok, reason, binding = verify_session(ident.footprint, ident.agent_id)
+    return Ctx(agent_id=ident.agent_id, chain_id=ident.chain_id,
+               footprint=ident.footprint,
                verified=ok, reason=reason, binding=binding)
 
 

@@ -41,6 +41,23 @@ try:
 except ImportError:                       # crypto optional for dry-run/tests
     _ETH = False
 
+# The canonical digest. Installed from the wheel, `protocol` is a sibling
+# top-level package and the first import succeeds. Imported by file path -- as
+# tests/test_e2e.py and examples/ do, and as anyone copying this single file
+# into their project will do -- it is not, so the repository root is added and
+# the import retried. The same thing the gateway does for the same reason.
+#
+# Note what this is NOT: a fallback to a different hash. If keccak256 is
+# genuinely unavailable, protocol.hashing raises, because a footprint computed
+# with the wrong function registers successfully and fails later somewhere
+# else.
+try:
+    from protocol.hashing import digest as _canonical_digest
+except ImportError:                       # pragma: no cover - layout dependent
+    import sys as _sys
+    _sys.path.insert(0, str(Path(__file__).resolve().parents[3]))
+    from protocol.hashing import digest as _canonical_digest
+
 
 # --------------------------------------------------------------------------
 # Configuration + identity
@@ -102,11 +119,12 @@ def cert_footprint(cert_pem: bytes) -> str:
     from cryptography import x509
     from cryptography.hazmat.primitives.serialization import Encoding
     der = x509.load_pem_x509_certificate(cert_pem).public_bytes(Encoding.DER)
-    try:
-        from eth_utils import keccak
-        return "0x" + keccak(der).hex()
-    except Exception:
-        return "0x" + hashlib.sha3_256(der).hexdigest()
+    # No SHA3-256 fallback. This value is bound to the agent in the Session
+    # Registry and compared byte-for-byte by every peer, so a client that
+    # computed it with a different hash would register a footprint nobody else
+    # can reproduce -- and would do so successfully, failing only later and
+    # elsewhere. protocol.hashing refuses instead.
+    return _canonical_digest(der)
 
 
 # --------------------------------------------------------------------------
@@ -205,9 +223,12 @@ class XCPClient:
     def _local_footprint(self) -> str:
         if self.identity.cert_path:
             return cert_footprint(Path(self.identity.cert_path).read_bytes())
-        # dry-run footprint from agent id (tests without real certs)
-        return "0x" + hashlib.sha3_256(
-            f"agent:{self.identity.agent_id}".encode()).hexdigest()
+        # Dry-run footprint from the agent id, for tests without real certs.
+        # Uses the canonical digest like everything else: this value only has
+        # to be stable, not interoperable, but a second hash function in the
+        # codebase is indistinguishable from the defect that one replaced, and
+        # anything calling itself a footprint should be computed one way.
+        return _canonical_digest(f"agent:{self.identity.agent_id}".encode())
 
     def close(self) -> None:
         if self.session:

@@ -1,0 +1,141 @@
+# XCP — Python distribution.
+#
+# WHY THE BASE INSTALL HAS NO DEPENDENCIES
+# ----------------------------------------
+# requirements.txt already states the claim: the `xcp` CLI, the trust lattice
+# and the discovery modules are standard library only. That claim is worth
+# packaging rather than merely documenting, because the people most likely to
+# evaluate a trust layer are the ones least able to pull nine transitive
+# dependencies into an environment to do it. `pip install xcp` installs nothing
+# but this project.
+#
+# Everything that needs a dependency is an extra, and each extra exists because
+# a specific surface needs it -- not as a convenience grouping. `xcp[gateway]`
+# runs a node; `xcp[client]` calls one; `xcp[admin]` operates a federation.
+#
+# THE ONE THING TO WATCH
+# ----------------------
+# `coincurve` is not optional for anything that verifies signatures on a hot
+# path. Without it eth-keys silently falls back to pure-Python ECDSA at roughly
+# 35x the cost (measured; see bench/). A deployment that omits it does not fail,
+# it just gets slow in a way nobody attributes to a missing wheel -- so it sits
+# in `client` and `gateway` rather than in an `accel` extra somebody would skip.
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "xcp"
+version = "0.1.0"
+description = "A trust layer for the agentic internet: per-call authority decisions for AI agents, tools and federated nodes."
+readme = "README.md"
+requires-python = ">=3.11"
+license = { file = "LICENSE" }
+authors = [{ name = "AGI-Gateway" }]
+keywords = [
+  "agent", "mcp", "model-context-protocol", "a2a", "trust", "authorization",
+  "federation", "gateway", "erc-8004", "zero-trust",
+]
+classifiers = [
+  "Development Status :: 3 - Alpha",
+  "Intended Audience :: Developers",
+  "Intended Audience :: System Administrators",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Topic :: Security",
+  "Topic :: Internet :: WWW/HTTP :: HTTP Servers",
+  "Topic :: Software Development :: Libraries :: Python Modules",
+  "Typing :: Typed",
+]
+# Deliberately empty. See the header.
+dependencies = []
+
+[project.urls]
+Homepage = "https://github.com/AGI-Gateway/XCP"
+Source = "https://github.com/AGI-Gateway/XCP"
+Issues = "https://github.com/AGI-Gateway/XCP/issues"
+Changelog = "https://github.com/AGI-Gateway/XCP/blob/main/CHANGELOG.md"
+Security = "https://github.com/AGI-Gateway/XCP/blob/main/SECURITY.md"
+
+[project.optional-dependencies]
+# Call a gateway: sign mandates, open sessions, invoke tools.
+client = [
+  "httpx>=0.27",
+  "eth-account>=0.13",
+  "eth-utils>=4.0",
+  "coincurve>=19.0",
+  "cryptography>=42.0",
+]
+# Run a node: gateway, server or verifier.
+gateway = [
+  "fastapi>=0.110",
+  "uvicorn[standard]>=0.27",
+  "httpx>=0.27",
+  "eth-account>=0.13",
+  "eth-utils>=4.0",
+  "coincurve>=19.0",
+  "cryptography>=42.0",
+  "prometheus-client>=0.20",
+  "pyyaml>=6.0",
+]
+# Operate a federation: cluster charters, registry reads, revocation.
+admin = [
+  "web3>=7.0",
+  "eth-account>=0.13",
+  "eth-utils>=4.0",
+  "cryptography>=42.0",
+  "pyyaml>=6.0",
+]
+# Telemetry is a data-export path. Read telemetry/attributes.py before
+# raising XCP_OTEL_DETAIL; without these every instrumentation call is a no-op.
+otel = [
+  "opentelemetry-api>=1.20",
+  "opentelemetry-sdk>=1.20",
+  "opentelemetry-exporter-otlp-proto-http>=1.20",
+]
+# Contract compilation and the on-chain verifier path.
+chain = ["web3>=7.0", "eth-tester>=0.12", "py-evm>=0.10"]
+dev = [
+  "hypothesis>=6.100",
+  "pyyaml>=6.0",
+  "mkdocs-material>=9.5",
+]
+all = [
+  "xcp[gateway]",
+  "xcp[admin]",
+  "xcp[otel]",
+]
+
+[project.scripts]
+xcp = "cli.xcp.main:main"
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = [
+  "cli*", "compliance*", "conformance*", "connectors*", "core*", "discovery*",
+  "federation*", "ops*", "policy*", "privacy*", "protocol*", "providers*",
+  "receipts*", "sdk*", "security*", "telemetry*", "trust*", "trustfirewall*",
+  "vault*",
+]
+exclude = [
+  "tests*", "examples*", "bench*", "docs*", "scripts*", "deploy*", "impl*",
+  "paper*", "rfc*", "*.__pycache__*", "*.tests*",
+]
+
+[tool.setuptools.package-data]
+# The SDK contract ships with the wheel so a consumer can run the vectors
+# against their own port without cloning the repository.
+sdk = ["contract/*.json", "vectors/*.json"]
+# The catalogue snapshot is 4.7MB and makes `xcp catalog` work offline. It
+# carries its own `generatedAt`, so staleness is visible rather than implied.
+connectors = ["snapshot/*.json", "catalog/*"]
+core = ["contracts/build/*.json", "proto/*.proto"]
+policy = ["*.yaml", "*.yml"]
+
+# NOTE: no [tool.setuptools] license-files key. It is deprecated in favour of
+# project.license-files (setuptools>=77), and setting both forms conflicts under
+# PEP 639. setuptools already includes LICENSE from the `license` field above,
+# so the correct action is to declare neither and let it do that.

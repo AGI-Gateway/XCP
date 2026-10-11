@@ -1,0 +1,411 @@
+{
+  "$comment": "XCP-Agent-Identity parse vectors. `header` is the exact field value as received. Implementations must strip ONLY SP and HTAB; the 'is NOT OWS' cases fail for any SDK that calls its language's trim(). Note that an empty footprint parses successfully -- whether it matches a binding is a question for the session registry, not the parser, and an SDK must not second-guess that here.",
+  "cases": [
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "",
+      "name": "empty",
+      "ok": false,
+      "reason": "missing or malformed XCP-Agent-Identity"
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab",
+      "header": "42001;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "canonical",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab",
+      "header": " 42001;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "leading SP",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab",
+      "header": "42001;8453;0xabababababababababababababababababababababababababababababababab ",
+      "name": "trailing SP",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab",
+      "header": "\t42001;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "leading HTAB",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab",
+      "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\t",
+      "name": "trailing HTAB",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab",
+      "header": " \t42001;8453;0xabababababababababababababababababababababababababababababababab\t ",
+      "name": "both OWS",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "42001; 8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "inner SP before chain",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "42001 ;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "inner SP after agent",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "42001;8453",
+      "name": "two fields",
+      "ok": false,
+      "reason": "missing or malformed XCP-Agent-Identity"
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "42001;8453;0xabababababababababababababababababababababababababababababababab;x",
+      "name": "four fields",
+      "ok": false,
+      "reason": "missing or malformed XCP-Agent-Identity"
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "42001",
+      "name": "one field",
+      "ok": false,
+      "reason": "missing or malformed XCP-Agent-Identity"
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "",
+      "header": "42001;8453;",
+      "name": "empty footprint",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "-1;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "negative agent",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "+42001;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "plus-prefixed agent",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "42_001;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "underscored agent",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "abc;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "non-numeric agent",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    },
+    {
+      "agentId": 9999999999999999999999999999999999999999,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab",
+      "header": "9999999999999999999999999999999999999999;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "huge agent",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": 0,
+      "chainId": 0,
+      "footprint": "0xabababababababababababababababababababababababababababababababab",
+      "header": "0;0;0xabababababababababababababababababababababababababababababababab",
+      "name": "zero agent",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0XABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB",
+      "header": "42001;8453;0XABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB",
+      "name": "footprint uppercased",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0Xabababababababababababababababababababababababababababababababab",
+      "header": "42001;8453;0Xabababababababababababababababababababababababababababababababab",
+      "name": "footprint 0X prefix",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xab",
+      "header": "42001;8453;0xab",
+      "name": "short footprint",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "abababababababababababababababababababababababababababababababab",
+      "header": "42001;8453;abababababababababababababababababababababababababababababababab",
+      "name": "footprint without 0x",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab\n",
+      "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\n",
+      "name": "trailing LF is NOT OWS",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "\n42001;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "leading LF is NOT OWS",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab\r",
+      "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\r",
+      "name": "trailing CR is NOT OWS",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "\r42001;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "leading CR is NOT OWS",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab\u000b",
+      "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\u000b",
+      "name": "trailing VT is NOT OWS",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "\u000b42001;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "leading VT is NOT OWS",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab\f",
+      "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\f",
+      "name": "trailing FF is NOT OWS",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "\f42001;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "leading FF is NOT OWS",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab\u0085",
+      "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\u0085",
+      "name": "trailing NEL is NOT OWS",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "\u008542001;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "leading NEL is NOT OWS",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab\u00a0",
+      "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\u00a0",
+      "name": "trailing NBSP is NOT OWS",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "\u00a042001;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "leading NBSP is NOT OWS",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab\u1680",
+      "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\u1680",
+      "name": "trailing OGHAM_SPACE is NOT OWS",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "\u168042001;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "leading OGHAM_SPACE is NOT OWS",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab\u2000",
+      "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\u2000",
+      "name": "trailing EN_QUAD is NOT OWS",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "\u200042001;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "leading EN_QUAD is NOT OWS",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab\u202f",
+      "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\u202f",
+      "name": "trailing NARROW_NBSP is NOT OWS",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "\u202f42001;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "leading NARROW_NBSP is NOT OWS",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab\u3000",
+      "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\u3000",
+      "name": "trailing IDEOGRAPHIC_SPACE is NOT OWS",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "\u300042001;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "leading IDEOGRAPHIC_SPACE is NOT OWS",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    },
+    {
+      "agentId": 42001,
+      "chainId": 8453,
+      "footprint": "0xabababababababababababababababababababababababababababababababab\u200b",
+      "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\u200b",
+      "name": "trailing ZWSP is NOT OWS",
+      "ok": true,
+      "reason": null
+    },
+    {
+      "agentId": null,
+      "chainId": null,
+      "footprint": null,
+      "header": "\u200b42001;8453;0xabababababababababababababababababababababababababababababababab",
+      "name": "leading ZWSP is NOT OWS",
+      "ok": false,
+      "reason": "identity fields must be canonical decimal integers"
+    }
+  ],
+  "function": "parseAgentIdentity"
+}

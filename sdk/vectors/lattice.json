@@ -1,0 +1,483 @@
+{
+  "$comment": "The nine envelopes, and what entitlements do to them. spendCapMinor 0 means no PROTOCOL cap, not an unlimited one: at A2xH2 the entitlement supplies the real limit. An SDK must not render 0 as 'unlimited' in a consent prompt.",
+  "cells": [
+    {
+      "agentTier": 0,
+      "cell": "A0xH0",
+      "envelope": {
+        "cell": "A0xH0",
+        "name": "Sandbox",
+        "notes": "Read-only, rate-limited front door. No principal to bill or hold liable.",
+        "posture": "enforce",
+        "rails": 0,
+        "railsList": [],
+        "requires_receipt": false,
+        "scopes": [
+          "mcp:tools/list",
+          "mcp:resources/list",
+          "mcp:resources/read",
+          "mcp:prompts/*",
+          "mcp:completion/complete",
+          "mcp:tasks/get",
+          "mcp:tasks/list"
+        ],
+        "settlement": "none",
+        "spend_cap_minor": 0,
+        "ttl_seconds": 3600
+      },
+      "humanTier": 0
+    },
+    {
+      "agentTier": 0,
+      "cell": "A0xH1",
+      "envelope": {
+        "cell": "A0xH1",
+        "name": "Metered",
+        "notes": "Cheap writes against a personal cap; the verified human bears liability.",
+        "posture": "enforce",
+        "rails": 1,
+        "railsList": [
+          "X402"
+        ],
+        "requires_receipt": true,
+        "scopes": [
+          "mcp:tools/list",
+          "mcp:resources/list",
+          "mcp:resources/read",
+          "mcp:prompts/*",
+          "mcp:completion/complete",
+          "mcp:tasks/get",
+          "mcp:tasks/list",
+          "mcp:tools/*",
+          "a2a:delegate/*"
+        ],
+        "settlement": "metered",
+        "spend_cap_minor": 500,
+        "ttl_seconds": 14400
+      },
+      "humanTier": 1
+    },
+    {
+      "agentTier": 0,
+      "cell": "A0xH2",
+      "envelope": {
+        "cell": "A0xH2",
+        "name": "Shadowed",
+        "notes": "Corporate human but unbacked agent: observe mode, audit-only, no settlement. Capped by the weaker leg \u2014 register the agent to unlock.",
+        "posture": "observe",
+        "rails": 0,
+        "railsList": [],
+        "requires_receipt": false,
+        "scopes": [
+          "mcp:tools/list",
+          "mcp:resources/list",
+          "mcp:resources/read",
+          "mcp:prompts/*",
+          "mcp:completion/complete",
+          "mcp:tasks/get",
+          "mcp:tasks/list"
+        ],
+        "settlement": "none",
+        "spend_cap_minor": 0,
+        "ttl_seconds": 3600
+      },
+      "humanTier": 2
+    },
+    {
+      "agentTier": 1,
+      "cell": "A1xH0",
+      "envelope": {
+        "cell": "A1xH0",
+        "name": "Open marketplace",
+        "notes": "Reputation-bearing agent with no human principal \u2014 escrowed settlement only.",
+        "posture": "enforce",
+        "rails": 1,
+        "railsList": [
+          "X402"
+        ],
+        "requires_receipt": true,
+        "scopes": [
+          "mcp:tools/list",
+          "mcp:resources/list",
+          "mcp:resources/read",
+          "mcp:prompts/*",
+          "mcp:completion/complete",
+          "mcp:tasks/get",
+          "mcp:tasks/list",
+          "mcp:tools/*",
+          "a2a:delegate/*"
+        ],
+        "settlement": "escrow",
+        "spend_cap_minor": 2000,
+        "ttl_seconds": 28800
+      },
+      "humanTier": 0
+    },
+    {
+      "agentTier": 1,
+      "cell": "A1xH1",
+      "envelope": {
+        "cell": "A1xH1",
+        "name": "Consumer commerce",
+        "notes": "Personal spend cap tied to a verified individual; marketplace counterparties.",
+        "posture": "enforce",
+        "rails": 3,
+        "railsList": [
+          "X402",
+          "AP2"
+        ],
+        "requires_receipt": true,
+        "scopes": [
+          "mcp:tools/list",
+          "mcp:resources/list",
+          "mcp:resources/read",
+          "mcp:prompts/*",
+          "mcp:completion/complete",
+          "mcp:tasks/get",
+          "mcp:tasks/list",
+          "mcp:tools/*",
+          "a2a:delegate/*",
+          "t2t:chain/*"
+        ],
+        "settlement": "metered",
+        "spend_cap_minor": 25000,
+        "ttl_seconds": 86400
+      },
+      "humanTier": 1
+    },
+    {
+      "agentTier": 1,
+      "cell": "A1xH2",
+      "envelope": {
+        "cell": "A1xH2",
+        "name": "Delegated corporate",
+        "notes": "Budget and counterparties narrowed by entitlement attributes from the IdP.",
+        "posture": "enforce",
+        "rails": 7,
+        "railsList": [
+          "X402",
+          "AP2",
+          "MPP"
+        ],
+        "requires_receipt": true,
+        "scopes": [
+          "mcp:tools/list",
+          "mcp:resources/list",
+          "mcp:resources/read",
+          "mcp:prompts/*",
+          "mcp:completion/complete",
+          "mcp:tasks/get",
+          "mcp:tasks/list",
+          "mcp:tools/*",
+          "a2a:delegate/*",
+          "t2t:chain/*"
+        ],
+        "settlement": "metered",
+        "spend_cap_minor": 250000,
+        "ttl_seconds": 86400
+      },
+      "humanTier": 2
+    },
+    {
+      "agentTier": 2,
+      "cell": "A2xH0",
+      "envelope": {
+        "cell": "A2xH0",
+        "name": "Service agent",
+        "notes": "Autonomous under the company's own liability \u2014 the company IS the principal. Deliberately NOT capped by the absent human.",
+        "posture": "enforce",
+        "rails": 3,
+        "railsList": [
+          "X402",
+          "AP2"
+        ],
+        "requires_receipt": true,
+        "scopes": [
+          "mcp:tools/list",
+          "mcp:resources/list",
+          "mcp:resources/read",
+          "mcp:prompts/*",
+          "mcp:completion/complete",
+          "mcp:tasks/get",
+          "mcp:tasks/list",
+          "mcp:tools/*",
+          "a2a:delegate/*",
+          "t2t:chain/*"
+        ],
+        "settlement": "metered",
+        "spend_cap_minor": 100000,
+        "ttl_seconds": 86400
+      },
+      "humanTier": 0
+    },
+    {
+      "agentTier": 2,
+      "cell": "A2xH1",
+      "envelope": {
+        "cell": "A2xH1",
+        "name": "Professional",
+        "notes": "Company agent acting for one individual; contract-scoped.",
+        "posture": "enforce",
+        "rails": 7,
+        "railsList": [
+          "X402",
+          "AP2",
+          "MPP"
+        ],
+        "requires_receipt": true,
+        "scopes": [
+          "mcp:tools/list",
+          "mcp:resources/list",
+          "mcp:resources/read",
+          "mcp:prompts/*",
+          "mcp:completion/complete",
+          "mcp:tasks/get",
+          "mcp:tasks/list",
+          "mcp:tools/*",
+          "a2a:delegate/*",
+          "t2t:chain/*"
+        ],
+        "settlement": "metered",
+        "spend_cap_minor": 500000,
+        "ttl_seconds": 86400
+      },
+      "humanTier": 1
+    },
+    {
+      "agentTier": 2,
+      "cell": "A2xH2",
+      "envelope": {
+        "cell": "A2xH2",
+        "name": "Full settlement",
+        "notes": "Enterprise \u2194 enterprise. Entitlement-bound budget, all rails, complete audit. spend_cap 0 = no protocol cap; the entitlement supplies the real limit.",
+        "posture": "enforce",
+        "rails": 15,
+        "railsList": [
+          "X402",
+          "AP2",
+          "MPP",
+          "ACP"
+        ],
+        "requires_receipt": true,
+        "scopes": [
+          "mcp:tools/list",
+          "mcp:resources/list",
+          "mcp:resources/read",
+          "mcp:prompts/*",
+          "mcp:completion/complete",
+          "mcp:tasks/get",
+          "mcp:tasks/list",
+          "mcp:tools/*",
+          "a2a:delegate/*",
+          "t2t:chain/*",
+          "pay:*"
+        ],
+        "settlement": "full",
+        "spend_cap_minor": 0,
+        "ttl_seconds": 604800
+      },
+      "humanTier": 2
+    }
+  ],
+  "entitlementNarrowing": [
+    {
+      "cell": "A2xH2",
+      "entitlements": {
+        "allowedScopes": null,
+        "approvalLimitMinor": 1000,
+        "costCenter": "",
+        "deniedScopes": [],
+        "groups": []
+      },
+      "envelope": {
+        "cell": "A2xH2",
+        "name": "Full settlement",
+        "notes": "Enterprise \u2194 enterprise. Entitlement-bound budget, all rails, complete audit. spend_cap 0 = no protocol cap; the entitlement supplies the real limit.",
+        "posture": "enforce",
+        "rails": 15,
+        "railsList": [
+          "X402",
+          "AP2",
+          "MPP",
+          "ACP"
+        ],
+        "requires_receipt": true,
+        "scopes": [
+          "mcp:tools/list",
+          "mcp:resources/list",
+          "mcp:resources/read",
+          "mcp:prompts/*",
+          "mcp:completion/complete",
+          "mcp:tasks/get",
+          "mcp:tasks/list",
+          "mcp:tools/*",
+          "a2a:delegate/*",
+          "t2t:chain/*",
+          "pay:*"
+        ],
+        "settlement": "full",
+        "spend_cap_minor": 1000,
+        "ttl_seconds": 604800
+      },
+      "name": "lower approval limit wins"
+    },
+    {
+      "cell": "A2xH2",
+      "entitlements": {
+        "allowedScopes": null,
+        "approvalLimitMinor": 10000000,
+        "costCenter": "",
+        "deniedScopes": [],
+        "groups": []
+      },
+      "envelope": {
+        "cell": "A2xH2",
+        "name": "Full settlement",
+        "notes": "Enterprise \u2194 enterprise. Entitlement-bound budget, all rails, complete audit. spend_cap 0 = no protocol cap; the entitlement supplies the real limit.",
+        "posture": "enforce",
+        "rails": 15,
+        "railsList": [
+          "X402",
+          "AP2",
+          "MPP",
+          "ACP"
+        ],
+        "requires_receipt": true,
+        "scopes": [
+          "mcp:tools/list",
+          "mcp:resources/list",
+          "mcp:resources/read",
+          "mcp:prompts/*",
+          "mcp:completion/complete",
+          "mcp:tasks/get",
+          "mcp:tasks/list",
+          "mcp:tools/*",
+          "a2a:delegate/*",
+          "t2t:chain/*",
+          "pay:*"
+        ],
+        "settlement": "full",
+        "spend_cap_minor": 10000000,
+        "ttl_seconds": 604800
+      },
+      "name": "higher approval limit is ignored"
+    },
+    {
+      "cell": "A2xH2",
+      "entitlements": {
+        "allowedScopes": [
+          "mcp:tools/list"
+        ],
+        "approvalLimitMinor": null,
+        "costCenter": "",
+        "deniedScopes": [],
+        "groups": []
+      },
+      "envelope": {
+        "cell": "A2xH2",
+        "name": "Full settlement",
+        "notes": "Enterprise \u2194 enterprise. Entitlement-bound budget, all rails, complete audit. spend_cap 0 = no protocol cap; the entitlement supplies the real limit.",
+        "posture": "enforce",
+        "rails": 15,
+        "railsList": [
+          "X402",
+          "AP2",
+          "MPP",
+          "ACP"
+        ],
+        "requires_receipt": true,
+        "scopes": [
+          "mcp:tools/list",
+          "mcp:tools/*"
+        ],
+        "settlement": "full",
+        "spend_cap_minor": 0,
+        "ttl_seconds": 604800
+      },
+      "name": "allowed_scopes intersects"
+    },
+    {
+      "cell": "A2xH2",
+      "entitlements": {
+        "allowedScopes": null,
+        "approvalLimitMinor": null,
+        "costCenter": "",
+        "deniedScopes": [
+          "mcp:tools/*"
+        ],
+        "groups": []
+      },
+      "envelope": {
+        "cell": "A2xH2",
+        "name": "Full settlement",
+        "notes": "Enterprise \u2194 enterprise. Entitlement-bound budget, all rails, complete audit. spend_cap 0 = no protocol cap; the entitlement supplies the real limit.",
+        "posture": "enforce",
+        "rails": 15,
+        "railsList": [
+          "X402",
+          "AP2",
+          "MPP",
+          "ACP"
+        ],
+        "requires_receipt": true,
+        "scopes": [
+          "mcp:resources/list",
+          "mcp:resources/read",
+          "mcp:prompts/*",
+          "mcp:completion/complete",
+          "mcp:tasks/get",
+          "mcp:tasks/list",
+          "a2a:delegate/*",
+          "t2t:chain/*",
+          "pay:*"
+        ],
+        "settlement": "full",
+        "spend_cap_minor": 0,
+        "ttl_seconds": 604800
+      },
+      "name": "denied_scopes subtracts"
+    },
+    {
+      "cell": "A2xH2",
+      "entitlements": {
+        "allowedScopes": null,
+        "approvalLimitMinor": null,
+        "costCenter": "",
+        "deniedScopes": [],
+        "groups": []
+      },
+      "envelope": {
+        "cell": "A2xH2",
+        "name": "Full settlement",
+        "notes": "Enterprise \u2194 enterprise. Entitlement-bound budget, all rails, complete audit. spend_cap 0 = no protocol cap; the entitlement supplies the real limit.",
+        "posture": "enforce",
+        "rails": 15,
+        "railsList": [
+          "X402",
+          "AP2",
+          "MPP",
+          "ACP"
+        ],
+        "requires_receipt": true,
+        "scopes": [
+          "mcp:tools/list",
+          "mcp:resources/list",
+          "mcp:resources/read",
+          "mcp:prompts/*",
+          "mcp:completion/complete",
+          "mcp:tasks/get",
+          "mcp:tasks/list",
+          "mcp:tools/*",
+          "a2a:delegate/*",
+          "t2t:chain/*",
+          "pay:*"
+        ],
+        "settlement": "full",
+        "spend_cap_minor": 0,
+        "ttl_seconds": 604800
+      },
+      "name": "empty entitlements change nothing"
+    }
+  ],
+  "function": "resolve"
+}

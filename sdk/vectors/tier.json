@@ -1,0 +1,232 @@
+{
+  "$comment": "Tier arithmetic. Narrowing is per leg with min(); widens() is the guard that refuses a ticket granting more than the origin held, and it mirrors the predicate guarding the OAuth bridge. Note canonical_tier accepts case variants but the canonical form is 'A2xH2' with a lowercase x -- an SDK that upper-cases the whole cell produces 'A2XH2' and will not match the lattice.",
+  "canonicalTier": [
+    {
+      "canonical": "A2xH2",
+      "input": "A2xH2",
+      "ok": true
+    },
+    {
+      "canonical": "A2xH2",
+      "input": "a2xh2",
+      "ok": true
+    },
+    {
+      "canonical": "A2xH2",
+      "input": "A2XH2",
+      "ok": true
+    },
+    {
+      "canonical": "A0xH0",
+      "input": "A0xH0",
+      "ok": true
+    },
+    {
+      "canonical": "A1xH2",
+      "input": "A1xH2",
+      "ok": true
+    },
+    {
+      "canonical": "A2xH2",
+      "input": " A2xH2 ",
+      "ok": true
+    },
+    {
+      "canonical": null,
+      "input": "A2\u00d7H2",
+      "ok": false,
+      "reason": "DelegationError"
+    },
+    {
+      "canonical": null,
+      "input": "A3xH0",
+      "ok": false,
+      "reason": "DelegationError"
+    },
+    {
+      "canonical": null,
+      "input": "AxH",
+      "ok": false,
+      "reason": "DelegationError"
+    },
+    {
+      "canonical": null,
+      "input": "",
+      "ok": false,
+      "reason": "DelegationError"
+    },
+    {
+      "canonical": null,
+      "input": "A2H2",
+      "ok": false,
+      "reason": "DelegationError"
+    },
+    {
+      "canonical": null,
+      "input": "A2xH9",
+      "ok": false,
+      "reason": "DelegationError"
+    }
+  ],
+  "functions": [
+    "canonicalTier",
+    "narrowTier",
+    "widens"
+  ],
+  "narrowTier": [
+    {
+      "asserted": "A2xH2",
+      "ceiling": "A2xH2",
+      "effective": "A2xH2",
+      "ok": true
+    },
+    {
+      "asserted": "A2xH2",
+      "ceiling": "A1xH2",
+      "effective": "A1xH2",
+      "ok": true
+    },
+    {
+      "asserted": "A2xH2",
+      "ceiling": "A0xH0",
+      "effective": "A0xH0",
+      "ok": true
+    },
+    {
+      "asserted": "A0xH0",
+      "ceiling": "A2xH2",
+      "effective": "A0xH0",
+      "ok": true
+    },
+    {
+      "asserted": "A1xH1",
+      "ceiling": "A2xH0",
+      "effective": "A1xH0",
+      "ok": true
+    },
+    {
+      "asserted": "A2xH0",
+      "ceiling": "A1xH2",
+      "effective": "A1xH0",
+      "ok": true
+    },
+    {
+      "asserted": "A0xH2",
+      "ceiling": "A2xH1",
+      "effective": "A0xH1",
+      "ok": true
+    },
+    {
+      "asserted": "A1xH2",
+      "ceiling": "A1xH1",
+      "effective": "A1xH1",
+      "ok": true
+    }
+  ],
+  "parseTier": [
+    {
+      "agent": 0,
+      "cell": "A0xH0",
+      "human": 0
+    },
+    {
+      "agent": 1,
+      "cell": "A1xH1",
+      "human": 1
+    },
+    {
+      "agent": 2,
+      "cell": "A2xH2",
+      "human": 2
+    },
+    {
+      "agent": 2,
+      "cell": "A2xH0",
+      "human": 0
+    },
+    {
+      "agent": 0,
+      "cell": "A0xH2",
+      "human": 2
+    }
+  ],
+  "roundTrip": [
+    {
+      "agent": 0,
+      "cell": "A0xH0",
+      "human": 0
+    },
+    {
+      "agent": 0,
+      "cell": "A0xH1",
+      "human": 1
+    },
+    {
+      "agent": 0,
+      "cell": "A0xH2",
+      "human": 2
+    },
+    {
+      "agent": 1,
+      "cell": "A1xH0",
+      "human": 0
+    },
+    {
+      "agent": 1,
+      "cell": "A1xH1",
+      "human": 1
+    },
+    {
+      "agent": 1,
+      "cell": "A1xH2",
+      "human": 2
+    },
+    {
+      "agent": 2,
+      "cell": "A2xH0",
+      "human": 0
+    },
+    {
+      "agent": 2,
+      "cell": "A2xH1",
+      "human": 1
+    },
+    {
+      "agent": 2,
+      "cell": "A2xH2",
+      "human": 2
+    }
+  ],
+  "widens": [
+    {
+      "asserted": "A2xH2",
+      "effective": "A2xH2",
+      "widens": false
+    },
+    {
+      "asserted": "A1xH1",
+      "effective": "A2xH1",
+      "widens": true
+    },
+    {
+      "asserted": "A1xH1",
+      "effective": "A1xH2",
+      "widens": true
+    },
+    {
+      "asserted": "A2xH2",
+      "effective": "A1xH2",
+      "widens": false
+    },
+    {
+      "asserted": "A0xH0",
+      "effective": "A0xH0",
+      "widens": false
+    },
+    {
+      "asserted": "A0xH0",
+      "effective": "A2xH2",
+      "widens": true
+    }
+  ]
+}

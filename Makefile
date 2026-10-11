@@ -31,6 +31,7 @@ test: ## run every test suite
 	@echo "── paid transport ──"     && $(PY) tests/test_transport.py
 	@echo "── abuse controls ──"     && $(PY) tests/test_limits.py
 	@echo "── packaging ──"          && $(PY) tests/test_packaging.py
+	@echo "── SDK contract ──"       && $(PY) tests/test_sdk_contract.py
 	@echo "── security audit ──"     && $(PY) tests/test_security_audit.py
 	@echo "── conformance ──"        && $(PY) tests/test_conformance.py
 	@echo "── version negotiation ──" && $(PY) tests/test_version.py

@@ -39,8 +39,15 @@ def test_image_contains_every_package_the_runtime_imports():
     Every top-level package the running services import must be copied in.
     Missing one is invisible until production, because the imports are guarded.
     """
+    # `protocol` became load-bearing when parse_ctx started importing
+    # protocol.identity at module scope: without it the gateway cannot
+    # authenticate anyone, and the failure is an ImportError at startup rather
+    # than a guarded degrade. `ops`, `policy` and `telemetry` are copied by the
+    # Dockerfile and read by the running roles, so a removal should fail here
+    # rather than in production.
     needed = {"core", "trustfirewall", "security", "vault", "trust",
-              "federation", "connectors", "receipts", "providers", "discovery"}
+              "federation", "connectors", "receipts", "providers", "discovery",
+              "protocol", "ops", "policy", "telemetry"}
     copied = _copied_dirs()
     missing = needed - copied
     assert not missing, f"Dockerfile does not copy: {sorted(missing)}"
