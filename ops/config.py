@@ -72,6 +72,26 @@ SETTINGS: tuple[Setting, ...] = (
             "Enable the xcpsec argument firewall. The gateway REFUSES TO START "
             "if this is 1 and xcpsec is unavailable, rather than running with a "
             "control you asked for silently absent."),
+    Setting("XCP_ENGINE", R.GATEWAY, "0",
+            "Enable the self-hosted decision engine: a local classifier that "
+            "estimates a request's complexity and risk so cheap requests can "
+            "take a cheap route. Advisory ONLY — it cannot change whether a "
+            "request is permitted, in either direction, and a refusal never "
+            "cites it. Unlike XCP_SECURITY the gateway does NOT refuse to "
+            "start when this is 1 and the engine is unavailable, because an "
+            "absent optimisation is not an absent control: it degrades to "
+            "silence and the node takes the route it would have taken anyway."),
+    Setting("XCP_ENGINE_FASTTEXT", R.GATEWAY, "",
+            "Path to a fastText model for the engine's linear tier. Absent, "
+            "that tier abstains; see `xcp engine --diagnose`."),
+    Setting("XCP_ENGINE_SETFIT", R.GATEWAY, "",
+            "Path to a SetFit model for the engine's semantic tier. At ~25ms "
+            "it exceeds the default classification budget, so it also needs "
+            "XCP_ENGINE_BUDGET_MICROS raised deliberately."),
+    Setting("XCP_ENGINE_BUDGET_MICROS", R.GATEWAY, "2000",
+            "Per-request classification budget. A tier whose typical cost "
+            "exceeds what remains is skipped rather than attempted, because a "
+            "classifier that adds latency has failed at its own job."),
     Setting("XCP_ADMIN_TOKEN", R.GATEWAY, "",
             "Bearer token for /admin/* and the full peer list. When unset the "
             "administrative endpoints are DISABLED rather than open — an admin "

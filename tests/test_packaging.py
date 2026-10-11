@@ -47,7 +47,7 @@ def test_image_contains_every_package_the_runtime_imports():
     # rather than in production.
     needed = {"core", "trustfirewall", "security", "vault", "trust",
               "federation", "connectors", "receipts", "providers", "discovery",
-              "protocol", "ops", "policy", "telemetry"}
+              "protocol", "ops", "policy", "telemetry", "engine"}
     copied = _copied_dirs()
     missing = needed - copied
     assert not missing, f"Dockerfile does not copy: {sorted(missing)}"

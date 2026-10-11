@@ -41,3 +41,6 @@ vault/**/*.secret
 vault/local/
 venv/
 xcp.toml.local
+
+# Machine-specific timings; bench/RESULTS.md carries the narrative.
+bench/engine-results.json

@@ -26,6 +26,7 @@ WORKDIR /app
 COPY core/            /app/core/
 COPY trustfirewall/   /app/trustfirewall/
 COPY protocol/        /app/protocol/
+COPY engine/          /app/engine/
 COPY policy/          /app/policy/
 COPY telemetry/       /app/telemetry/
 COPY ops/             /app/ops/

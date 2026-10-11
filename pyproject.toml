@@ -89,6 +89,19 @@ admin = [
   "cryptography>=42.0",
   "pyyaml>=6.0",
 ]
+# The decision engine's model backends. The engine's CORE is standard library
+# only and always available, because the machinery that stops a classifier
+# widening authority must not be contingent on an optional install. These are
+# only the models it can optionally consult.
+engine = [
+  "fasttext-wheel>=0.9.2",
+]
+# The semantic tier. Large: a sentence-transformer plus torch. At ~25ms per
+# inference it also needs XCP_ENGINE_BUDGET_MICROS raised deliberately, so
+# installing this is a decision rather than a default.
+engine-semantic = [
+  "setfit>=1.1.0",
+]
 # Telemetry is a data-export path. Read telemetry/attributes.py before
 # raising XCP_OTEL_DETAIL; without these every instrumentation call is a no-op.
 otel = [
@@ -105,6 +118,7 @@ dev = [
 ]
 all = [
   "xcp[gateway]",
+  "xcp[engine]",
   "xcp[admin]",
   "xcp[otel]",
 ]
@@ -116,7 +130,7 @@ xcp = "cli.xcp.main:main"
 where = ["."]
 include = [
   "cli*", "compliance*", "conformance*", "connectors*", "core*", "discovery*",
-  "federation*", "ops*", "policy*", "privacy*", "protocol*", "providers*",
+  "engine*", "federation*", "ops*", "policy*", "privacy*", "protocol*", "providers*",
   "receipts*", "sdk*", "security*", "telemetry*", "trust*", "trustfirewall*",
   "vault*",
 ]

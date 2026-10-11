@@ -302,6 +302,34 @@ _sys.path.insert(0, str(_pathlib.Path(__file__).resolve().parents[2]))
 # why one parser matters more here than for most headers.
 from protocol.identity import try_parse as _parse_identity
 
+# ── optional decision engine ──────────────────────────────────────────────
+# A local classifier that estimates complexity and risk so cheap requests can
+# take a cheap route. Note the contrast with XCP_SECURITY above: that one makes
+# the gateway REFUSE TO START when the control it names is unavailable, because
+# an operator who believes the argument firewall is active and is wrong is in a
+# dangerous position. This one does not, because an absent optimisation is not
+# an absent control. It degrades to silence and the node routes as it would
+# have with no engine at all.
+#
+# The engine cannot change whether a request is permitted. That is enforced by
+# engine.advice -- `Advice` has no field that could carry a scope, a tier or a
+# skipped check -- and asserted by tests/test_engine.py, which runs a
+# representative decision function across every possible advice value and
+# requires the permit outcome to be identical.
+_ENGINE = os.getenv("XCP_ENGINE", "0") == "1"
+_classify = None
+if _ENGINE:
+    try:
+        from engine import classify as _classify
+    except Exception as _e:
+        # Logged, not fatal, and not silent either. An operator who asked for
+        # the engine should be told it is not running; they should not lose a
+        # node over it.
+        print(f"[xcp] XCP_ENGINE=1 but the engine is unavailable ({_e}); "
+              f"continuing without it. Routing falls back to the conservative "
+              f"path, which is what the node would do anyway.", flush=True)
+        _classify = None
+
 PRIVATE_PEER_CIDRS: tuple = ()
 PEER_TRUST: dict[str, Any] = {"anchor": "system", "bundle": "", "authorities": 0}
 
@@ -854,6 +882,33 @@ async def a2t_call(request: Request) -> Response:
         if v is not None and v.blocked and POSTURE == "enforce":
             audit(ctx, "a2t", f"tool={tool} ARGFW-BLOCKED ({v.reason()})")
             return JSONResponse({"error": f"XCP argument firewall: {v.reason()}"}, 400)
+    # Optional classification, deliberately LAST.
+    #
+    # Everything authorization-related has already happened: the version was
+    # negotiated, the caller metered, the binding verified, the mandate checked
+    # against the derived scope, the upstream credential validated, policy
+    # applied and the argument firewall run. The decision to allow this call
+    # was recorded above, before this line, with its own reason.
+    #
+    # The placement is the argument. A classifier that runs here cannot affect
+    # the outcome, because the outcome is already decided and recorded. It can
+    # only annotate what is about to happen and express a route preference. If
+    # this call were moved above `check_mandate`, the separation this component
+    # is built around would be gone -- so it stays here, and a reviewer can see
+    # that it does.
+    if _classify is not None:
+        advice = _classify(server=server, tool=tool, scope=scope,
+                           arguments=body.get("arguments", {}),
+                           tier=getattr(ctx.binding, "tier", ""))
+        if not advice.silent:
+            # Recorded as an observation, never as a reason. `audit()` above
+            # already wrote the allow and why; this is a separate line so no
+            # reader can mistake the two for one decision.
+            audit(ctx, "a2t-advice",
+                  f"route={advice.route or '-'} "
+                  f"scrutiny={advice.scrutiny.value} (advisory; "
+                  f"did not affect the decision above)")
+
     return await _route_mcp(server, tool, body.get("arguments", {}), ctx,
                             upstream_credential=request.headers.get(
                                 H_UPSTREAM_CREDENTIAL, ""))

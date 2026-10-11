@@ -234,6 +234,42 @@
         "unsafe": false
       },
       {
+        "default": "0",
+        "description": "Enable the self-hosted decision engine: a local classifier that estimates a request's complexity and risk so cheap requests can take a cheap route. Advisory ONLY \u2014 it cannot change whether a request is permitted, in either direction, and a refusal never cites it. Unlike XCP_SECURITY the gateway does NOT refuse to start when this is 1 and the engine is unavailable, because an absent optimisation is not an absent control: it degrades to silence and the node takes the route it would have taken anyway.",
+        "name": "XCP_ENGINE",
+        "required": false,
+        "role": "gateway",
+        "secret": false,
+        "unsafe": false
+      },
+      {
+        "default": "2000",
+        "description": "Per-request classification budget. A tier whose typical cost exceeds what remains is skipped rather than attempted, because a classifier that adds latency has failed at its own job.",
+        "name": "XCP_ENGINE_BUDGET_MICROS",
+        "required": false,
+        "role": "gateway",
+        "secret": false,
+        "unsafe": false
+      },
+      {
+        "default": "",
+        "description": "Path to a fastText model for the engine's linear tier. Absent, that tier abstains; see `xcp engine --diagnose`.",
+        "name": "XCP_ENGINE_FASTTEXT",
+        "required": false,
+        "role": "gateway",
+        "secret": false,
+        "unsafe": false
+      },
+      {
+        "default": "",
+        "description": "Path to a SetFit model for the engine's semantic tier. At ~25ms it exceeds the default classification budget, so it also needs XCP_ENGINE_BUDGET_MICROS raised deliberately.",
+        "name": "XCP_ENGINE_SETFIT",
+        "required": false,
+        "role": "gateway",
+        "secret": false,
+        "unsafe": false
+      },
+      {
         "default": "gw-local",
         "description": "Identifier stamped on audit records and forwarded downstream as XCP-Verified-By.",
         "name": "XCP_GATEWAY_ID",

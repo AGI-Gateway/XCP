@@ -38,6 +38,8 @@ jobs:
           python tests/test_limits.py
           python tests/test_packaging.py
           python tests/test_sdk_contract.py
+          python tests/test_config_profiles.py
+          python tests/test_engine.py
           python tests/test_security_audit.py
           python tests/test_version.py
           python tests/test_performance.py
