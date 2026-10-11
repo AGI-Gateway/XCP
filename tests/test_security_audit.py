@@ -238,6 +238,55 @@ def test_the_peer_fetcher_is_the_only_federation_http_client():
             "redirect, size and trust-anchor handling in federation.peerfetch"
 
 
+def test_whitespace_around_the_identity_value_is_not_part_of_the_value():
+    """
+    FOUND BY DIFFERENTIAL ANALYSIS. "42001;8453;0xab…ab " answered 401 here and
+    403 on the Node implementation, and the disagreement was in neither parser
+    -- both are strict. Node's HTTP server strips OWS before the application
+    sees it, as [RFC9110] 5.5 says a recipient should; uvicorn passes it
+    through, so this gateway compared a footprint with a trailing space against
+    the one it had registered and reported an unverified session.
+
+    Refusing OWS instead was not available: a parser that never receives the
+    whitespace cannot refuse it, so the two implementations could not have
+    converged on refusal. What is asserted here is that surrounding whitespace
+    makes no difference to the outcome.
+    """
+    _boot()
+    fp = "0x" + "ab" * 32
+    _call("/v1/session/open", {"agentId": 42001, "chainId": 8453,
+                               "footprint": fp, "tier": "A0xH0"})
+    clean = _call("/v1/a2t/call", {},
+                  {"XCP-Agent-Identity": f"42001;8453;{fp}"})[0]
+    for pad in (f"42001;8453;{fp} ", f" 42001;8453;{fp}",
+                f"  42001;8453;{fp}  "):
+        got = _call("/v1/a2t/call", {}, {"XCP-Agent-Identity": pad})[0]
+        assert got == clean, \
+            (f"padding the identity value changed the outcome: {pad!r} gave "
+             f"{got}, the same value unpadded gave {clean}")
+
+
+def test_whitespace_INSIDE_the_identity_is_still_refused():
+    """
+    The control. Only whitespace around the field value is OWS; a space inside
+    a field is part of that field and must not be tolerated, or "42001 " and
+    "42001" become the same agent to one parser and not another.
+    """
+    _boot()
+    fp = "0x" + "ab" * 32
+    for bad in (f"42001 ;8453;{fp}", f"42001; 8453;{fp}",
+                f"42001;8453 ;{fp}"):
+        status, res = _call("/v1/a2t/call", {},
+                            {"XCP-Agent-Identity": bad})
+        # 401 is the identity refusal. 429 also appears, because an unverified
+        # caller is metered on the austere anonymous bucket and these probes
+        # are precisely the traffic it exists to throttle -- a refusal either
+        # way. What must never happen is the call proceeding.
+        assert status in (401, 429), \
+            f"{bad!r} was not refused: {status} {res}"
+        assert status != 200
+
+
 def test_the_fetch_error_is_not_an_oracle():
     """Echoing the error turned a blind SSRF into an information leak."""
     _boot()

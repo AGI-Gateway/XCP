@@ -693,7 +693,25 @@ class Ctx:
 
 def parse_ctx(request: Request) -> Ctx:
     hdr = request.headers.get("xcp-agent-identity", "")
-    parts = hdr.split(";")
+    # Optional whitespace around a field VALUE is not part of the value
+    # ([RFC9110] 5.5), so it is stripped before parsing. Inner whitespace is
+    # not OWS and stays refused by the canonical-integer check below.
+    #
+    # FOUND BY DIFFERENTIAL ANALYSIS. "42001;8453;0xab…ab " answered 401 here
+    # and 403 on the Node implementation, and the disagreement was not in
+    # either parser -- both are strict. Node's HTTP server strips OWS before
+    # the application sees it, as RFC 9110 says a recipient should; uvicorn
+    # passes it through, so this gateway compared a footprint with a trailing
+    # space against the one it had registered, failed to find it, and reported
+    # an unverified session.
+    #
+    # Refusing OWS instead was not an option: a parser that never receives the
+    # whitespace cannot refuse it, so "reject non-canonical input" is
+    # unimplementable on one of the two servers and the implementations could
+    # not have converged. Stripping is what RFC 9110 already requires of a
+    # recipient, and it leaves the strictness that matters -- which bytes count
+    # as the footprint -- identical on both sides.
+    parts = hdr.strip().split(";")
     if len(parts) != 3:
         return Ctx(reason="missing or malformed XCP-Agent-Identity")
     # Strict rather than coercive. int() accepts "+42001", " 42001" and
