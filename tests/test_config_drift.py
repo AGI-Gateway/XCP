@@ -24,9 +24,23 @@ from ops.config import SETTINGS, get, unsafe, secrets, Role, table
 
 SKIP_DIRS = {".git", "__pycache__", "site", "dist", "node_modules"}
 ENV_READ = re.compile(r'os\.(?:getenv|environ\.get)\(\s*["\']([A-Z][A-Z0-9_]*)["\']')
+#: A variable passed to getenv instead of a literal, e.g. os.getenv(CHARTER_ENV).
+ENV_READ_VIA = re.compile(r'os\.(?:getenv|environ\.get)\(\s*([A-Z][A-Z0-9_]*)\s*[,)]')
+#: A module-level constant holding an environment variable name.
+ENV_CONST = re.compile(r'^([A-Z][A-Z0-9_]*)\s*=\s*["\']([A-Z][A-Z0-9_]*)["\']',
+                       re.M)
 
 
 def _read_by_code() -> set[str]:
+    """
+    Every environment variable the code reads.
+
+    Resolves names read through a module-level constant as well as literals.
+    Without that, `os.getenv(CHARTER_ENV)` is invisible to this scan and the
+    registry can drift exactly where a module was tidy enough to name its
+    variables — XCP_PEER_CA_BUNDLE was caught only because an unrelated literal
+    happened to exist elsewhere.
+    """
     found: set[str] = set()
     for p in ROOT.rglob("*.py"):
         if any(d in p.parts for d in SKIP_DIRS):
@@ -34,9 +48,14 @@ def _read_by_code() -> set[str]:
         if p.name.startswith("test_"):
             continue                       # tests set their own fixtures
         try:
-            found |= set(ENV_READ.findall(p.read_text(encoding="utf-8")))
+            src = p.read_text(encoding="utf-8")
         except (UnicodeDecodeError, PermissionError):
             continue
+        found |= set(ENV_READ.findall(src))
+        consts = dict(ENV_CONST.findall(src))
+        for ident in ENV_READ_VIA.findall(src):
+            if ident in consts:
+                found.add(consts[ident])
     return found
 
 

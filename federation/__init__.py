@@ -41,6 +41,19 @@ __all__ = list(globals().get("__all__", [])) + [
     "Effect", "PeerMetrics", "Policy", "Candidate", "select", "admissible",
     "score", "concentration", "RoutingError"]
 
+from .cluster import (CLUSTER_SPEC_VERSION, ClusterCharter, ClusterError,
+                      ClusterPosture, MemberSet, MembershipClaim,
+                      build_member_set, cluster_id_from_name, issue_claim,
+                      load_posture, membership_proof, membership_root,
+                      sign_charter, verify_charter, verify_member,
+                      verify_membership_proof)
+__all__ = list(globals().get("__all__", [])) + [
+    "CLUSTER_SPEC_VERSION", "ClusterCharter", "ClusterError", "ClusterPosture",
+    "MemberSet", "MembershipClaim", "build_member_set", "cluster_id_from_name",
+    "issue_claim", "load_posture", "membership_proof", "membership_root",
+    "sign_charter", "verify_charter", "verify_member",
+    "verify_membership_proof"]
+
 from .peerfetch import (CA_BUNDLE_ENV, FetchedRecord, PeerFetchError,
                         PeerTrustConfigError, fetch_node_record,
                         peer_ca_bundle, peer_certificate_der, peer_ssl_context,

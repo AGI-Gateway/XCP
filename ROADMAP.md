@@ -33,10 +33,14 @@ done; the rest is what a private federation still needs.
 - [x] **Trust anchoring** — `XCP_PEER_CA_BUNDLE` declares who signs this
       federation's peers, so an internal CA verifies. Scoped to federation;
       upstream tool calls keep public trust
-- [ ] **Off-chain cluster membership** — `cluster_id` currently anchors to a
-      Merkle root in `NodeRegistry.sol`, so a private federation has to use a
-      chain to use clusters. Needs a signed `ClusterCharter` carrying the same
-      root-not-roster property with no chain dependency
+- [x] **Off-chain cluster membership** — a signed `ClusterCharter` commits to
+      the member set with a Merkle root and carries no roster, so the same file
+      goes to every node without publishing who is in the cluster. Removal is
+      a re-issue at a higher epoch: the departed node's genuine proof stops
+      verifying against the root its peers hold, with no revocation list and
+      nothing to expire. The root stays byte-compatible with
+      `NodeRegistry.upsertCluster`, so a deployment can anchor the identical
+      charter on-chain later or run both off one root
 - [ ] **Membership-gated node record** — `/.well-known/xcp-node.json` is
       unauthenticated by RFC 8615, which is right for the public federation and
       publishes internal topology in a private one. Needs an authorization

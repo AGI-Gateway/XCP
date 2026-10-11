@@ -65,6 +65,57 @@ are mutually suspicious strangers on routable addresses.
   is the reconnaissance step. `xcp triage` honours the bundle, so diagnostics
   no longer report every check unreachable against an internal node.
 
+### Private federation — cluster membership without a chain
+
+`NodeRecord.cluster_id` carried a comment that was also an admission —
+*"membership root is on-chain, roster is not"*. Clusters existed only in
+`NodeRegistry.sol`, so an organisation federating three of its own datacentres
+could not use them without deploying and paying for a contract.
+
+- **`federation/cluster.py`** is the off-chain equivalent: a `ClusterCharter`
+  signed by the organisation's own authority key, committing to the member set
+  with a Merkle root and carrying no roster. The same file goes to every node
+  without publishing who is in the cluster, and `to_dict()` is asserted to
+  contain no member id rather than left to review.
+
+- **Whose charter decides.** A peering node verifies an incoming member's proof
+  against the root in the charter *it* holds, never against one the claimant
+  supplies. That removes charter substitution as an attack: there is no "which
+  charter do we believe" question, because only one of them is ours.
+
+- **Removal needs no revocation.** To remove a node the authority re-issues at
+  a higher epoch with a root that excludes it. The departed node still holds a
+  proof the authority genuinely issued, and it stops verifying against the root
+  its former peers hold — no revocation list, no gossip, nothing to wait out.
+  Tested end to end, and tested with the epoch forged, so the defence is shown
+  to rest on the proof rather than on the epoch check being a diagnostic.
+
+- **The root is the on-chain root.** Byte-compatible with
+  `NodeRegistry.verifyMembership` — sorted-pair keccak over raw node_id leaves
+  — so a deployment can federate privately now and anchor the identical charter
+  with `upsertCluster` later, or run both off one root. Asserted against an
+  independent transcription of the Solidity loop, not assumed.
+
+- **A one-member cluster would have published its only member.** A Merkle root
+  over a single leaf *is* that leaf, so the root field would have held the
+  roster it exists to avoid holding. Trees are padded with random leaves, which
+  is transparent to both verifiers and keeps the tree's shape from leaking the
+  real member count.
+
+- **`scripts/cluster-charter.py`** is the authority's side: `init` creates the
+  key, `issue` signs a charter and writes each member its own proof, `verify`
+  checks either. Carrying `members.json` forward keeps the root stable when the
+  member set has not changed, so re-issuing to bump a policy hash does not
+  invalidate every proof for no reason anyone asked for.
+
+- Enforced in the gateway rather than available as a library: a closed cluster
+  refuses a peer with no claim, a stale proof, or another node's claim, and the
+  check runs before the peer is recorded. A charter that does not verify stops
+  the node — starting without it would leave a closed cluster accepting any
+  peer, which is the one outcome it exists to prevent. A claim for a different
+  node also stops the node, which catches a membership file copied between
+  datacentres.
+
 ### Test infrastructure
 
 - Contract tests signalled "skip" by raising `RuntimeError("SKIP: …")`, which
@@ -78,6 +129,12 @@ are mutually suspicious strangers on routable addresses.
   server), and the certificate-retrieval invariant is asserted across the call
   chain. A companion test refuses a second HTTP client in the handler, which is
   how the first one came to have verification disabled.
+- The configuration-drift scan only saw environment variables passed to
+  `getenv` as string literals, so a module tidy enough to name its variables
+  was invisible to it — `XCP_PEER_CA_BUNDLE` was caught only because an
+  unrelated literal happened to exist elsewhere. It now resolves module-level
+  constants too, which is the difference between the registry being enforced
+  and appearing to be.
 
 ### Second implementation
 

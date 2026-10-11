@@ -335,10 +335,37 @@ else:
     except _TrustError as _e:
         raise RuntimeError(str(_e))
 
-PRIVATE_FEDERATION = bool(PRIVATE_PEER_CIDRS) or PEER_TRUST["anchor"] == "declared"
+# Cluster membership. Validated here for the same reason as the two above, and
+# with a sharper edge: a node that starts without its charter would be a CLOSED
+# cluster accepting any peer, which is the single outcome the charter exists to
+# prevent. So a charter that does not verify stops the node.
+_CLUSTER = None
+try:
+    from federation.cluster import load_posture as _load_cluster, ClusterError
+except ImportError:
+    _load_cluster = None
+if _load_cluster is None:
+    if os.getenv("XCP_CLUSTER_CHARTER", ""):
+        raise RuntimeError(
+            "XCP_CLUSTER_CHARTER is set but the federation package is "
+            "unavailable, so cluster membership cannot be enforced. Refusing "
+            "to start.")
+else:
+    try:
+        _CLUSTER = _load_cluster()
+    except ClusterError as _e:
+        raise RuntimeError(f"{_e}\nRefusing to start.")
+
+PRIVATE_FEDERATION = (bool(PRIVATE_PEER_CIDRS)
+                      or PEER_TRUST["anchor"] == "declared"
+                      or (_CLUSTER is not None and _CLUSTER.configured))
 if PRIVATE_FEDERATION:
+    _cl = (f", cluster={_CLUSTER.charter.cluster_id[:14]}… "
+           f"epoch={_CLUSTER.charter.epoch} "
+           f"{'closed' if _CLUSTER.closed else 'open'}"
+           if _CLUSTER is not None and _CLUSTER.configured else "")
     print(f"[gateway] private federation: {len(PRIVATE_PEER_CIDRS)} declared "
-          f"range(s), peer trust anchor={PEER_TRUST['anchor']}", flush=True)
+          f"range(s), peer trust anchor={PEER_TRUST['anchor']}{_cl}", flush=True)
 
 # FOUND BY INDEPENDENT REVIEW (B.4.6). XCP-Upstream-Credential is relayed
 # without inspection, which is right for confidentiality and incomplete as a
@@ -985,10 +1012,33 @@ if _NODE_KEY and _NODE_DOMAIN:
             gateway_url=_NODE_URL or f"https://{_NODE_DOMAIN}",
             operator=os.getenv("XCP_NODE_OPERATOR", "anonymous"),
             published_at=int(time.time()),
-            bindings=_bs.to_dict(), cert_footprint=_fp)
+            bindings=_bs.to_dict(), cert_footprint=_fp,
+            # Publish the cluster id and this node's proof so a peer in the
+            # same cluster can verify us against ITS charter. The charter
+            # itself is not published: it is the verifier's side, and a node
+            # serving its own charter would invite peers to judge it by the
+            # very document it chose.
+            cluster_id=(_CLUSTER.charter.cluster_id
+                        if _CLUSTER is not None and _CLUSTER.configured else ""),
+            membership=(_CLUSTER.claim.to_dict()
+                        if _CLUSTER is not None and _CLUSTER.claim else None))
         _FED = Federation(self_domain=_NODE_DOMAIN, self_node_id=_ident.node_id)
     except Exception as _e:
         print(f"[gateway] federation disabled: {_e}", flush=True)
+
+# The claim has to be about THIS node. load_posture() verifies the claim
+# against the charter but cannot check whose it is, because the node identity
+# is not known that early. An operator who copies a sibling datacentre's claim
+# file would otherwise publish a claim for someone else's node and only find
+# out when every peer refused it.
+if (_CLUSTER is not None and _CLUSTER.claim is not None
+        and _NODE_RECORD is not None
+        and _CLUSTER.claim.node_id.lower() != _NODE_RECORD.node_id.lower()):
+    raise RuntimeError(
+        f"XCP_CLUSTER_MEMBERSHIP is a claim for node "
+        f"{_CLUSTER.claim.node_id}, but this node is {_NODE_RECORD.node_id}. "
+        f"That claim belongs to a different node — check you have not copied "
+        f"another datacentre's membership file. Refusing to start.")
 
 
 def _fed_audit(msg: str) -> None:
@@ -1125,6 +1175,41 @@ async def federation_peer(request: Request) -> JSONResponse:
                       "bound to a certificate. A private federation still needs "
                       "TLS — issue internal certificates and declare the signer "
                       "in XCP_PEER_CA_BUNDLE"}, status_code=400)
+    # ── cluster membership ─────────────────────────────────────────────────
+    # A closed cluster admits members only. The proof is checked against the
+    # root in the charter THIS node holds, never against anything the peer
+    # supplied, so there is no question of whose charter is authoritative.
+    #
+    # This is also how removal takes effect: the authority publishes a charter
+    # at a higher epoch whose root excludes the departed node, and that node's
+    # still-perfectly-valid proof stops verifying here. No revocation list, no
+    # gossip, nothing to expire.
+    cluster_member = None
+    if _CLUSTER is not None and _CLUSTER.closed:
+        from federation.cluster import (MembershipClaim, verify_member,
+                                        ClusterError as _ClErr)
+        if not rec.membership:
+            _fed_audit(f"peer {domain} REFUSED: no membership claim")
+            return JSONResponse(
+                {"error": "this node federates within a closed cluster and the "
+                          "peer presented no membership claim"},
+                status_code=403)
+        try:
+            claim = MembershipClaim.from_dict(rec.membership)
+        except _ClErr as e:
+            _fed_audit(f"peer {domain} REFUSED: malformed claim")
+            return JSONResponse({"error": f"membership claim is malformed: {e}"},
+                                status_code=400)
+        problems = verify_member(_CLUSTER.charter, claim,
+                                 expected_node_id=rec.node_id)
+        if problems:
+            _fed_audit(f"peer {domain} REFUSED: membership — {problems[0]}")
+            return JSONResponse({"error": "membership did not verify",
+                                 "reason": problems[0]}, status_code=403)
+        cluster_member = claim.cluster_id
+        _fed_audit(f"peer {domain} is a member of {claim.cluster_id[:14]}… "
+                   f"epoch={claim.epoch}")
+
     known = _FED.peers.get(domain)
     try:
         # FOUND BY INDEPENDENT REVIEW (GPT-5.6, finding B.2). `mutual` was
@@ -1145,6 +1230,10 @@ async def federation_peer(request: Request) -> JSONResponse:
         "trust": p.trust.label, "sequence": p.sequence,
         "tlsVerified": tls_verified,
         "mutual": False,
+        # Stated rather than implied: membership is not a trust level. A member
+        # peers at VERIFIED like anyone else, and what it may then do is still
+        # decided by the lattice and its mandates.
+        "clusterMember": cluster_member,
         "note": "this path grants at most VERIFIED; PEERED requires the peer "
                 "to confirm independently",
         "rotation": bool(known and known.node_id == rec.node_id
@@ -1232,14 +1321,19 @@ async def federation_trust(request: Request) -> JSONResponse:
         return JSONResponse(
             {"declaredRanges": len(PRIVATE_PEER_CIDRS),
              "peerTrustAnchor": PEER_TRUST["anchor"],
+             "cluster": (_CLUSTER.summary() if _CLUSTER is not None
+                         else {"configured": False}),
              "detail": "redacted; requires an admin token"})
     return JSONResponse({
         "declaredRanges": [str(n) for n in PRIVATE_PEER_CIDRS],
         "peerTrust": PEER_TRUST,
         "plainHttpPeering": os.getenv("XCP_ALLOW_INSECURE_PEERS", "0") == "1",
         "profile": _PROFILE,
+        "cluster": (_CLUSTER.detail() if _CLUSTER is not None
+                    else {"configured": False}),
         "note": "a declared range makes a private peer reachable; it does not "
-                "waive TLS or the certificate footprint binding"})
+                "waive TLS, the certificate footprint binding, or cluster "
+                "membership"})
 
 
 @app.get("/v1/federation/catalog")
@@ -1274,4 +1368,9 @@ async def health() -> dict:
             # token on /v1/federation/trust.
             "privateFederation": {
                 "declaredRanges": len(PRIVATE_PEER_CIDRS),
-                "peerTrustAnchor": PEER_TRUST["anchor"]}}
+                "peerTrustAnchor": PEER_TRUST["anchor"],
+                # Counts, ids and the epoch — never the membership root, which
+                # is a commitment to the member set and has no business on an
+                # unauthenticated endpoint.
+                "cluster": (_CLUSTER.summary() if _CLUSTER is not None
+                            else {"configured": False})}}

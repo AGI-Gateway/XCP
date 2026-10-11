@@ -162,6 +162,10 @@ before restarting.
 | `XCP_NODE_OPERATOR` | `anonymous` | Operator name published in the node record. |
 | `XCP_PRIVATE_PEER_CIDRS` **!** | `—` | Comma-separated internal ranges that may hold peers, e.g. `10.40.0.0/16,fd00:dc1::/48`. Required for a private federation: without it a peer on a private address is unreachable. Narrower than `XCP_ALLOW_INSECURE_PEERS` — an undeclared range is still refused, loopback and cloud-metadata addresses stay refused even inside a declaration, and TLS is still required. Declarations broader than /8 (IPv4) or /7 (IPv6) are refused, and a malformed entry stops the node. |
 | `XCP_PEER_CA_BUNDLE` | `—` | PEM bundle of the authorities that sign this federation's peers. REPLACES the public trust store for peer fetches and footprint retrieval, and for those only — upstream tool calls keep public trust. An unreadable or empty bundle stops the node. |
+| `XCP_CLUSTER_CHARTER` | `—` | Path to the signed cluster charter this node federates under. Commits to the member set with a Merkle root and carries no roster, so the same file goes to every node without publishing who is in the cluster. A closed cluster refuses any peer whose proof does not verify against THIS charter's root. A charter that does not verify stops the node. |
+| `XCP_CLUSTER_MEMBERSHIP` | `—` | Path to this node's own membership proof, published in its node record. The node stops if the proof does not verify, or if it is a proof for a different node — which catches a membership file copied from another datacentre. |
+| `XCP_CLUSTER_AUTHORITY` | `—` | Address of the key allowed to sign this cluster's charters. Without it a node accepts any correctly-signed charter naming its cluster id, so anyone could mint one. Set it on every node. |
+| `XCP_CLUSTER_MIN_EPOCH` | `0` | Refuse a charter below this epoch. Raising the epoch is how a removal takes effect, so pinning the floor stops a rolled-back charter file re-admitting a removed node. |
 
 **wrapper**
 
@@ -291,14 +295,127 @@ as the node or every check reports unreachable.
 | gateway will not start, naming `XCP_PRIVATE_PEER_CIDRS` | a malformed entry, or a declaration broader than /8. It stops rather than silently dropping the entry |
 | gateway will not start, naming `XCP_PEER_CA_BUNDLE` | the file is missing or holds no authorities. It stops rather than falling back to the public store, which would leave you believing peers are verified against your CA |
 
+## Cluster membership — who may peer at all
+
+The two settings above decide where peers are and who signs them. A cluster
+decides **which** of them may peer, without any node holding a list of the
+others.
+
+The authority — you — keeps the member list and publishes only a Merkle root.
+Each node gets the same charter and its own proof. A node outside the root
+cannot peer, and nobody learns the roster from anything that is distributed.
+
+### Standing one up
+
+On the authority's machine, once:
+
+```bash
+python scripts/cluster-charter.py init --name acme-internal
+# prints the cluster id, the authority address, and the authority key
+```
+
+**Back the authority key up offline before going further.** Every node is
+configured with the matching address and refuses a charter signed by anything
+else, so losing the key means reconfiguring every node in the cluster.
+
+Then, with each node's `node_id` to hand (`xcp doctor` prints it, as does
+`/.well-known/xcp-node.json`):
+
+```bash
+export XCP_CLUSTER_AUTHORITY_KEY=0x...
+python scripts/cluster-charter.py issue --name acme-internal --epoch 1 \
+    --member 0x<dc1-node-id> \
+    --member 0x<dc2-node-id> \
+    --member 0x<dc3-node-id> \
+    --out ./cluster/
+```
+
+Distribute what it writes:
+
+| file | goes to | as |
+|---|---|---|
+| `charter.json` | every node | `XCP_CLUSTER_CHARTER` |
+| `membership-<id>.json` | that one node | `XCP_CLUSTER_MEMBERSHIP` |
+| `members.json` | **nobody** | keep on the authority |
+
+`members.json` is the roster the charter exists in order not to publish. It
+stays with the authority, and it is also what lets you re-issue later without
+disturbing the root.
+
+Every node also gets `XCP_CLUSTER_AUTHORITY=0x<authority address>`. Without it
+a node accepts any correctly-signed charter naming its cluster id, which means
+anyone can mint one.
+
+### Removing a node
+
+Re-issue at a higher epoch, without it:
+
+```bash
+python scripts/cluster-charter.py issue --name acme-internal --epoch 2 \
+    --member 0x<dc1-node-id> --member 0x<dc2-node-id> \
+    --members-in ./cluster/members.json --out ./cluster/
+```
+
+Ship the new `charter.json` to the remaining nodes and raise
+`XCP_CLUSTER_MIN_EPOCH` to `2` on each.
+
+That is the whole procedure. The removed node still holds a proof the authority
+genuinely issued, and it no longer verifies against the root its former peers
+hold — so there is no revocation list to distribute, nothing to gossip, and
+nothing to wait out. Raising `XCP_CLUSTER_MIN_EPOCH` matters because it is what
+stops someone reinstating the older charter file and re-admitting the node.
+
+!!! note "Membership is not authority"
+    A member peers at `VERIFIED` like any other peer. What it may then *do* is
+    still decided by the trust lattice and its mandates. A cluster answers "may
+    you peer", not "what may you call".
+
+### Confirming it
+
+```bash
+curl -s https://dc1-gw.internal.example/health | jq .privateFederation.cluster
+# { "configured": true, "clusterId": "0x40b1ac…", "epoch": 2,
+#   "closed": true, "selfIsMember": true }
+
+python scripts/cluster-charter.py verify \
+    --charter ./cluster/charter.json \
+    --membership ./cluster/membership-abc123456789.json \
+    --authority 0x<authority address> --min-epoch 2
+```
+
+`/health` publishes the cluster id, the epoch and whether it is closed. The
+membership root and the proofs need the admin token on
+`/v1/federation/trust`: the root is a commitment to the member set, and it has
+no business on an unauthenticated endpoint.
+
+### When membership fails
+
+| symptom | cause |
+|---|---|
+| `the peer presented no membership claim` | the peer has no `XCP_CLUSTER_MEMBERSHIP`, or is not in a cluster at all |
+| `membership proof does not verify against this cluster's root` | the peer was removed, or the two nodes hold charters from different epochs. Check both ends report the same `epoch` on `/health` |
+| `claim proves membership of epoch N` | the peer's proof predates your charter. Re-issue its proof at the current epoch |
+| `claim is for a different node` | the peer is presenting someone else's proof — most often a membership file copied between datacentres |
+| node will not start, `claim for node 0x…, but this node is 0x…` | the same copied-file mistake, caught locally |
+| node will not start, `charter is signed by 0x…, not the expected authority` | `XCP_CLUSTER_AUTHORITY` does not match whoever signed the charter |
+
+### Anchoring on-chain later, if you ever want to
+
+The root is byte-identical to what `NodeRegistry.upsertCluster` takes, and
+proofs issued here verify under `verifyMembership` unchanged. So a deployment
+can run privately now and anchor the same charter later without recomputing
+anything, or run both at once off one root. Nothing above requires a chain, and
+the test suite asserts the two implementations agree rather than assuming it.
+
 ### What this does not yet do
 
-Reachability and trust anchoring, not the rest of a private federation. Still
-outstanding: off-chain cluster membership (`cluster_id` currently anchors to
-`NodeRegistry.sol`), a membership-gated node record, destination authentication
-for cross-boundary A2A — `/v1/a2a/delegate` returns `delivered: false` and
-authorises a delegation rather than opening a channel — and datacentre locality
-in route selection. See `ROADMAP.md`.
+Reachability, trust anchoring and membership — not the rest of a private
+federation. Still outstanding: a membership-gated node record (the record is
+unauthenticated per RFC 8615, so it publishes internal topology), destination
+authentication for cross-boundary A2A — `/v1/a2a/delegate` returns
+`delivered: false` and authorises a delegation rather than opening a channel —
+datacentre locality in route selection, and a federated tool catalogue. See
+`ROADMAP.md`.
 
 ## Severity, and what it actually means
 

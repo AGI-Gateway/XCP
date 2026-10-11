@@ -133,7 +133,12 @@ class NodeRecord:
     session_registry: str = ""
     node_registry: str = ""            # NodeRegistry address, if bonded
     bond_minor: int = 0                # stake backing this node's identity
-    cluster_id: str = ""               # membership root is on-chain, roster is not
+    cluster_id: str = ""               # a root commits to the member set
+    #: This node's membership proof, when it belongs to a private cluster. A
+    #: claim carries a proof and nothing a peer would judge it by: the peer
+    #: verifies it against the root in the charter the PEER holds, so a claim
+    #: cannot assert the ground it is checked against. See federation/cluster.py.
+    membership: Optional[dict] = None
     transport_price_minor: int = 0     # what this node charges per routed call
     accepts_paid_routing: bool = False
     seed_peers_extra: list = field(default_factory=list)

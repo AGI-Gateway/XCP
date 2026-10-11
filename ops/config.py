@@ -98,6 +98,37 @@ SETTINGS: tuple[Setting, ...] = (
             "refused as a disguised bypass, and a malformed entry stops the "
             "node starting rather than silently narrowing what you declared.",
             unsafe=True),
+    Setting("XCP_CLUSTER_CHARTER", R.NODE, "",
+            "Path to the signed cluster charter this node federates under. The "
+            "charter commits to the member set with a Merkle root and carries "
+            "no roster, so it can be distributed to every node without "
+            "publishing who is in the cluster. A closed cluster refuses any "
+            "peer whose membership proof does not verify against THIS "
+            "charter's root — never against one the peer supplied. Unset means "
+            "no cluster, and peering is bilateral. A charter that does not "
+            "verify stops the node: starting without it would leave a closed "
+            "cluster accepting any peer, which is what it exists to prevent."),
+    Setting("XCP_CLUSTER_MEMBERSHIP", R.NODE, "",
+            "Path to THIS node's own membership proof, issued by the cluster "
+            "authority. Published in the node record so peers can verify this "
+            "node against their own charter. The node refuses to start if the "
+            "proof does not verify, or if it is a proof for a different node — "
+            "which catches a membership file copied from another datacentre."),
+    Setting("XCP_CLUSTER_AUTHORITY", R.NODE, "",
+            "Address of the key allowed to sign this cluster's charters. "
+            "Without it a node accepts any correctly-signed charter naming its "
+            "cluster id, so anyone could mint one. Set it on every node."),
+    Setting("XCP_CLUSTER_MIN_EPOCH", R.NODE, "0",
+            "Refuse a charter below this epoch. Raising the epoch is how a "
+            "member removal takes effect, so an operator pinning the floor "
+            "stops a rolled-back charter file re-admitting a node that was "
+            "removed. Set it to the epoch you currently expect."),
+    Setting("XCP_CLUSTER_AUTHORITY_KEY", R.TOOLING, "",
+            "The cluster authority's signing key, read by "
+            "scripts/cluster-charter.py. Belongs on the authority's machine "
+            "only, never on a node: a node needs the address, not the key. "
+            "UNRECOVERABLE if lost — every node is configured with the "
+            "matching address and would need reconfiguring.", secret=True),
     Setting("XCP_PEER_CA_BUNDLE", R.NODE, "",
             "PEM bundle of the certificate authorities that sign THIS "
             "federation's peers. When set it REPLACES the public trust store "

@@ -66,6 +66,8 @@ jobs:
         # gateway in the production profile, so it belongs in this job rather
         # than the dependency-light one.
         run: python tests/test_private_federation.py
+      - name: Cluster membership (off-chain, and agreeing with the contract)
+        run: python tests/test_cluster.py
       - name: Triage and runbook
         run: python tests/test_triage.py
       - name: Conformance suite (reference must certify)
