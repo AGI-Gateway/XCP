@@ -206,8 +206,20 @@ def test_every_published_artifact_is_gated_on_the_sdk_vectors():
     assert "ports" in jobs, "the release does not check the SDK ports"
 
     steps = " ".join(str(s.get("run", "")) for s in jobs["ports"]["steps"])
-    for runner in ("python -m sdk", "vectors.mjs", "go test ./sdk/go"):
+    for runner in ("python -m sdk", "vectors.mjs", "go test ./..."):
         assert runner in steps, f"the ports job does not run {runner!r}"
+
+    # The Go step must run INSIDE the module. `go test ./sdk/go/...` from the
+    # repository root fails with "directory prefix sdk/go does not contain
+    # main module", because the root is not a Go module and sdk/go is a nested
+    # one. This shipped once: it passed locally, where it had been run from
+    # inside the directory, and failed on CI. The earlier version of this
+    # assertion looked for the root-relative form, so it certified the bug.
+    go_step = next(s for s in jobs["ports"]["steps"]
+                   if "go test" in str(s.get("run", "")))
+    assert go_step.get("working-directory") == "sdk/go", (
+        "the Go port step does not run inside sdk/go, so it cannot work: the "
+        "repository root is not a Go module")
     assert "generate-sdk-contract.py --check" in steps, \
         "the ports job does not check the contract against its sources"
 

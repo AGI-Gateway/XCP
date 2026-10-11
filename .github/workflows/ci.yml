@@ -189,10 +189,21 @@ jobs:
       - uses: actions/setup-node@v4
         with: {node-version: "22"}
       - uses: actions/setup-go@v5
-        with: {go-version: "1.22"}
+        with:
+          go-version: "1.22"
+          # The SDK has no dependencies, so there is no go.sum to key a cache
+          # on and setup-go warns about its absence on every run.
+          cache: false
       - name: Python port
         run: python -m sdk
       - name: TypeScript port
         run: node sdk/typescript/vectors.mjs
       - name: Go port
-        run: go test ./sdk/go/...
+        # `working-directory`, not `go test ./sdk/go/...` from the root. The
+        # repository root is not a Go module and sdk/go is a nested one, so the
+        # root-relative form fails with "directory prefix sdk/go does not
+        # contain main module". It passed locally because it was run from
+        # inside the directory, which is exactly the difference CI exists to
+        # catch.
+        working-directory: sdk/go
+        run: go test ./...

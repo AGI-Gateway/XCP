@@ -45,7 +45,9 @@ jobs:
       - uses: actions/setup-node@v4
         with: {node-version: "22"}
       - uses: actions/setup-go@v5
-        with: {go-version: "1.22"}
+        with:
+          go-version: "1.22"
+          cache: false
       - run: pip install -r requirements.txt
       - name: The contract must match its sources
         run: python scripts/generate-sdk-contract.py --check
@@ -54,7 +56,9 @@ jobs:
       - name: TypeScript port
         run: node sdk/typescript/vectors.mjs
       - name: Go port
-        run: go test ./sdk/go/...
+        # Inside the module: the repository root is not a Go module.
+        working-directory: sdk/go
+        run: go test ./...
 
   image:
     name: Build, sign and publish
