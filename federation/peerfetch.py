@@ -47,6 +47,7 @@ Status: XCP is a draft proposal.
 from __future__ import annotations
 
 import asyncio
+import json
 import os
 import socket
 import ssl
@@ -147,18 +148,41 @@ def _record_url(gateway_url: str, path: str = "/.well-known/xcp-node.json") -> s
     return gateway_url.rstrip("/") + path
 
 
+def encode_access(req: Any) -> str:
+    """
+    A ClusterAccess request as one header value.
+
+    base64url rather than raw JSON: a proof is a list of 32-byte hex strings,
+    and header values have no business carrying structure that a proxy might
+    normalise.
+    """
+    import base64
+    blob = json.dumps(req.to_dict(), separators=(",", ":")).encode("utf-8")
+    return base64.urlsafe_b64encode(blob).decode("ascii").rstrip("=")
+
+
 async def fetch_node_record(gateway_url: str, *,
                             timeout: float = DEFAULT_TIMEOUT,
-                            bundle: Optional[str] = None) -> FetchedRecord:
+                            bundle: Optional[str] = None,
+                            access: Any = None) -> FetchedRecord:
     """
     Fetch a peer's node record.
 
     Redirects are refused rather than followed: the caller has already checked
     this URL against the egress guard, and an open redirector on a permitted
     host would otherwise reach somewhere that was never checked.
+
+    `access` is this node's own membership proof, presented so that a peer
+    gating its record will serve the full one. Without it, gating a record
+    would break peering in both directions -- each node would fetch a reduced
+    record with no certificate binding to verify, and refuse the peer for a
+    reason that has nothing to do with the peer.
     """
     import httpx
     url = _record_url(gateway_url)
+    headers = {}
+    if access is not None:
+        headers["XCP-Cluster-Access"] = encode_access(access)
     # Always an SSLContext, never `verify=False`. A plain-HTTP peer URL has
     # already been refused by the egress guard unless the operator set the
     # development flag, and `verify=False` in federation code is the line an
@@ -166,7 +190,7 @@ async def fetch_node_record(gateway_url: str, *,
     try:
         async with httpx.AsyncClient(timeout=timeout, follow_redirects=False,
                                      verify=peer_verify(bundle=bundle)) as hc:
-            r = await hc.get(url)
+            r = await hc.get(url, headers=headers)
     except Exception as e:                       # noqa: BLE001 - reported coarsely
         raise PeerFetchError(f"{type(e).__name__}") from e
     body = r.content or b""
@@ -223,4 +247,5 @@ def trust_summary() -> dict[str, Any]:
 __all__ = ["CA_BUNDLE_ENV", "MAX_RECORD_BYTES", "PeerFetchError",
            "PeerTrustConfigError", "FetchedRecord", "peer_ca_bundle",
            "validate_config", "peer_ssl_context", "peer_verify",
-           "fetch_node_record", "peer_certificate_der", "trust_summary"]
+           "fetch_node_record", "peer_certificate_der", "trust_summary",
+           "encode_access"]

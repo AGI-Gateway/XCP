@@ -116,6 +116,53 @@ could not use them without deploying and paying for a contract.
   node also stops the node, which catches a membership file copied between
   datacentres.
 
+### Private federation — gated discovery
+
+`/.well-known/xcp-node.json` is unauthenticated by RFC 8615. That is right for
+a public node, where it is the entire bootstrap, and it publishes the inside of
+a private one: node ids, gateway URLs, operator, certificate bindings, seed
+peers — everything an attacker would use to map the estate.
+
+- A node in a **closed cluster** now serves a **reduced record** to callers
+  that have not proved membership: domain, protocol versions, and the cluster
+  id so the caller knows what to prove. An authorization split on the one
+  resource rather than a second, non-standard path — RFC 8615 reserves the
+  path, not the response. `NodeRecord.PUBLIC_FIELDS` is an allowlist, because
+  a denylist would leak every field added later.
+
+- **The full record needs proof of possession, not a bearer token.** A
+  membership claim is a static document, so gating on the claim alone would
+  make possession access. `XCP-Cluster-Access` carries the claim plus an
+  EIP-712 signature from the key the claim names, over a payload bound to the
+  audience and expiring in 60 seconds. Replaying it at another node fails on
+  the audience; replaying it later fails on the expiry; a member cannot mint
+  itself a longer-lived one, because the verifier refuses a TTL above the
+  ceiling — the expiry is the only thing bounding replay. The signature commits
+  to a digest of the proof, so a member cannot sign once and then substitute a
+  stale proof.
+
+- **Removal now costs discovery as well as peering**, out of the same epoch
+  bump. A removed node's proof stops verifying here too, so it can no longer
+  read the record it would need in order to attempt peering.
+
+- Every refusal returns the identical reduced record. A precise complaint would
+  tell an unauthenticated caller which part of their credential was wrong,
+  which is a probing oracle; the reason goes to the audit log, where the
+  operator can see it. Tested by comparing the responses to four different
+  failures byte for byte.
+
+- Gating would have broken federation in both directions — each node fetching
+  a reduced record with no certificate binding, and refusing the other for a
+  reason that has nothing to do with the peer. The peer fetcher now presents
+  this node's own membership, minted per fetch and bound to the domain being
+  asked. When a peer does refuse, the diagnostic says membership rather than
+  surfacing as "could not retrieve a valid peer record", which would send an
+  operator looking at the network.
+
+- `XCP_NODE_RECORD_PUBLIC=1` keeps a node discoverable despite a closed
+  cluster — a public-facing gateway inside a private organisation, or one under
+  external monitoring. Marked as weakening a control, because it does.
+
 ### Test infrastructure
 
 - Contract tests signalled "skip" by raising `RuntimeError("SKIP: …")`, which
@@ -129,6 +176,11 @@ could not use them without deploying and paying for a contract.
   server), and the certificate-retrieval invariant is asserted across the call
   chain. A companion test refuses a second HTTP client in the handler, which is
   how the first one came to have verification disabled.
+- `_gateway` in the private-federation tests applied its own defaults *after*
+  the caller's overrides, so a test that set `XCP_NODE_KEY` silently got the
+  default instead. It surfaced as the gateway refusing to start — correctly,
+  because the membership claim then named a different node than the one
+  running. The fixture had been masking what a caller asked for.
 - The configuration-drift scan only saw environment variables passed to
   `getenv` as string literals, so a module tidy enough to name its variables
   was invisible to it — `XCP_PEER_CA_BUNDLE` was caught only because an

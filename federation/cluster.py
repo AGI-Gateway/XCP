@@ -452,6 +452,170 @@ def verify_member(charter: ClusterCharter, claim: MembershipClaim, *,
     return problems
 
 
+# ── proving membership to a peer, right now ────────────────────────────────
+# A claim on its own is a BEARER credential: it is a static document, and
+# anyone who obtains one can present it as their own. That is tolerable inside
+# a node record, where the claim sits alongside the identity it describes and a
+# peer checks both. It is not tolerable as the thing that unlocks a gated
+# resource, because then possession alone is access.
+#
+# So an access request is a claim plus a signature from the key the claim names,
+# over a payload bound to WHO is being asked and WHEN. Replaying it elsewhere
+# fails on the audience; replaying it later fails on the expiry. This is the
+# same shape as the per-request credentials the trust firewall already mints for
+# agents -- short-lived, and bound to the exact thing being requested.
+
+ACCESS_TTL = 60
+
+
+@dataclass
+class AccessRequest:
+    """A member proving, to one named audience, that it is a member right now."""
+    claim: MembershipClaim
+    audience: str                    # the domain being asked
+    issued_at: int
+    expires_at: int
+    signature: str = ""
+
+    def payload(self) -> dict[str, Any]:
+        return {"clusterId": self.claim.cluster_id, "nodeId": self.claim.node_id,
+                "epoch": self.claim.epoch, "proofRoot": _proof_digest(self.claim),
+                "audience": self.audience.lower(),
+                "issuedAt": self.issued_at, "expiresAt": self.expires_at}
+
+    def expired(self, now: Optional[int] = None) -> bool:
+        return (now or int(time.time())) > self.expires_at
+
+    def to_dict(self) -> dict[str, Any]:
+        return {"claim": self.claim.to_dict(), "audience": self.audience,
+                "issuedAt": self.issued_at, "expiresAt": self.expires_at,
+                "signature": self.signature}
+
+    @staticmethod
+    def from_dict(d: dict[str, Any]) -> "AccessRequest":
+        if not isinstance(d, dict):
+            raise ClusterError("access request must be an object")
+        try:
+            return AccessRequest(
+                claim=MembershipClaim.from_dict(d["claim"]),
+                audience=str(d["audience"]), issued_at=int(d["issuedAt"]),
+                expires_at=int(d["expiresAt"]),
+                signature=str(d.get("signature") or ""))
+        except ClusterError:
+            raise
+        except (KeyError, TypeError, ValueError) as e:
+            raise ClusterError(f"malformed access request: {e}")
+
+
+def _proof_digest(claim: MembershipClaim) -> str:
+    """
+    The proof, committed to by digest rather than signed element by element.
+
+    Without this the signature would cover the claim's identity but not its
+    proof, so a member could sign once and then swap in any proof it liked --
+    including a stale one for a node that has since been removed.
+    """
+    return digest(canonical([claim.cluster_id, claim.node_id, claim.epoch,
+                             list(claim.proof)]))
+
+
+def _typed_access(payload: dict[str, Any], chain_id: int) -> dict:
+    return {
+        "types": {
+            "EIP712Domain": [{"name": "name", "type": "string"},
+                             {"name": "version", "type": "string"},
+                             {"name": "chainId", "type": "uint256"}],
+            "ClusterAccess": [
+                {"name": "clusterId", "type": "string"},
+                {"name": "nodeId", "type": "string"},
+                {"name": "epoch", "type": "uint64"},
+                {"name": "proofRoot", "type": "string"},
+                {"name": "audience", "type": "string"},
+                {"name": "issuedAt", "type": "uint64"},
+                {"name": "expiresAt", "type": "uint64"}],
+        },
+        "primaryType": "ClusterAccess",
+        "domain": {"name": "XCPClusterAccess", "version": "1",
+                   "chainId": chain_id},
+        "message": payload,
+    }
+
+
+def sign_access_request(node_key: str, claim: MembershipClaim, *,
+                        audience: str, ttl: int = ACCESS_TTL,
+                        now: Optional[int] = None,
+                        chain_id: int = 8453) -> AccessRequest:
+    """
+    Mint a short-lived proof of membership for one audience.
+
+    The key must be the node's own long-lived identity key -- the same one that
+    signs its certificate bindings. A member that signs with anything else is
+    not proving it is the node its claim names.
+    """
+    if not _ETH:
+        raise ClusterError("eth-account required to sign an access request")
+    if not audience.strip():
+        raise ClusterError("an access request must name its audience")
+    n = now or int(time.time())
+    req = AccessRequest(claim=claim, audience=audience.strip().lower(),
+                        issued_at=n, expires_at=n + max(1, ttl))
+    sig = Account.sign_message(
+        encode_typed_data(full_message=_typed_access(req.payload(), chain_id)),
+        private_key=node_key).signature.hex()
+    req.signature = sig if sig.startswith("0x") else "0x" + sig
+    return req
+
+
+def verify_access_request(charter: ClusterCharter, req: AccessRequest, *,
+                          audience: str, now: Optional[int] = None,
+                          max_ttl: int = ACCESS_TTL,
+                          chain_id: int = 8453) -> list[str]:
+    """
+    Check an access request against OUR charter. Returns problems; empty means
+    this really is a current member of this cluster, asking us.
+    """
+    problems: list[str] = []
+    n = now or int(time.time())
+
+    if req.audience.lower() != audience.strip().lower():
+        # Without this a request minted for one node is replayed at every other
+        # node in the cluster, so one captured credential opens all of them.
+        problems.append("access request was minted for a different audience")
+    if req.expired(n):
+        problems.append("access request has expired")
+    if req.issued_at > n + 5:
+        problems.append("access request is issued in the future")
+    if req.expires_at - req.issued_at > max_ttl:
+        # A member could otherwise mint itself a year-long credential and make
+        # the expiry meaningless, which is the only thing bounding replay.
+        problems.append(
+            f"access request lives longer than {max_ttl}s; refusing a "
+            f"credential whose expiry does not bound replay")
+
+    problems.extend(verify_member(charter, req.claim))
+
+    if not req.signature:
+        problems.append("access request is unsigned")
+    elif _ETH:
+        try:
+            rec = Account.recover_message(
+                encode_typed_data(
+                    full_message=_typed_access(req.payload(), chain_id)),
+                signature=bytes.fromhex(req.signature[2:]))
+        except Exception as e:                      # noqa: BLE001
+            problems.append(f"access signature is malformed: {type(e).__name__}")
+        else:
+            # The signature has to come from the key the CLAIM names, which is
+            # what makes this proof of possession rather than a second bearer
+            # token. node_id is keccak(address), so the recovered address is
+            # checked by deriving the id it would produce.
+            from .identity import node_id_from_address
+            if node_id_from_address(rec).lower() != req.claim.node_id.lower():
+                problems.append(
+                    "access request is not signed by the node its claim names")
+    return problems
+
+
 # ── what a node loads at startup ───────────────────────────────────────────
 
 CHARTER_ENV = "XCP_CLUSTER_CHARTER"
@@ -543,9 +707,11 @@ def load_posture(*, now: Optional[int] = None) -> ClusterPosture:
 
 
 __all__ = ["CLUSTER_SPEC_VERSION", "DEFAULT_CHARTER_TTL", "MIN_LEAVES",
-           "ClusterError", "ClusterCharter", "MemberSet", "MembershipClaim",
-           "ClusterPosture", "cluster_id_from_name", "membership_root",
+           "ACCESS_TTL", "ClusterError", "ClusterCharter", "MemberSet",
+           "MembershipClaim", "AccessRequest", "ClusterPosture",
+           "cluster_id_from_name", "membership_root",
            "membership_proof", "verify_membership_proof", "build_member_set",
            "sign_charter", "verify_charter", "issue_claim", "verify_member",
+           "sign_access_request", "verify_access_request",
            "load_posture", "digest", "canonical",
            "CHARTER_ENV", "CLAIM_ENV", "AUTHORITY_ENV", "MIN_EPOCH_ENV"]

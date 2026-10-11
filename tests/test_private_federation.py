@@ -787,11 +787,16 @@ class _gateway:
     def __enter__(self):
         import urllib.request
         self.port = 8731
-        env = {**os.environ, **_PROD_ENV, **self.extra}
+        env = {**os.environ, **_PROD_ENV}
         env["PYTHONPATH"] = os.pathsep.join([str(ROOT), str(ROOT / "security")])
         env.update(XCP_NODE_KEY=GW_KEY, XCP_NODE_DOMAIN="dc0-gw.internal.example",
                    XCP_NODE_URL="https://dc0-gw.internal.example",
                    XCP_GLOBAL_RATE="500000")
+        # The caller's overrides go on LAST. They used to be applied before
+        # these defaults, so a test that set XCP_NODE_KEY silently got GW_KEY
+        # instead — which showed up as the gateway refusing to start, correctly,
+        # because the membership claim then named a different node.
+        env.update(self.extra)
         self.proc = subprocess.Popen(
             [sys.executable, "-m", "uvicorn", "core.gateway.xcp_gateway:app",
              "--host", "127.0.0.1", "--port", str(self.port), "--log-level",

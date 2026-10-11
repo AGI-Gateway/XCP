@@ -1041,6 +1041,29 @@ if (_CLUSTER is not None and _CLUSTER.claim is not None
         f"another datacentre's membership file. Refusing to start.")
 
 
+def _mint_access(audience: str):
+    """
+    This node's own membership proof, for one audience, valid for seconds.
+
+    None when this node is not a cluster member, which is the ordinary public
+    case: a peer that does not gate its record does not look at this, and one
+    that does will serve us the reduced record. That is the correct outcome —
+    a non-member should not be able to read a closed cluster's topology, and
+    this node is a non-member as far as that cluster is concerned.
+    """
+    if _CLUSTER is None or _CLUSTER.claim is None or not _NODE_KEY:
+        return None
+    try:
+        from federation.cluster import sign_access_request
+        return sign_access_request(_NODE_KEY, _CLUSTER.claim,
+                                   audience=audience)
+    except Exception as e:                          # noqa: BLE001
+        # Never fatal: failing to mint means we fetch unauthenticated and get
+        # the reduced record, which is a clear refusal rather than a hang.
+        _fed_audit(f"could not mint a membership proof: {type(e).__name__}")
+        return None
+
+
 def _fed_audit(msg: str) -> None:
     """
     Federation events are node-to-node, not caller actions. Routing them through
@@ -1052,16 +1075,76 @@ def _fed_audit(msg: str) -> None:
           flush=True)
 
 
+H_CLUSTER_ACCESS = "xcp-cluster-access"
+
+#: A node in a closed cluster gates its record by default: publishing the full
+#: topology of a federation that only members may join is incoherent. An
+#: operator who wants a node discoverable anyway — a public-facing gateway
+#: inside a private organisation, or one under external monitoring — can say so.
+NODE_RECORD_PUBLIC = os.getenv("XCP_NODE_RECORD_PUBLIC", "0") == "1"
+
+
+def _record_is_gated() -> bool:
+    return (_CLUSTER is not None and _CLUSTER.closed
+            and not NODE_RECORD_PUBLIC)
+
+
 @app.get("/.well-known/xcp-node.json")
-async def node_record() -> JSONResponse:
+async def node_record(request: Request) -> JSONResponse:
     """
-    This node's identity. Unauthenticated by RFC 8615 — a peer must be able to
-    read it before it has any relationship with us.
+    This node's identity.
+
+    Unauthenticated by RFC 8615 for a public node — a peer must be able to read
+    it before it has any relationship with us, and that is the whole bootstrap.
+
+    A node in a CLOSED cluster serves a reduced record instead: enough to
+    negotiate a protocol version and to learn which cluster to prove membership
+    of, and nothing that maps the estate. The full record goes to a caller that
+    presents a signed, audience-bound membership proof.
+
+    This is an authorisation split on one resource, not a second path. RFC 8615
+    reserves the path; it says nothing about every caller getting the same
+    response, and a private federation should not need a discovery mechanism of
+    its own.
+
+    Note what this gives beyond privacy: a removed member loses DISCOVERY, not
+    just peering. Its proof stops verifying here too, so it can no longer read
+    the record it would need in order to try.
     """
     if _NODE_RECORD is None:
         return JSONResponse({"error": "federation not configured; set "
                                       "XCP_NODE_KEY and XCP_NODE_DOMAIN"},
                             status_code=404)
+    if not _record_is_gated():
+        return JSONResponse(json.loads(_NODE_RECORD.to_json()))
+
+    limited = _fed_limit(request, "record")
+    if limited is not None:
+        return limited
+
+    raw = request.headers.get(H_CLUSTER_ACCESS, "")
+    if not raw:
+        return JSONResponse(_NODE_RECORD.reduced())
+    try:
+        import base64
+        from federation.cluster import (AccessRequest, verify_access_request,
+                                        ClusterError as _ClErr)
+        pad = "=" * (-len(raw) % 4)
+        req = AccessRequest.from_dict(
+            json.loads(base64.urlsafe_b64decode(raw + pad)))
+    except Exception:                               # noqa: BLE001
+        # Coarse on purpose, and the reduced record rather than an error: a
+        # precise complaint tells an unauthenticated caller how close they got.
+        _fed_audit("record access refused: unreadable credential")
+        return JSONResponse(_NODE_RECORD.reduced())
+
+    problems = verify_access_request(_CLUSTER.charter, req,
+                                     audience=_NODE_DOMAIN)
+    if problems:
+        _fed_audit(f"record access refused for {req.claim.node_id[:18]}…: "
+                   f"{problems[0]}")
+        return JSONResponse(_NODE_RECORD.reduced())
+    _fed_audit(f"record served to member {req.claim.node_id[:18]}…")
     return JSONResponse(json.loads(_NODE_RECORD.to_json()))
 
 
@@ -1108,13 +1191,32 @@ async def federation_peer(request: Request) -> JSONResponse:
         # an internal chain before the footprint binding below was ever
         # reached: a private federation could not peer at all.
         from federation.peerfetch import fetch_node_record
-        fetched = await fetch_node_record(url)
+        # Present our own membership so a peer that gates its record serves us
+        # the full one. Minted per fetch and bound to the domain we are asking,
+        # so it is useless anywhere else and useless a minute later.
+        fetched = await fetch_node_record(url, access=_mint_access(domain))
         if fetched.status >= 300:
             # Redirects are refused rather than followed: an open redirector on
             # a benign host would otherwise defeat the egress check above.
             return JSONResponse({"error": "peer record must be served directly"},
                                 status_code=502)
         doc = json.loads(fetched.body or b"{}")
+        # Detected BEFORE parsing as a full record. A reduced record has no
+        # node_id, so constructing one raises inside this block and the attempt
+        # surfaces as the generic "could not retrieve a valid peer record" —
+        # which sends the operator looking at the network rather than at
+        # membership.
+        if doc.get("gated") and not doc.get("node_id"):
+            _fed_audit(f"peer {domain} served a reduced record: not admitted")
+            return JSONResponse(
+                {"error": "the peer gates its node record and did not accept "
+                          "this node as a member of its cluster",
+                 "reason": "no membership proof was accepted; check both nodes "
+                           "share a cluster, that this node's "
+                           "XCP_CLUSTER_MEMBERSHIP is current, and that the "
+                           "peer's charter epoch matches",
+                 "peerCluster": doc.get("cluster_id") or None},
+                status_code=403)
         rec = NodeRecord(**{k: v for k, v in doc.items()
                             if k in NodeRecord.__dataclass_fields__})
     except Exception:

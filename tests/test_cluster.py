@@ -856,6 +856,445 @@ def test_an_open_cluster_admits_a_node_with_no_claim():
     assert res.get("clusterMember") is None
 
 
+# ── the gated node record ──────────────────────────────────────────────────
+# /.well-known/xcp-node.json is unauthenticated by RFC 8615, which is right for
+# a public node and publishes the inside of a private one: node ids, gateway
+# URLs, operator, seed peers. A closed cluster serves a reduced record instead
+# and the full one to a member that proves itself.
+#
+# A claim alone would be a bearer credential, so what is presented is a signed,
+# audience-bound, short-lived access request. Most of what follows tests what
+# that refuses.
+
+def _member_with_key(n_others: int = 2):
+    """An authority, a charter, and one member whose signing key we hold."""
+    _need_eth()
+    from federation.identity import node_id_from_address
+    auth = Account.create()
+    node = Account.create()
+    node_id = node_id_from_address(node.address)
+    ms = build_member_set(CID, [node_id, *_ids(n_others)])
+    charter = sign_charter(auth.key.hex(), ms, epoch=1)
+    claim = issue_claim(ms, node_id, epoch=1)
+    return auth, node, node_id, ms, charter, claim
+
+
+def test_an_access_request_proves_possession_not_just_membership():
+    """
+    The claim is a static document and a bearer credential. The signature is
+    what makes presenting it proof that you ARE the node it names.
+    """
+    from federation.cluster import sign_access_request, verify_access_request
+    _, node, node_id, _, charter, claim = _member_with_key()
+    req = sign_access_request(node.key.hex(), claim, audience="dc1.internal")
+    assert verify_access_request(charter, req, audience="dc1.internal") == []
+
+    # the same claim, signed by someone else's key
+    impostor = Account.create()
+    stolen = sign_access_request(impostor.key.hex(), claim,
+                                 audience="dc1.internal")
+    problems = verify_access_request(charter, stolen, audience="dc1.internal")
+    assert problems and "not signed by the node its claim names" in problems[-1]
+
+
+def test_an_access_request_is_bound_to_one_audience():
+    """
+    Otherwise one captured credential opens every node in the cluster, and
+    binding it to a domain is the only thing that stops lateral replay.
+    """
+    from federation.cluster import sign_access_request, verify_access_request
+    _, node, _, _, charter, claim = _member_with_key()
+    req = sign_access_request(node.key.hex(), claim, audience="dc1.internal")
+    problems = verify_access_request(charter, req, audience="dc2.internal")
+    assert problems and "different audience" in problems[0]
+
+
+def test_an_access_request_expires():
+    from federation.cluster import sign_access_request, verify_access_request
+    _, node, _, _, charter, claim = _member_with_key()
+    req = sign_access_request(node.key.hex(), claim, audience="dc1.internal")
+    later = int(time.time()) + 3600
+    problems = verify_access_request(charter, req, audience="dc1.internal",
+                                      now=later)
+    assert problems and "expired" in problems[0]
+
+
+def test_a_member_cannot_mint_itself_an_unbounded_credential():
+    """
+    The expiry is the only thing bounding replay, so a member handing itself a
+    year-long credential would make it meaningless.
+    """
+    from federation.cluster import sign_access_request, verify_access_request
+    _, node, _, _, charter, claim = _member_with_key()
+    req = sign_access_request(node.key.hex(), claim, audience="dc1.internal",
+                              ttl=86400)
+    problems = verify_access_request(charter, req, audience="dc1.internal")
+    assert any("does not bound replay" in p for p in problems), problems
+
+
+def test_the_proof_cannot_be_swapped_after_signing():
+    """
+    The signature commits to a digest of the proof, so a member cannot sign
+    once and then substitute a stale proof for a node since removed.
+    """
+    from federation.cluster import (AccessRequest, sign_access_request,
+                                     verify_access_request)
+    _, node, _, ms, charter, claim = _member_with_key()
+    req = sign_access_request(node.key.hex(), claim, audience="dc1.internal")
+    tampered = AccessRequest.from_dict(req.to_dict())
+    tampered.claim.proof = [ms.node_ids[1]]
+    problems = verify_access_request(charter, tampered, audience="dc1.internal")
+    assert problems
+
+
+def test_a_removed_member_cannot_mint_a_working_credential():
+    """
+    The property worth having: gating means a removed member loses DISCOVERY,
+    not just peering. It cannot read the record it would need to try.
+    """
+    from federation.cluster import sign_access_request, verify_access_request
+    auth, node, node_id, ms, _, claim = _member_with_key()
+    ms2 = build_member_set(CID, ms.node_ids[1:])
+    charter2 = sign_charter(auth.key.hex(), ms2, epoch=2)
+    req = sign_access_request(node.key.hex(), claim, audience="dc1.internal")
+    assert verify_access_request(charter2, req, audience="dc1.internal")
+
+
+def test_an_access_request_round_trips_through_a_header():
+    from federation.cluster import (AccessRequest, sign_access_request,
+                                     verify_access_request)
+    from federation.peerfetch import encode_access
+    import base64
+    _, node, _, _, charter, claim = _member_with_key()
+    req = sign_access_request(node.key.hex(), claim, audience="dc1.internal")
+    header = encode_access(req)
+    assert "=" not in header, "padding in a header value invites normalisation"
+    pad = "=" * (-len(header) % 4)
+    revived = AccessRequest.from_dict(
+        json.loads(base64.urlsafe_b64decode(header + pad)))
+    assert verify_access_request(charter, revived, audience="dc1.internal") == []
+
+
+def test_a_malformed_access_request_is_refused():
+    from federation.cluster import AccessRequest
+    for bad in ({}, {"claim": {}}, "nope",
+                {"claim": {"clusterId": CID, "nodeId": "0x1", "epoch": 1},
+                 "audience": "x"}):
+        _refuses(ClusterError, AccessRequest.from_dict, bad)
+
+
+def test_an_access_request_must_name_an_audience():
+    from federation.cluster import sign_access_request
+    _, node, _, _, _, claim = _member_with_key()
+    _refuses(ClusterError, sign_access_request, node.key.hex(), claim,
+             audience="   ")
+
+
+# ── what the reduced record withholds ──────────────────────────────────────
+
+def _full_record():
+    from federation import NodeIdentity, NodeRecord, rotate
+    ident = NodeIdentity.from_key(PEER_NODE_KEY)
+    fp = "0x" + "ab" * 32
+    return NodeRecord(
+        domain="dc1.internal", node_id=ident.node_id,
+        gateway_url="https://dc1.internal", operator="Example Corp DC1",
+        bindings=rotate(ident, fp, domain="dc1.internal").to_dict(),
+        cert_footprint=fp, cluster_id=CID,
+        seed_peers=["dc2.internal", "dc3.internal"])
+
+
+def test_the_reduced_record_withholds_the_topology():
+    _need_eth()
+    rec = _full_record()
+    blob = json.dumps(rec.reduced())
+    for leaked in (rec.node_id, rec.gateway_url, rec.operator,
+                   rec.cert_footprint, "dc2.internal", "dc3.internal"):
+        assert leaked not in blob, f"the reduced record published {leaked!r}"
+    assert "bindings" not in rec.reduced()
+
+
+def test_the_reduced_record_still_allows_negotiation():
+    """A caller that cannot authenticate must still learn whether this node
+    speaks a version it can talk, or the gate becomes a black hole."""
+    _need_eth()
+    red = _full_record().reduced()
+    for needed in ("domain", "spec_version", "mcp_spec", "protocol_versions",
+                   "cluster_id", "gated"):
+        assert needed in red, f"the reduced record omits {needed}"
+    assert red["gated"] is True
+    assert red["cluster_id"] == CID, \
+        "a caller needs the cluster id to know what to prove"
+
+
+def test_the_reduced_record_is_an_allowlist():
+    """
+    A denylist would leak every field added later. Asserted on the mechanism,
+    because this is the kind of thing that decays silently.
+    """
+    from federation import NodeRecord
+    red = set(_full_record().reduced())
+    assert red - {"gated", "authentication"} <= set(NodeRecord.PUBLIC_FIELDS)
+    # and the record has grown fields the reduced view must not be carrying
+    assert len(NodeRecord.__dataclass_fields__) > len(NodeRecord.PUBLIC_FIELDS)
+
+
+# ── end to end: a gated gateway ────────────────────────────────────────────
+
+def _gated_gateway_record(*, present: str = "member"):
+    """
+    Boot a gated gateway and GET its record. `present` is one of
+    "member", "nothing", "removed", "stranger", "expired", "wrong-audience".
+
+    Returns the parsed record.
+    """
+    _need_eth()
+    import urllib.request
+    from federation.cluster import sign_access_request
+    from federation.identity import node_id_from_address
+    from test_private_federation import _gateway
+    from federation.peerfetch import encode_access
+
+    # The gateway's own identity has to be a member, or it would refuse to
+    # start with a claim that is not its own.
+    gw_key = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+    gw_id = node_id_from_address(Account.from_key(gw_key).address)
+    caller = Account.create()
+    caller_id = node_id_from_address(caller.address)
+    auth = Account.create()
+
+    roster = [gw_id] + ([] if present in ("nothing", "stranger") else [caller_id])
+    ms = build_member_set(CID, roster + _ids(1))
+    epoch = 1
+    if present == "removed":
+        # the caller holds a genuine epoch-1 proof; the gateway has moved on
+        old_ms = ms
+        old_claim = issue_claim(old_ms, caller_id, epoch=1)
+        ms = build_member_set(CID, [gw_id, *_ids(1)])
+        epoch = 2
+    charter = sign_charter(auth.key.hex(), ms, epoch=epoch)
+
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        (tmp / "charter.json").write_text(charter.to_json())
+        (tmp / "claim.json").write_text(
+            json.dumps(issue_claim(ms, gw_id, epoch=epoch).to_dict()) + "\n")
+
+        header = None
+        if present == "member":
+            header = encode_access(sign_access_request(
+                caller.key.hex(), issue_claim(ms, caller_id, epoch=epoch),
+                audience="dc0-gw.internal.example"))
+        elif present == "removed":
+            header = encode_access(sign_access_request(
+                caller.key.hex(), old_claim,
+                audience="dc0-gw.internal.example"))
+        elif present == "stranger":
+            # a non-member inventing a claim and signing it properly
+            fake = MembershipClaim(cluster_id=CID, node_id=caller_id, epoch=1,
+                                   proof=[_ids(1)[0]])
+            header = encode_access(sign_access_request(
+                caller.key.hex(), fake, audience="dc0-gw.internal.example"))
+        elif present == "expired":
+            header = encode_access(sign_access_request(
+                caller.key.hex(), issue_claim(ms, caller_id, epoch=epoch),
+                audience="dc0-gw.internal.example", ttl=1,
+                now=int(time.time()) - 600))
+        elif present == "wrong-audience":
+            header = encode_access(sign_access_request(
+                caller.key.hex(), issue_claim(ms, caller_id, epoch=epoch),
+                audience="somewhere-else.example"))
+
+        with _gateway(XCP_PROFILE="development", XCP_VERIFY_URL="",
+                      XCP_NODE_KEY=gw_key,
+                      XCP_CLUSTER_CHARTER=str(tmp / "charter.json"),
+                      XCP_CLUSTER_MEMBERSHIP=str(tmp / "claim.json"),
+                      XCP_CLUSTER_AUTHORITY=auth.address) as gw:
+            req = urllib.request.Request(
+                f"http://127.0.0.1:{gw.port}/.well-known/xcp-node.json")
+            if header:
+                req.add_header("XCP-Cluster-Access", header)
+            with urllib.request.urlopen(req, timeout=20) as r:
+                return json.loads(r.read())
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
+def test_a_member_gets_the_full_record():
+    rec = _gated_gateway_record(present="member")
+    assert not rec.get("gated"), f"a member was served the reduced record: {rec}"
+    assert rec.get("node_id") and rec.get("gateway_url"), rec
+    assert rec.get("bindings"), "the full record must carry the cert binding"
+
+
+def test_an_unauthenticated_caller_gets_the_reduced_record():
+    rec = _gated_gateway_record(present="nothing")
+    assert rec.get("gated") is True, f"the full record was published: {rec}"
+    assert "node_id" not in rec and "gateway_url" not in rec, rec
+    assert rec.get("cluster_id") == CID, \
+        "a caller still needs to know which cluster to prove"
+
+
+def test_a_removed_member_loses_discovery_not_just_peering():
+    """
+    The reason gating is worth having beyond privacy. The caller presents a
+    proof the authority genuinely issued and still cannot read the record.
+    """
+    rec = _gated_gateway_record(present="removed")
+    assert rec.get("gated") is True, f"a removed member read the record: {rec}"
+
+
+def test_a_stranger_with_an_invented_proof_gets_the_reduced_record():
+    rec = _gated_gateway_record(present="stranger")
+    assert rec.get("gated") is True, f"an invented proof worked: {rec}"
+
+
+def test_an_expired_credential_gets_the_reduced_record():
+    rec = _gated_gateway_record(present="expired")
+    assert rec.get("gated") is True, f"an expired credential worked: {rec}"
+
+
+def test_a_credential_for_another_audience_gets_the_reduced_record():
+    rec = _gated_gateway_record(present="wrong-audience")
+    assert rec.get("gated") is True, \
+        f"a credential minted for another node worked here: {rec}"
+
+
+def test_the_refusal_does_not_say_how_close_the_caller_got():
+    """
+    Every refusal returns the same reduced record. A precise complaint would
+    tell an unauthenticated caller which part of their credential was wrong,
+    which is a probing oracle.
+    """
+    shapes = [_gated_gateway_record(present=p)
+              for p in ("nothing", "stranger", "expired", "wrong-audience")]
+    first = json.dumps(shapes[0], sort_keys=True)
+    for other in shapes[1:]:
+        assert json.dumps(other, sort_keys=True) == first, \
+            "the refusals differ, so they can be told apart"
+
+
+def test_an_ungated_node_still_publishes_its_full_record():
+    """
+    RFC 8615 bootstrap for the public federation must be untouched: a node
+    outside a closed cluster serves everyone the same record.
+    """
+    _need_eth()
+    import urllib.request
+    from test_private_federation import _gateway
+    gw_key = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+    with _gateway(XCP_PROFILE="development", XCP_VERIFY_URL="",
+                  XCP_NODE_KEY=gw_key) as gw:
+        with urllib.request.urlopen(
+                f"http://127.0.0.1:{gw.port}/.well-known/xcp-node.json",
+                timeout=20) as r:
+            rec = json.loads(r.read())
+    assert not rec.get("gated") and rec.get("node_id"), rec
+
+
+def test_the_gate_can_be_opened_deliberately():
+    """A public-facing gateway inside a private organisation, or one under
+    external monitoring, needs a way to stay discoverable."""
+    _need_eth()
+    import urllib.request
+    from federation.identity import node_id_from_address
+    from test_private_federation import _gateway
+    gw_key = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+    gw_id = node_id_from_address(Account.from_key(gw_key).address)
+    auth = Account.create()
+    ms = build_member_set(CID, [gw_id, *_ids(1)])
+    charter = sign_charter(auth.key.hex(), ms, epoch=1)
+    tmp = Path(tempfile.mkdtemp())
+    try:
+        (tmp / "charter.json").write_text(charter.to_json())
+        (tmp / "claim.json").write_text(
+            json.dumps(issue_claim(ms, gw_id, epoch=1).to_dict()) + "\n")
+        with _gateway(XCP_PROFILE="development", XCP_VERIFY_URL="",
+                      XCP_NODE_KEY=gw_key,
+                      XCP_NODE_RECORD_PUBLIC="1",
+                      XCP_CLUSTER_CHARTER=str(tmp / "charter.json"),
+                      XCP_CLUSTER_MEMBERSHIP=str(tmp / "claim.json"),
+                      XCP_CLUSTER_AUTHORITY=auth.address) as gw:
+            with urllib.request.urlopen(
+                    f"http://127.0.0.1:{gw.port}/.well-known/xcp-node.json",
+                    timeout=20) as r:
+                rec = json.loads(r.read())
+    finally:
+        shutil.rmtree(tmp, ignore_errors=True)
+    assert not rec.get("gated") and rec.get("node_id"), rec
+
+
+def test_the_setting_that_opens_the_gate_is_marked_unsafe():
+    from ops.config import get
+    s = get("XCP_NODE_RECORD_PUBLIC")
+    assert s is not None and s.unsafe and s.default == "0"
+
+
+def test_gating_does_not_break_peering():
+    """
+    The failure this most easily causes: both nodes gate, each fetches a
+    reduced record with no certificate binding, and each refuses the other for
+    a reason that has nothing to do with the peer. The fetcher presents its own
+    membership, so a gated peer serves it the full record.
+    """
+    src = (ROOT / "core" / "gateway" / "xcp_gateway.py").read_text()
+    i = src.index("async def federation_peer(")
+    j = src.find("@app.", i)
+    body = src[i:j if j > 0 else len(src)]
+    assert "_mint_access(" in body, \
+        "peering fetches a record without presenting membership, so a gated " \
+        "peer would serve it the reduced one"
+    # and when it IS refused, the diagnostic says so rather than blaming TLS
+    assert 'doc.get("gated")' in body
+
+
+def test_a_peer_serving_a_reduced_record_is_reported_as_such():
+    status, res = _attempt_peering_against_gated()
+    assert status == 403, f"expected a membership refusal, got {status} {res}"
+    assert "gates its node record" in str(res), res
+
+
+def _attempt_peering_against_gated():
+    """A gateway in cluster A peering with a node that gates for cluster B."""
+    _need_eth()
+    from test_private_federation import _gateway, _issue_internal_ca
+    from federation.identity import node_id_from_address
+
+    gw_key = "0x59c6995e998f97a5a0044966f0945389dc9e86dae88c7a8412f4603b6b78690d"
+    gw_id = node_id_from_address(Account.from_key(gw_key).address)
+    auth = Account.create()
+    ms = build_member_set(CID, [gw_id, *_ids(1)])
+    charter = sign_charter(auth.key.hex(), ms, epoch=1)
+
+    tmp = Path(tempfile.mkdtemp())
+    srv = None
+    try:
+        (tmp / "charter.json").write_text(charter.to_json())
+        (tmp / "claim.json").write_text(
+            json.dumps(issue_claim(ms, gw_id, epoch=1).to_dict()) + "\n")
+        bundle, cert_p, key_p = _issue_internal_ca(
+            tmp, san_ip="127.0.0.1", common_name="127.0.0.1")
+        # The peer answers with a REDUCED record: it gates, and did not accept us.
+        reduced = json.dumps({
+            "domain": "127.0.0.1", "spec_version": "0.2-draft",
+            "mcp_spec": "2026-07-28", "protocol_versions": ["1"],
+            "features": [], "accepts_peering": True,
+            "cluster_id": cluster_id_from_name("someone-elses-cluster"),
+            "gated": True}).encode()
+        srv, url = _peer_serving(reduced, cert_p, key_p)
+        with _gateway(XCP_PROFILE="development", XCP_VERIFY_URL="",
+                      XCP_ALLOW_INSECURE_PEERS="1", XCP_NODE_KEY=gw_key,
+                      XCP_PEER_CA_BUNDLE=str(bundle),
+                      XCP_CLUSTER_CHARTER=str(tmp / "charter.json"),
+                      XCP_CLUSTER_MEMBERSHIP=str(tmp / "claim.json"),
+                      XCP_CLUSTER_AUTHORITY=auth.address) as gw:
+            return gw.peer("127.0.0.1", url)
+    finally:
+        if srv is not None:
+            srv.shutdown()
+        shutil.rmtree(tmp, ignore_errors=True)
+
+
 if __name__ == "__main__":
     tests = [(n, f) for n, f in sorted(globals().items())
              if n.startswith("test_") and callable(f)]

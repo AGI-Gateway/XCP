@@ -123,6 +123,15 @@ SETTINGS: tuple[Setting, ...] = (
             "member removal takes effect, so an operator pinning the floor "
             "stops a rolled-back charter file re-admitting a node that was "
             "removed. Set it to the epoch you currently expect."),
+    Setting("XCP_NODE_RECORD_PUBLIC", R.NODE, "0",
+            "Serve the FULL node record to anyone, even in a closed cluster. A "
+            "closed cluster gates its record by default — publishing the "
+            "topology of a federation only members may join is incoherent, and "
+            "gating also means a removed member loses discovery and not just "
+            "peering. Set this for a node that must stay publicly "
+            "discoverable: a public-facing gateway inside a private "
+            "organisation, or one under external monitoring. It publishes this "
+            "node's id, gateway URL, operator and seed peers.", unsafe=True),
     Setting("XCP_CLUSTER_AUTHORITY_KEY", R.TOOLING, "",
             "The cluster authority's signing key, read by "
             "scripts/cluster-charter.py. Belongs on the authority's machine "

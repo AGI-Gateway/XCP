@@ -41,11 +41,12 @@ done; the rest is what a private federation still needs.
       nothing to expire. The root stays byte-compatible with
       `NodeRegistry.upsertCluster`, so a deployment can anchor the identical
       charter on-chain later or run both off one root
-- [ ] **Membership-gated node record** — `/.well-known/xcp-node.json` is
-      unauthenticated by RFC 8615, which is right for the public federation and
-      publishes internal topology in a private one. Needs an authorization
-      split on the one resource: a reduced record for negotiation, the full one
-      to a caller proving cluster membership
+- [x] **Membership-gated node record** — a closed cluster serves a reduced
+      record to strangers (domain, protocol versions, cluster id) and the full
+      one to a caller presenting a signed, audience-bound, 60-second membership
+      proof. An authorization split on the one RFC 8615 resource rather than a
+      second path. A removed member therefore loses discovery as well as
+      peering, from the same epoch bump
 - [ ] **Cross-boundary A2A** — `/v1/a2a/delegate` authorises a delegation and
       reports `delivered: false`; it does not open a channel. Needs a signed
       delegation ticket the destination redeems, re-deriving the tier under its

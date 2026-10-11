@@ -166,6 +166,7 @@ before restarting.
 | `XCP_CLUSTER_MEMBERSHIP` | `—` | Path to this node's own membership proof, published in its node record. The node stops if the proof does not verify, or if it is a proof for a different node — which catches a membership file copied from another datacentre. |
 | `XCP_CLUSTER_AUTHORITY` | `—` | Address of the key allowed to sign this cluster's charters. Without it a node accepts any correctly-signed charter naming its cluster id, so anyone could mint one. Set it on every node. |
 | `XCP_CLUSTER_MIN_EPOCH` | `0` | Refuse a charter below this epoch. Raising the epoch is how a removal takes effect, so pinning the floor stops a rolled-back charter file re-admitting a removed node. |
+| `XCP_NODE_RECORD_PUBLIC` **!** | `0` | Serve the FULL node record to anyone, even in a closed cluster. A closed cluster gates it by default. Set this only for a node that must stay publicly discoverable — a public-facing gateway inside a private organisation, or one under external monitoring. It publishes this node's id, gateway URL, operator and seed peers. |
 
 **wrapper**
 
@@ -399,6 +400,60 @@ no business on an unauthenticated endpoint.
 | node will not start, `claim for node 0x…, but this node is 0x…` | the same copied-file mistake, caught locally |
 | node will not start, `charter is signed by 0x…, not the expected authority` | `XCP_CLUSTER_AUTHORITY` does not match whoever signed the charter |
 
+### The node record is gated too
+
+A node in a closed cluster stops publishing its full record. This needs no
+configuration — it follows from the cluster being closed, because publishing
+the topology of a federation only members may join is incoherent.
+
+An unauthenticated caller gets a reduced record: the domain, the protocol
+versions, and the cluster id so it knows what to prove. Withheld are the node
+id, gateway URL, operator, certificate bindings and seed peers — everything you
+would use to map the estate.
+
+```bash
+# a stranger
+curl -s https://dc1-gw.internal.example/.well-known/xcp-node.json
+# { "domain": "...", "protocol_versions": ["1"], "cluster_id": "0x40b1ac…",
+#   "gated": true, "authentication": "present XCP-Cluster-Access: …" }
+```
+
+The full record goes to a caller presenting `XCP-Cluster-Access`: its
+membership claim plus a signature from its node key, naming this domain as the
+audience and valid for 60 seconds. Your gateways mint this for each other
+automatically when peering — there is nothing to configure, and nothing to
+rotate.
+
+The claim alone would have been a bearer credential: a static document, so
+possession would be access. The signature makes it proof that the caller *is*
+the node its claim names; the audience stops one captured credential opening
+every node in the cluster; the expiry bounds replay. A member cannot mint
+itself a longer-lived one, because the verifier refuses a TTL above 60s.
+
+!!! note "Removal now costs discovery as well as peering"
+    A removed node's proof stops verifying here too, so it can no longer read
+    the record it would need in order to attempt peering. That falls out of the
+    same epoch bump — there is nothing extra to do.
+
+Every refusal returns the same reduced record, deliberately. A precise
+complaint would tell an unauthenticated caller which part of their credential
+was wrong, which is a probing oracle. The reason goes to the node's audit log
+instead, so `XCP_CLUSTER_MEMBERSHIP` problems are diagnosed from the serving
+side:
+
+```
+federation record access refused for 0x8b935c8b36f7b2…: access request has expired
+```
+
+If a peering attempt fails with *"the peer gates its node record and did not
+accept this node as a member"*, check that both nodes report the same `epoch`
+on `/health`, and that the one being refused has a current
+`XCP_CLUSTER_MEMBERSHIP`.
+
+To keep a node publicly discoverable despite a closed cluster, set
+`XCP_NODE_RECORD_PUBLIC=1`. It only affects what the record publishes — peering
+is still members-only.
+
 ### Anchoring on-chain later, if you ever want to
 
 The root is byte-identical to what `NodeRegistry.upsertCluster` takes, and
@@ -409,13 +464,12 @@ the test suite asserts the two implementations agree rather than assuming it.
 
 ### What this does not yet do
 
-Reachability, trust anchoring and membership — not the rest of a private
-federation. Still outstanding: a membership-gated node record (the record is
-unauthenticated per RFC 8615, so it publishes internal topology), destination
-authentication for cross-boundary A2A — `/v1/a2a/delegate` returns
-`delivered: false` and authorises a delegation rather than opening a channel —
-datacentre locality in route selection, and a federated tool catalogue. See
-`ROADMAP.md`.
+Reachability, trust anchoring, membership and gated discovery — not the rest of
+a private federation. Still outstanding: destination authentication for
+cross-boundary A2A (`/v1/a2a/delegate` returns `delivered: false` and authorises
+a delegation rather than opening a channel), datacentre locality in route
+selection, and a federated tool catalogue so one egress gateway can hold a
+vendor credential for the whole estate. See `ROADMAP.md`.
 
 ## Severity, and what it actually means
 

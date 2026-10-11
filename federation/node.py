@@ -203,6 +203,34 @@ class NodeRecord:
     def to_json(self) -> str:
         return json.dumps(self.to_dict(), indent=2, sort_keys=True) + "\n"
 
+    #: Everything a caller needs to negotiate a protocol version and work out
+    #: what to prove, and nothing that describes this organisation's inside.
+    #: Deliberately an allowlist: a denylist would leak every field added later.
+    PUBLIC_FIELDS = ("domain", "spec_version", "mcp_spec", "protocol_versions",
+                     "features", "accepts_peering", "cluster_id")
+
+    def reduced(self) -> dict[str, Any]:
+        """
+        The record for a caller that has not proved membership.
+
+        RFC 8615 is about the PATH being well-known, not about the response
+        being identical for everyone, so gating is an authorisation split on
+        one resource rather than a second, non-standard path -- a private
+        federation should not need a discovery mechanism of its own.
+
+        What is withheld is the topology: node_id, gateway_url, operator, the
+        certificate bindings and the seed peers. A caller learns that a node
+        is here, which protocol versions it speaks, and which cluster to prove
+        membership of. It learns nothing it could use to map the estate.
+        """
+        d = asdict(self)
+        out = {k: d[k] for k in self.PUBLIC_FIELDS if k in d}
+        out["gated"] = True
+        out["authentication"] = (
+            "present XCP-Cluster-Access: a base64url ClusterAccess request "
+            "signed by your node key, naming this domain as its audience")
+        return out
+
     @staticmethod
     def from_dict(d: dict[str, Any]) -> "NodeRecord":
         known = {f for f in NodeRecord.__dataclass_fields__}
