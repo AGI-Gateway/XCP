@@ -101,7 +101,14 @@ def main() -> int:
     a2a_mandate = sign_mandate(key, "m-a2a", ident.address,
                                [f"a2a:delegate/{peer}"], now + 3600)
     r = client.delegate(peer, {"job": "summarize"}, mandate=a2a_mandate)
-    print(f"A2A delegate     OK  accepted={r.get('accepted')} peer={peer}")
+    # Reports both, because they are different claims and the distinction is
+    # the point: this gateway authorised the delegation, and nothing here has
+    # delivered it or seen the destination authenticate. The demo prints
+    # `delivered=False` with no peer gateway to deliver to, which is the
+    # honest answer. It used to read `accepted`, a field the gateway stopped
+    # returning when exactly that conflation was fixed, so it printed None.
+    print(f"A2A delegate     OK  authorized={r.get('authorized')} "
+          f"delivered={r.get('delivered')} peer={peer}")
 
     t2t_mandate = sign_mandate(key, "m-t2t", ident.address,
                                ["t2t:chain/research.fetch->summarize.run"],

@@ -240,6 +240,48 @@ def test_concurrent_checks_are_safe():
     assert not errors
 
 
+def test_the_demo_sequence_fits_inside_the_sandbox_allowance():
+    """
+    `make demo` is the first command in the README and it 429'd at the A2A step
+    from the moment the repository went public.
+
+    Every governed handler meters twice -- once before auth, once with the
+    scope known -- so a verified caller paid for each request twice. At 5 cost
+    units per tools/call against an A0xH0 burst of 30, that made three calls
+    the limit for a sandbox caller, and the demo makes four. The pre-auth pass
+    is now a no-op for a caller who is already verified.
+
+    This asserts the budget, not the fix: the sandbox tier has to have room for
+    the walkthrough the README tells people to run, charged once per request.
+    """
+    lim = RateLimiter()          # real allowances, not the test's generous ones
+    demo = ["mcp:tools/echo", "mcp:tools/sum",
+            "a2a:delegate/did:8004:8453:0xPEER",
+            "t2t:chain/research.fetch->summarize.run"]
+    for scope in demo:
+        d = lim.check(agent_key="42001", tier="A0xH0", method="tools/call",
+                      scope=scope)
+        assert d.allowed, (
+            f"the demo runs out of budget at {scope!r}: {d.reason}. "
+            f"A0xH0 burst is {ALLOWANCES['A0xH0'].burst} and a tools/call "
+            f"costs {COST['tools/call']}, so the walkthrough needs "
+            f"{len(demo) * COST['tools/call']} units charged once per request.")
+
+
+def test_a_sandbox_caller_is_still_throttled():
+    """The control for the test above: the fix must not have lifted the ceiling,
+    only stopped charging twice for one request."""
+    lim = RateLimiter()
+    allowed = 0
+    while lim.check(agent_key="noisy", tier="A0xH0",
+                    method="tools/call").allowed:
+        allowed += 1
+        if allowed > 1000:
+            raise AssertionError("A0xH0 is no longer throttled at all")
+    assert allowed <= ALLOWANCES["A0xH0"].burst // COST["tools/call"] + 1, \
+        f"{allowed} calls got through on a burst of {ALLOWANCES['A0xH0'].burst}"
+
+
 def test_stats_expose_why_requests_were_rejected():
     lim = _lim()
     lim.check(agent_key="a", tier="A0xH0", method="tools/call",

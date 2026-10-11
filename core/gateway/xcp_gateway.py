@@ -476,7 +476,7 @@ def _fed_limit(request: "Request", what: str):
 
 
 def _limit(ctx: "Ctx", method: str, scope: str = "", body: bytes = b"",
-           request: "Request" = None):
+           request: "Request" = None, *, preauth: bool = False):
     """
     Returns a 429 response if the caller is over budget, else None.
 
@@ -485,8 +485,23 @@ def _limit(ctx: "Ctx", method: str, scope: str = "", body: bytes = b"",
     denial-of-service vector unless it is metered too. Unverified callers are
     keyed on their source address, because there is no identity to key on yet
     and one attacker must not be able to starve every other anonymous caller.
+
+    `preauth` marks that first pass, and it is a no-op for a caller who is
+    already verified.
+
+    WHY: every governed handler calls this twice -- once before auth and once
+    with the scope known -- so a VERIFIED caller was charged for one request
+    twice. `tools/call` costs 5 and the A0xH0 burst is 30, which made three
+    calls the limit for a sandbox caller. `make demo` is four, so the first
+    command in the README had never worked: it died at the A2A step with a 429.
+    The pre-auth pass exists for UNAUTHENTICATED floods, which is exactly the
+    case where ctx.verified is False, so skipping it here costs nothing it was
+    there to defend. Metering once, where the scope is known, is also more
+    accurate -- the scope is part of what a call costs.
     """
     if _LIMITS is None:
+        return None
+    if preauth and ctx.verified and ctx.binding is not None:
         return None
     if ctx.verified and ctx.binding is not None:
         tier = getattr(ctx.binding, "tier", "")
@@ -786,7 +801,7 @@ async def a2t_call(request: Request) -> Response:
     if verr is not None:
         return verr
     ctx = parse_ctx(request)
-    limited = _limit(ctx, "tools/call", request=request)
+    limited = _limit(ctx, "tools/call", request=request, preauth=True)
     if limited is not None:
         return limited
     if not ctx.verified and POSTURE == "enforce":
@@ -844,7 +859,7 @@ async def a2a_delegate(request: Request) -> Response:
     if verr is not None:
         return verr
     ctx = parse_ctx(request)
-    limited = _limit(ctx, "tools/call", request=request)
+    limited = _limit(ctx, "tools/call", request=request, preauth=True)
     if limited is not None:
         return limited
     if not ctx.verified and POSTURE == "enforce":
@@ -882,7 +897,7 @@ async def t2t_pipe(request: Request) -> Response:
     if verr is not None:
         return verr
     ctx = parse_ctx(request)
-    limited = _limit(ctx, "tools/call", request=request)
+    limited = _limit(ctx, "tools/call", request=request, preauth=True)
     if limited is not None:
         return limited
     if not ctx.verified and POSTURE == "enforce":

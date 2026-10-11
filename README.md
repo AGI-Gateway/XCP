@@ -22,11 +22,13 @@ make install && make demo
 session opened   agent=42001 footprint=0xd3832e3d18dbb6… rails=3
 A2T echo         OK  served_for=42001 verified_by=gw-local
 A2T sum          DENIED (out of scope) ✓
-A2A delegate     OK  accepted=True peer=did:8004:8453:0xPEER
+A2A delegate     OK  authorized=True delivered=False peer=did:8004:8453:0xPEER
 T2T chain        OK  research.fetch -> summarize.run
 ```
 
-The denials are the product working.
+The denials are the product working. So is `delivered=False`: this gateway
+authorised the delegation, and with no peer gateway to deliver it to, nothing
+has been delivered. Those are separate claims and XCP reports them separately.
 
 ---
 
@@ -41,6 +43,7 @@ The denials are the product working.
 | **Per-call governance** | Every action gated by a signed mandate: Merkle proof + EIP-712 + scope coverage. Revocable in about one block. |
 | **Discovery on-ramp** | One command generates your ARD catalog *and* MCP Registry manifest, with representative queries derived from your real tool surface. |
 | **Defence in depth** | Optional `xcpsec`: hardened mTLS, argument firewall, execution sandbox, supply-chain pinning, prompt-injection boundaries. |
+| **Private federation** | Federate your own datacentres: declared internal ranges, your own CA as the peer trust anchor, cluster membership by signed charter, and a node record that stops publishing your topology. |
 | **Wraps, never replaces** | Point it at MCP servers you already run. They don't change. |
 
 ---
@@ -70,6 +73,44 @@ and off by default. What you *do* still depend on — DNS and certificate
 authorities — is stated plainly in
 [docs/agentic-internet.md](docs/agentic-internet.md), along with the honest
 limits: the network doesn't exist yet, and bootstrap is a real unsolved problem.
+
+## Or federate only with yourself
+
+The same mechanism runs inside one organisation — several datacentres, agents
+talking across boundaries, nothing published to anyone outside. Four settings,
+and the defaults are the safe ones.
+
+```bash
+XCP_PRIVATE_PEER_CIDRS=10.40.0.0/16,10.41.0.0/16   # where your peers are
+XCP_PEER_CA_BUNDLE=/etc/xcp/internal-roots.pem     # who signs them
+XCP_CLUSTER_CHARTER=/etc/xcp/charter.json          # which of them may peer
+XCP_CLUSTER_AUTHORITY=0x…                          # who may say so
+```
+
+Each one is narrower than the thing it replaced, and that is the whole design:
+
+- **Declaring a range** is not disabling the SSRF guard. A host resolving
+  outside every declared range is still refused, and loopback, link-local,
+  cloud-metadata and CGNAT addresses stay refused *even inside a declaration* —
+  so a range cannot be used to aim the gateway at its own admin surface. TLS is
+  not waived.
+- **Your CA replaces** the public trust store for peer verification rather than
+  joining it, because setting it is a statement about who signs your peers.
+  Upstream tool calls keep public trust, so this doesn't break external APIs.
+- **A cluster charter commits to the member set with a Merkle root and carries
+  no roster.** The same file goes to every node without publishing who is in
+  the cluster. Removing a node is a re-issue at a higher epoch: its genuine
+  proof stops verifying against the root its former peers hold — no revocation
+  list, no gossip, nothing to expire.
+- **The node record stops publishing your topology.** A stranger gets the
+  protocol versions and the cluster id; the full record needs a signed,
+  audience-bound, 60-second membership proof. So a removed node loses discovery
+  as well as peering.
+
+The charter root is byte-compatible with `NodeRegistry.upsertCluster`, so a
+deployment can run entirely off-chain now and anchor the identical charter
+later, or run both off one root. Setup, removal and failure modes:
+**[docs/runbook.md](docs/runbook.md)**.
 
 ## The catalog — 9,576 entries, classified
 
@@ -175,15 +216,19 @@ xcp/
 ├── xcp                     the self-serve CLI entry point
 ├── cli/xcp/                CLI implementation
 ├── trust/                  the trust lattice — tiers → mandate templates
-├── federation/             peer-to-peer node trust — the agentic internet
+├── federation/             peer trust, clusters, routing — the agentic internet
 ├── connectors/             one MCP endpoint definition per external SaaS
-├── vault/                  secret *references* + SSO identity providers
+├── vault/                  secret *references*, sealed credentials, SSO IdPs
 ├── providers/              open registries: add an MCP connection or a model
 ├── trustfirewall/          stateless MCP credentials + graded corpus reachability
+├── policy/                 a policy document the gateway enforces, with a digest
 ├── receipts/               proof-of-delivery and evidence-conditioned escrow
 ├── privacy/                retention, crypto-shredded erasure, the data map
+├── compliance/             covenants mapped to EU AI Act, DORA, GDPR, SOC
+├── conformance/            the suite an implementation must pass to claim XCP
+├── protocol/               wire version negotiation and the feature set
 ├── telemetry/              OpenTelemetry logs, metrics, traces — scrubbed
-├── ops/                    live triage: the first five minutes, automated
+├── ops/                    live triage + the configuration registry
 ├── bench/                  performance measurement against a baseline
 ├── discovery/              ARD catalog + MCP Registry manifest generation
 ├── core/
@@ -191,12 +236,21 @@ xcp/
 │   ├── gateway/            verify session → gate mandate → route
 │   ├── server/             XCP-aware MCP server
 │   ├── verifier/           Merkle + EIP-712 + scope, in-memory or on-chain
-│   ├── contracts/          ERC-8004x SessionRegistry.sol
+│   ├── contracts/          ERC-8004x SessionRegistry + NodeRegistry
 │   └── proto/              A2T / A2A / T2T gRPC contract
+├── impl/node/              a second gateway, written from the spec alone
 ├── security/xcpsec/        optional defence-in-depth library
-├── deploy/                 certs, docker-compose, helm
-├── examples/ tests/ docs/
+├── rfc/                    the Internet-Draft
+├── paper/                  the working paper
+├── scripts/ deploy/ examples/ tests/ docs/
 ```
+
+Two things in there are load-bearing rather than decorative.
+`conformance/` imports nothing from the implementation, so it tests the
+*specification*; `impl/node/` is a second gateway written from the draft rather
+than ported from the Python, and it passes that suite 15/15. That is the first
+evidence the spec is implementable from the document — which is what a
+specification is for, and is the reason both exist.
 
 ---
 
@@ -210,6 +264,25 @@ xcp/
                                      ▼
                               upstream MCP server  ◀── verified identity forwarded
 ```
+
+The client's asserted identity never travels upstream — the *verified* one does,
+stamped with which gateway verified it. Across a federation boundary the same
+discipline applies in the other direction:
+
+```
+ gateway A ──① fetch node record (+ membership proof)──▶ gateway B
+           ──② peer: verify record against B's live cert──▶
+                                     │ ③ cluster membership, against A's charter
+                                     │ ④ trust recorded at VERIFIED — not PEERED
+                                     ▼
+                              B is reachable, at a trust level B did not choose
+```
+
+Nothing a peer asserts about itself is taken as given: the record is bound to
+the certificate the TLS handshake actually presented, and membership is checked
+against the charter *this* node holds rather than one the peer supplied. Mutual
+trust can't be self-awarded — `PEERED` needs the other side to confirm
+independently.
 
 The gateway holds no keys and no funds. It is a verifier and a router, not a
 custodian — and we intend to keep that property.
@@ -231,6 +304,12 @@ against an in-process EVM.
 ## Documentation
 
 - **Docs site**: https://agi-gateway.github.io/XCP/
+- [Operator runbook](docs/runbook.md) — day zero, private federation, the
+  first five minutes of an incident
+- [Internet-Draft](rfc/draft-xcp-trust-envelope-00.txt) — XCP as a wire
+  protocol over TLS, and its relationship to RFC 6749, 9449, 9334 and 9518
+- [Conformance](docs/conformance.md) — what an implementation must pass
+- [Compliance](docs/compliance.md) — covenants against EU AI Act, DORA, GDPR, SOC
 - [SaaS connectors](docs/connectors.md) — one MCP endpoint per service
 - [Vault & authentication](docs/vault.md) — OAuth, OIDC, SAML, JWT, mTLS; SSO providers
 - [Run a node](docs/agentic-internet.md) — federate without central dependencies
@@ -266,7 +345,15 @@ project.** MCP, A2A, ERC-8004 and the OWASP taxonomies are independent, real wor
 by others, and we don't claim otherwise.
 
 - The code works and is tested; the enforcement path has no stubs.
-- It has **not** had an independent security audit.
+- It has **not** had a commissioned independent security audit. It has had an
+  adversarial review by a different model family, whose findings — including
+  two HIGH issues the project's own audit missed — are resolved and recorded
+  in [SECURITY-AUDIT.md](SECURITY-AUDIT.md). That is useful and it is not the
+  same thing as a paid audit by people with their name on the result.
+- **Cross-boundary A2A is authorisation, not delivery.** `/v1/a2a/delegate`
+  reports `authorized` and `delivered` separately and will not claim the
+  second. See [ROADMAP.md](ROADMAP.md) for what a private federation still
+  needs.
 - ARD support targets a **v0.9 draft** whose industry adoption was near zero at
   the time of writing. Publishing a catalog is a cheap option on a well-backed
   spec — not a proven traffic channel.
