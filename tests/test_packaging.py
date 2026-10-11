@@ -134,6 +134,51 @@ def test_the_peer_trust_anchor_is_mounted_read_only():
     assert "readOnly: true" in t[i:i + 80]
 
 
+def test_no_image_reference_interpolates_the_raw_owner():
+    """
+    An OCI repository name must be lowercase, and this organisation is
+    "AGI-Gateway". docker/metadata-action lowercases what it derives, so a
+    build succeeds while a hand-written reference fails on an invalid
+    reference -- which is exactly how v0.1.0 published an image and then
+    failed to sign it, with the verify job skipped so nothing said so.
+
+    Every image reference must come from the one lowercased value.
+    """
+    wf = (ROOT / ".github" / "workflows" / "release.yml").read_text()
+    for raw in ("${REGISTRY}/${IMAGE}", "env.REGISTRY }}/${{ env.IMAGE"):
+        assert raw not in wf, (
+            f"an image reference is built from {raw!r}, which keeps the "
+            f"organisation's capital letters and is not a valid OCI reference")
+    assert "tr '[:upper:]' '[:lower:]'" in wf, \
+        "nothing lowercases the image name"
+    # and the verify job must be able to see it
+    import yaml
+    d = yaml.safe_load(wf)
+    assert "image" in d["jobs"]["image"]["outputs"], \
+        "the image job does not publish the reference the verify job needs"
+
+
+def test_the_release_verifies_before_it_claims_success():
+    """
+    Signing that fails must fail the release. v0.1.0 pushed an image, failed to
+    sign it, and skipped verification -- so the only thing that would have
+    caught an unsigned release never ran.
+    """
+    import yaml
+    wf = (ROOT / ".github" / "workflows" / "release.yml").read_text()
+    d = yaml.safe_load(wf)
+    needs = d["jobs"]["verify"]["needs"]
+    assert needs == "image" or "image" in needs, \
+        "the verify job does not depend on the build, so it can run without it"
+    assert "cosign verify" in wf
+    sign = [s for j in d["jobs"].values() for s in j.get("steps", [])
+            if "cosign sign" in str(s.get("run", ""))]
+    assert sign, "the release does not sign"
+    for s in sign:
+        assert "continue-on-error" not in s, \
+            "a failed signature would not fail the release"
+
+
 def test_release_workflow_signs_what_it_publishes():
     wf = (ROOT / ".github" / "workflows" / "release.yml").read_text()
     assert "cosign sign" in wf, "unsigned images while demanding signed manifests"

@@ -36,8 +36,20 @@ jobs:
     runs-on: ubuntu-latest
     outputs:
       digest: ${{ steps.build.outputs.digest }}
+      image: ${{ steps.img.outputs.image }}
     steps:
       - uses: actions/checkout@v4
+
+      # An OCI repository name must be lowercase, and this organisation is
+      # "AGI-Gateway". docker/metadata-action lowercases what it derives, so
+      # the build and push succeeded; `cosign sign` was handed the raw value
+      # and failed on an invalid reference, which is how v0.1.0 came to publish
+      # an image and then not sign it. Derived once here and used everywhere,
+      # so the two cannot disagree again.
+      - name: Resolve the image reference in lowercase
+        id: img
+        run: |
+          echo "image=${REGISTRY}/$(printf '%s' "$IMAGE" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
 
       - uses: docker/setup-qemu-action@v3
       - uses: docker/setup-buildx-action@v3
@@ -53,7 +65,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          images: ${{ steps.img.outputs.image }}
           tags: |
             type=semver,pattern={{version}}
             type=semver,pattern={{major}}.{{minor}}
@@ -82,12 +94,12 @@ jobs:
       - name: Sign the image (keyless)
         run: |
           cosign sign --yes \
-            "${REGISTRY}/${IMAGE}@${{ steps.build.outputs.digest }}"
+            "${{ steps.img.outputs.image }}@${{ steps.build.outputs.digest }}"
 
       - name: Attest build provenance
         uses: actions/attest-build-provenance@v1
         with:
-          subject-name: ${{ env.REGISTRY }}/${{ env.IMAGE }}
+          subject-name: ${{ steps.img.outputs.image }}
           subject-digest: ${{ steps.build.outputs.digest }}
           push-to-registry: true
 
@@ -95,7 +107,7 @@ jobs:
         run: |
           echo "### Published" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
-          echo "${REGISTRY}/${IMAGE}@${{ steps.build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
+          echo "${{ steps.img.outputs.image }}@${{ steps.build.outputs.digest }}" >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY
           echo "Pin this digest in deploy/helm/values.yaml." >> $GITHUB_STEP_SUMMARY
 
@@ -110,13 +122,13 @@ jobs:
           cosign verify \
             --certificate-identity-regexp "^https://github.com/${{ github.repository }}/" \
             --certificate-oidc-issuer https://token.actions.githubusercontent.com \
-            "${REGISTRY}/${IMAGE}@${{ needs.image.outputs.digest }}"
+            "${{ needs.image.outputs.image }}@${{ needs.image.outputs.digest }}"
       - name: Every role must actually start
         run: |
           for role in gateway server verifier; do
             port=$([ "$role" = gateway ] && echo 8080 || { [ "$role" = server ] && echo 9001 || echo 8500; })
             docker run -d --name "xcp-$role" -e ROLE=$role -p $port:$port \
-              "${REGISTRY}/${IMAGE}@${{ needs.image.outputs.digest }}"
+              "${{ needs.image.outputs.image }}@${{ needs.image.outputs.digest }}"
             for i in $(seq 1 30); do
               curl -fsS "http://127.0.0.1:$port/health" && break || sleep 2
             done
@@ -126,7 +138,7 @@ jobs:
       - name: The gateway must refuse to start without its abuse controls
         run: |
           if docker run --rm -e ROLE=gateway -e XCP_RATE_LIMIT=1 \
-               --entrypoint python "${REGISTRY}/${IMAGE}@${{ needs.image.outputs.digest }}" \
+               --entrypoint python "${{ needs.image.outputs.image }}@${{ needs.image.outputs.digest }}" \
                -c "import sys;sys.modules['trustfirewall']=None;import core.gateway.xcp_gateway"; then
             echo "gateway started without abuse controls — refusing to release" >&2
             exit 1
