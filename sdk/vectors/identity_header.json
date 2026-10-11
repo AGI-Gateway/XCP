@@ -1,5 +1,5 @@
 {
-  "$comment": "XCP-Agent-Identity parse vectors. `header` is the exact field value as received. Implementations must strip ONLY SP and HTAB; the 'is NOT OWS' cases fail for any SDK that calls its language's trim(). Note that an empty footprint parses successfully -- whether it matches a binding is a question for the session registry, not the parser, and an SDK must not second-guess that here.",
+  "$comment": "XCP-Agent-Identity parse vectors. `header` is the exact field value as received. Implementations must strip ONLY SP and HTAB; the 'is NOT OWS' cases fail for any SDK that calls its language's trim(). `agentId` and `chainId` are DECIMAL STRINGS rather than JSON numbers: these are uint256 values on chain, a JSON number cannot carry one past 2^53, and a 40-digit id came back from JavaScript's JSON.parse as 1e+40. Parse them with your language's big-integer type. Note that an empty footprint parses successfully -- whether it matches a binding is a question for the session registry, not the parser, and an SDK must not second-guess that here.",
   "cases": [
     {
       "agentId": null,
@@ -11,8 +11,8 @@
       "reason": "missing or malformed XCP-Agent-Identity"
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab",
       "header": "42001;8453;0xabababababababababababababababababababababababababababababababab",
       "name": "canonical",
@@ -20,8 +20,8 @@
       "reason": null
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab",
       "header": " 42001;8453;0xabababababababababababababababababababababababababababababababab",
       "name": "leading SP",
@@ -29,8 +29,8 @@
       "reason": null
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab",
       "header": "42001;8453;0xabababababababababababababababababababababababababababababababab ",
       "name": "trailing SP",
@@ -38,8 +38,8 @@
       "reason": null
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab",
       "header": "\t42001;8453;0xabababababababababababababababababababababababababababababababab",
       "name": "leading HTAB",
@@ -47,8 +47,8 @@
       "reason": null
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab",
       "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\t",
       "name": "trailing HTAB",
@@ -56,8 +56,8 @@
       "reason": null
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab",
       "header": " \t42001;8453;0xabababababababababababababababababababababababababababababababab\t ",
       "name": "both OWS",
@@ -110,8 +110,8 @@
       "reason": "missing or malformed XCP-Agent-Identity"
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "",
       "header": "42001;8453;",
       "name": "empty footprint",
@@ -155,8 +155,8 @@
       "reason": "identity fields must be canonical decimal integers"
     },
     {
-      "agentId": 9999999999999999999999999999999999999999,
-      "chainId": 8453,
+      "agentId": "9999999999999999999999999999999999999999",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab",
       "header": "9999999999999999999999999999999999999999;8453;0xabababababababababababababababababababababababababababababababab",
       "name": "huge agent",
@@ -164,8 +164,8 @@
       "reason": null
     },
     {
-      "agentId": 0,
-      "chainId": 0,
+      "agentId": "0",
+      "chainId": "0",
       "footprint": "0xabababababababababababababababababababababababababababababababab",
       "header": "0;0;0xabababababababababababababababababababababababababababababababab",
       "name": "zero agent",
@@ -173,8 +173,8 @@
       "reason": null
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0XABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB",
       "header": "42001;8453;0XABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABABAB",
       "name": "footprint uppercased",
@@ -182,8 +182,8 @@
       "reason": null
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0Xabababababababababababababababababababababababababababababababab",
       "header": "42001;8453;0Xabababababababababababababababababababababababababababababababab",
       "name": "footprint 0X prefix",
@@ -191,8 +191,8 @@
       "reason": null
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xab",
       "header": "42001;8453;0xab",
       "name": "short footprint",
@@ -200,8 +200,8 @@
       "reason": null
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "abababababababababababababababababababababababababababababababab",
       "header": "42001;8453;abababababababababababababababababababababababababababababababab",
       "name": "footprint without 0x",
@@ -209,8 +209,8 @@
       "reason": null
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab\n",
       "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\n",
       "name": "trailing LF is NOT OWS",
@@ -227,8 +227,8 @@
       "reason": "identity fields must be canonical decimal integers"
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab\r",
       "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\r",
       "name": "trailing CR is NOT OWS",
@@ -245,8 +245,8 @@
       "reason": "identity fields must be canonical decimal integers"
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab\u000b",
       "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\u000b",
       "name": "trailing VT is NOT OWS",
@@ -263,8 +263,8 @@
       "reason": "identity fields must be canonical decimal integers"
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab\f",
       "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\f",
       "name": "trailing FF is NOT OWS",
@@ -281,8 +281,8 @@
       "reason": "identity fields must be canonical decimal integers"
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab\u0085",
       "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\u0085",
       "name": "trailing NEL is NOT OWS",
@@ -299,8 +299,8 @@
       "reason": "identity fields must be canonical decimal integers"
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab\u00a0",
       "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\u00a0",
       "name": "trailing NBSP is NOT OWS",
@@ -317,8 +317,8 @@
       "reason": "identity fields must be canonical decimal integers"
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab\u1680",
       "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\u1680",
       "name": "trailing OGHAM_SPACE is NOT OWS",
@@ -335,8 +335,8 @@
       "reason": "identity fields must be canonical decimal integers"
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab\u2000",
       "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\u2000",
       "name": "trailing EN_QUAD is NOT OWS",
@@ -353,8 +353,8 @@
       "reason": "identity fields must be canonical decimal integers"
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab\u202f",
       "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\u202f",
       "name": "trailing NARROW_NBSP is NOT OWS",
@@ -371,8 +371,8 @@
       "reason": "identity fields must be canonical decimal integers"
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab\u3000",
       "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\u3000",
       "name": "trailing IDEOGRAPHIC_SPACE is NOT OWS",
@@ -389,8 +389,8 @@
       "reason": "identity fields must be canonical decimal integers"
     },
     {
-      "agentId": 42001,
-      "chainId": 8453,
+      "agentId": "42001",
+      "chainId": "8453",
       "footprint": "0xabababababababababababababababababababababababababababababababab\u200b",
       "header": "42001;8453;0xabababababababababababababababababababababababababababababababab\u200b",
       "name": "trailing ZWSP is NOT OWS",

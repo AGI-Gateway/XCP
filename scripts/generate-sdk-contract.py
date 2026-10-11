@@ -296,8 +296,20 @@ def vectors_identity_header() -> dict[str, Any]:
             "name": name,
             "header": header,
             "ok": ident is not None,
-            "agentId": ident.agent_id if ident else None,
-            "chainId": ident.chain_id if ident else None,
+            # Emitted as DECIMAL STRINGS, not JSON numbers.
+            #
+            # Found by the TypeScript port. A JSON number cannot carry an
+            # integer beyond 2^53: the 40-digit agent id below came back from
+            # JSON.parse as 1e+40, so the vector could not be reproduced by any
+            # language whose JSON parser uses doubles -- which is most of them.
+            # The port was correct (BigInt preserves the value) and the vector
+            # file was the thing that was wrong.
+            #
+            # Agent ids are uint256 on chain, so this is not a hypothetical
+            # range. A runner compares these as strings and parses them with
+            # whatever big-integer type its language has.
+            "agentId": str(ident.agent_id) if ident else None,
+            "chainId": str(ident.chain_id) if ident else None,
             "footprint": ident.footprint if ident else None,
             "reason": reason or None,
         })
@@ -306,7 +318,11 @@ def vectors_identity_header() -> dict[str, Any]:
             "XCP-Agent-Identity parse vectors. `header` is the exact field "
             "value as received. Implementations must strip ONLY SP and HTAB; "
             "the 'is NOT OWS' cases fail for any SDK that calls its "
-            "language's trim(). Note that an empty footprint parses "
+            "language's trim(). `agentId` and `chainId` are DECIMAL STRINGS "
+            "rather than JSON numbers: these are uint256 values on chain, a "
+            "JSON number cannot carry one past 2^53, and a 40-digit id came "
+            "back from JavaScript's JSON.parse as 1e+40. Parse them with your "
+            "language's big-integer type. Note that an empty footprint parses "
             "successfully -- whether it matches a binding is a question for "
             "the session registry, not the parser, and an SDK must not "
             "second-guess that here."),

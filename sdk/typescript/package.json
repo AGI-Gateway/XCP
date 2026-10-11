@@ -1,0 +1,55 @@
+{
+  "name": "@agi-gateway/xcp",
+  "version": "0.1.0",
+  "description": "XCP client and protocol primitives: per-call authority decisions for AI agents, tools and federated nodes.",
+  "license": "Apache-2.0",
+  "type": "module",
+  "exports": {
+    ".": "./src/index.mjs",
+    "./protocol": "./src/protocol.mjs",
+    "./client": "./src/client.mjs"
+  },
+  "files": [
+    "src/",
+    "vectors.mjs",
+    "README.md"
+  ],
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "test": "node vectors.mjs"
+  },
+  "keywords": [
+    "xcp",
+    "mcp",
+    "model-context-protocol",
+    "a2a",
+    "agent",
+    "authorization",
+    "trust",
+    "federation",
+    "erc-8004"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/AGI-Gateway/XCP.git",
+    "directory": "sdk/typescript"
+  },
+  "homepage": "https://github.com/AGI-Gateway/XCP",
+  "bugs": "https://github.com/AGI-Gateway/XCP/issues",
+  "dependencies": {},
+  "comment": [
+    "No dependencies, and none wanted. The protocol primitives are string and",
+    "integer arithmetic over values this file's sibling vectors pin exactly,",
+    "and the client uses fetch(), which Node has had built in since 18. A",
+    "dependency here would be a supply-chain edge on the authorization path of",
+    "a project that enforces signed, digest-pinned manifests on everyone",
+    "else's tools.",
+    "",
+    "`npm test` runs this port against sdk/vectors/*.json. It is wired into CI",
+    "and must pass before publish, because an SDK that disagrees with the",
+    "protocol is worse than no SDK: it fails at the point of integration,",
+    "against a gateway the integrator does not control."
+  ]
+}

@@ -160,10 +160,13 @@ def _check_identity(rep: Report) -> Report:
         if c["ok"]:
             if ident is None:
                 continue
+            # Compared as decimal strings, because that is how the vectors
+            # carry them: a JSON number cannot represent a uint256 agent id.
+            # See the vector file's $comment.
             _cmp(rep, "identity_header", c["name"], "agentId",
-                 c["agentId"], ident.agent_id)
+                 c["agentId"], str(ident.agent_id))
             _cmp(rep, "identity_header", c["name"], "chainId",
-                 c["chainId"], ident.chain_id)
+                 c["chainId"], str(ident.chain_id))
             _cmp(rep, "identity_header", c["name"], "footprint",
                  c["footprint"], ident.footprint)
         else:

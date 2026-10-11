@@ -174,3 +174,25 @@ jobs:
         with: {python-version: "3.12"}
       - run: pip install web3 eth-tester py-evm eth-account eth-utils fastapi
       - run: python core/contracts/deploy_mock_registry.py
+
+  sdk-ports:
+    name: Every SDK port must reproduce the vectors
+    runs-on: ubuntu-latest
+    # An SDK that disagrees with the protocol is worse than no SDK: it fails at
+    # the point of integration, against a gateway the integrator does not
+    # control. These runners read the SAME sdk/vectors/*.json the Python
+    # implementation is held to -- one contract, several ports, no copies.
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - uses: actions/setup-go@v5
+        with: {go-version: "1.22"}
+      - name: Python port
+        run: python -m sdk
+      - name: TypeScript port
+        run: node sdk/typescript/vectors.mjs
+      - name: Go port
+        run: go test ./sdk/go/...

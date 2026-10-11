@@ -1,0 +1,54 @@
+{{- if .Values.server.enabled }}
+# The reference MCP server role.
+#
+# This template was missing while values.yaml declared server.enabled,
+# server.requireVerified and server.service.port. Setting server.enabled: true
+# therefore did nothing at all, silently -- the same class of defect as a key a
+# template reads and values.yaml does not declare, in the other direction, and
+# the reason tests/test_packaging.py now checks both directions.
+#
+# The image supports three roles and the chart could deploy two of them.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Release.Name }}-server
+spec:
+  replicas: {{ .Values.server.replicas }}
+  selector: {matchLabels: {app: {{ .Release.Name }}-server}}
+  template:
+    metadata:
+      labels: {app: {{ .Release.Name }}-server}
+    spec:
+      securityContext: {{- toYaml .Values.podSecurityContext | nindent 8 }}
+      containers:
+        - name: server
+          image: "{{ .Values.image.repository }}{{ if .Values.image.digest }}@{{ .Values.image.digest }}{{ else }}:{{ .Values.image.tag }}{{ end }}"
+          imagePullPolicy: {{ .Values.image.pullPolicy }}
+          securityContext: {{- toYaml .Values.containerSecurityContext | nindent 12 }}
+          ports: [{containerPort: 9001, name: http}]
+          env:
+            - {name: ROLE, value: "server"}
+            - {name: XCP_SERVER_NAME, value: {{ .Values.server.name | quote }}}
+            # Refuse calls that did not arrive through a gateway. Setting this
+            # false lets an agent reach the server directly, bypassing every
+            # mandate check the gateway performs -- which is the whole point of
+            # putting a gateway in front of it. Rendered unconditionally so the
+            # pod's environment states the posture.
+            - {name: REQUIRE_VERIFIED, value: {{ ternary "1" "0" .Values.server.requireVerified | quote }}}
+          readinessProbe: {httpGet: {path: /health, port: http}, initialDelaySeconds: 3}
+          livenessProbe:  {httpGet: {path: /health, port: http}, initialDelaySeconds: 10}
+          resources: {{- toYaml .Values.server.resources | nindent 12 }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ .Release.Name }}-server
+spec:
+  # ClusterIP only, and deliberately not configurable. The server is reached
+  # through the gateway; exposing it as a LoadBalancer would put an MCP
+  # endpoint on the internet with REQUIRE_VERIFIED as the only thing between it
+  # and an anonymous caller.
+  type: ClusterIP
+  selector: {app: {{ .Release.Name }}-server}
+  ports: [{port: {{ .Values.server.service.port }}, targetPort: http}]
+{{- end }}

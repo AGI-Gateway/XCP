@@ -30,9 +30,39 @@ jobs:
       - run: pip install -r requirements.txt pyyaml
       - run: make test
 
+  # Every SDK port must agree with the committed contract before anything is
+  # published. An SDK that disagrees with the protocol is worse than no SDK: it
+  # fails at the point of integration, against a gateway the integrator does
+  # not control, and the failure looks like the gateway's fault.
+  ports:
+    name: SDK ports must reproduce the vectors
+    needs: test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - uses: actions/setup-node@v4
+        with: {node-version: "22"}
+      - uses: actions/setup-go@v5
+        with: {go-version: "1.22"}
+      - run: pip install -r requirements.txt
+      - name: The contract must match its sources
+        run: python scripts/generate-sdk-contract.py --check
+      - name: Python port
+        run: python -m sdk
+      - name: TypeScript port
+        run: node sdk/typescript/vectors.mjs
+      - name: Go port
+        run: go test ./sdk/go/...
+
   image:
     name: Build, sign and publish
-    needs: test
+    # Gated on `ports` as well as `test`: the gateway imports
+    # protocol.identity, whose behaviour the vectors pin. A stale contract
+    # would ship a gateway that disagrees with the SDKs published alongside it
+    # from the same tag, which is the one combination nobody can debug.
+    needs: [test, ports]
     runs-on: ubuntu-latest
     outputs:
       digest: ${{ steps.build.outputs.digest }}
@@ -143,3 +173,121 @@ jobs:
             echo "gateway started without abuse controls — refusing to release" >&2
             exit 1
           fi
+
+  # ── package distribution ─────────────────────────────────────────────────
+  #
+  # This repository enforces signed, digest-pinned tool manifests through
+  # xcpsec.supplychain. Publishing unsigned packages while demanding that of
+  # everyone else would be exactly the contradiction the image signing already
+  # fixed, so every artifact below carries provenance and nothing uses a
+  # long-lived credential where OIDC is available.
+  #
+  # Both jobs need `ports`, not just `test`: a package whose protocol
+  # primitives disagree with the gateway is a package that breaks at the
+  # integration boundary.
+
+  pypi:
+    name: Publish to PyPI
+    needs: [test, ports]
+    runs-on: ubuntu-latest
+    environment: release          # a protected environment, so a tag alone cannot publish
+    permissions:
+      id-token: write             # Trusted Publishing — no API token to leak or rotate
+      attestations: write
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with: {python-version: "3.12"}
+      - run: pip install build
+      - name: Build the sdist and wheel
+        run: python -m build
+
+      # The base distribution has no dependencies, by design and by test
+      # (tests/test_sdk_contract.py). That claim is the reason an evaluator can
+      # try this at all, so it is verified against the BUILT ARTIFACT rather
+      # than the source tree -- which is where the keccak fallback defect was
+      # caught, and it was invisible from the repository.
+      - name: The wheel must install with no dependencies and run
+        run: |
+          python -m venv /tmp/v
+          /tmp/v/bin/pip install --quiet dist/*.whl
+          installed=$(/tmp/v/bin/pip list --format=freeze | grep -vc '^pip==')
+          if [ "$installed" != "1" ]; then
+            echo "base install pulled dependencies:" >&2
+            /tmp/v/bin/pip list --format=freeze >&2
+            exit 1
+          fi
+          /tmp/v/bin/xcp tier --table > /dev/null
+          /tmp/v/bin/python -m sdk
+
+      - name: Attest the distributions
+        uses: actions/attest-build-provenance@v1
+        with:
+          subject-path: "dist/*"
+
+      - name: Publish
+        uses: pypa/gh-action-pypi-publish@release/v1
+        with:
+          attestations: true
+
+  npm:
+    name: Publish to npm
+    needs: [test, ports]
+    runs-on: ubuntu-latest
+    environment: release
+    permissions:
+      id-token: write             # npm provenance is attested through OIDC
+      contents: read
+    defaults:
+      run:
+        working-directory: sdk/typescript
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "22"
+          registry-url: "https://registry.npmjs.org"
+      - name: The published version must match the tag
+        # A package version that drifts from the tag is how `npm i pkg@1.2.3`
+        # installs something that is not 1.2.3.
+        run: |
+          tag="${GITHUB_REF_NAME#v}"
+          [ -n "${{ inputs.tag }}" ] && tag="${{ inputs.tag }}" && tag="${tag#v}"
+          pkg=$(node -p "require('./package.json').version")
+          if [ "$tag" != "$pkg" ]; then
+            echo "tag $tag != package.json $pkg" >&2
+            exit 1
+          fi
+      - name: The port must reproduce the vectors from the package itself
+        run: npm test
+      - name: Publish with provenance
+        run: npm publish --provenance --access public
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+
+  # The Go module proxy needs no publish step: `go get
+  # github.com/AGI-Gateway/XCP/sdk/go@vX.Y.Z` resolves straight from the tag.
+  # This job exists so a tag that does not actually resolve fails the release
+  # rather than being discovered by the first person to try installing it.
+  gomodule:
+    name: The Go module must resolve from the tag
+    needs: [test, ports]
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/setup-go@v5
+        with: {go-version: "1.22"}
+      - name: Resolve the published module
+        run: |
+          tag="${GITHUB_REF_NAME}"
+          [ -n "${{ inputs.tag }}" ] && tag="${{ inputs.tag }}"
+          # The proxy caches on first request, so a short retry covers the gap
+          # between the tag appearing and the proxy noticing it.
+          for i in $(seq 1 10); do
+            if go list -m "github.com/AGI-Gateway/XCP/sdk/go@${tag}"; then
+              exit 0
+            fi
+            sleep 15
+          done
+          echo "the module did not resolve at ${tag}" >&2
+          exit 1

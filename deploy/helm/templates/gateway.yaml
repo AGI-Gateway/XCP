@@ -28,6 +28,38 @@ spec:
             {{- end }}
             - {name: XCP_SECURITY,  value: {{ .Values.gateway.security | quote }}}
             - {name: XCP_UPSTREAMS, value: {{ .Values.gateway.upstreams | toJson | quote }}}
+            # Abuse controls and the settings that weaken them. Rendered
+            # unconditionally rather than behind an `if`, so the pod's
+            # environment states the posture explicitly instead of relying on
+            # the image default -- an operator reading `kubectl describe` can
+            # see what is on.
+            - {name: XCP_RATE_LIMIT, value: {{ ternary "1" "0" .Values.gateway.rateLimit | quote }}}
+            - {name: XCP_LIMIT_FAIL_OPEN, value: {{ ternary "1" "0" .Values.gateway.limitFailOpen | quote }}}
+            - {name: XCP_NODE_RECORD_PUBLIC, value: {{ ternary "1" "0" .Values.gateway.nodeRecordPublic | quote }}}
+            {{- if .Values.gateway.nodeSite }}
+            # Locality is a cost: an off-site peer is priced at CROSS_SITE_COST
+            # and can still win.
+            - {name: XCP_NODE_SITE, value: {{ .Values.gateway.nodeSite | quote }}}
+            {{- end }}
+            {{- if .Values.gateway.residencySites }}
+            # Residency is a constraint: a site outside this set is
+            # inadmissible at any price.
+            - {name: XCP_RESIDENCY_SITES, value: {{ join "," .Values.gateway.residencySites | quote }}}
+            {{- end }}
+            {{- if .Values.engine.enabled }}
+            # Advisory only. The engine cannot change whether a request is
+            # permitted, in either direction, and unlike XCP_SECURITY the
+            # gateway does not refuse to start when it is unavailable: an
+            # absent optimisation is not an absent control.
+            - {name: XCP_ENGINE, value: "1"}
+            - {name: XCP_ENGINE_BUDGET_MICROS, value: {{ .Values.engine.budgetMicros | quote }}}
+            {{- if .Values.engine.fastTextPath }}
+            - {name: XCP_ENGINE_FASTTEXT, value: {{ .Values.engine.fastTextPath | quote }}}
+            {{- end }}
+            {{- if .Values.engine.setFitPath }}
+            - {name: XCP_ENGINE_SETFIT, value: {{ .Values.engine.setFitPath | quote }}}
+            {{- end }}
+            {{- end }}
             {{- if .Values.verifier.enabled }}
             - {name: XCP_VERIFY_URL, value: "http://{{ .Release.Name }}-verifier:{{ .Values.verifier.service.port }}"}
             {{- end }}

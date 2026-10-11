@@ -14,6 +14,21 @@ gateway:
   posture: enforce          # enforce | observe — observe is for onboarding only
   security: "1"             # XCP_SECURITY=1 enables the argument firewall
   upstreams: {}             # name -> MCP url
+  # Abuse controls. false on a node reachable by strangers makes it an open
+  # relay. Rendered into the pod unconditionally so `kubectl describe` states
+  # the posture rather than relying on the image default.
+  rateLimit: true
+  # Serve traffic if the limiter itself fails. Turns any limiter outage into an
+  # unmetered window.
+  limitFailOpen: false
+  # Serve the FULL node record to anyone, even inside a closed cluster.
+  nodeRecordPublic: false
+  # This node's site, e.g. eu-west. Locality is a COST: an off-site peer is
+  # priced at CROSS_SITE_COST and can still win.
+  nodeSite: ""
+  # Sites data may reach. Unlike locality this is a CONSTRAINT: a site outside
+  # this list is inadmissible at any price.
+  residencySites: []
   service: {type: ClusterIP, port: 8080}
   resources:
     requests: {cpu: 100m, memory: 128Mi}
@@ -28,8 +43,16 @@ verifier:
 
 server:
   enabled: false            # your own MCP servers usually live elsewhere
+  replicas: 1
+  name: research            # XCP_SERVER_NAME; must match a key in gateway.upstreams
+  # Refuse calls that did not arrive through a gateway. false lets an agent
+  # reach the server directly, bypassing every mandate check the gateway
+  # performs — which is the whole reason the gateway is in front of it.
   requireVerified: true
   service: {port: 9001}
+  resources:
+    requests: {cpu: 50m, memory: 64Mi}
+    limits: {cpu: 500m, memory: 256Mi}
 
 trust:
   agent: registry           # free | registry | company
@@ -81,3 +104,20 @@ telemetry:
 
 serviceMonitor:
   enabled: false            # set true if you run the Prometheus operator
+
+# The self-hosted decision engine: a local classifier that estimates a
+# request's complexity and risk so cheap requests can take a cheap route.
+#
+# Advisory ONLY. It cannot change whether a request is permitted, in either
+# direction, and a refusal never cites it. Off by default.
+engine:
+  enabled: false
+  # Per-request classification budget. A tier whose typical cost exceeds what
+  # remains is skipped, because a classifier that adds latency has failed at
+  # its own job. The default excludes the ~25ms semantic tier, which must
+  # therefore be opted into by raising this deliberately.
+  budgetMicros: 2000
+  # Paths to models inside the image or a mounted volume. Absent, those tiers
+  # abstain and the node routes as it would with no engine at all.
+  fastTextPath: ""
+  setFitPath: ""

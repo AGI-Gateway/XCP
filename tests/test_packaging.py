@@ -193,12 +193,238 @@ def test_release_workflow_signs_what_it_publishes():
     assert "sbom: true" in wf and "provenance: true" in wf
 
 
+def test_every_published_artifact_is_gated_on_the_sdk_vectors():
+    """
+    A package whose protocol primitives disagree with the gateway breaks at the
+    integration boundary, against a gateway the integrator does not control --
+    and the failure looks like the gateway's fault. So nothing publishes until
+    every port reproduces the committed vectors.
+    """
+    import yaml
+    d = yaml.safe_load((ROOT / ".github" / "workflows" / "release.yml").read_text())
+    jobs = d["jobs"]
+    assert "ports" in jobs, "the release does not check the SDK ports"
+
+    steps = " ".join(str(s.get("run", "")) for s in jobs["ports"]["steps"])
+    for runner in ("python -m sdk", "vectors.mjs", "go test ./sdk/go"):
+        assert runner in steps, f"the ports job does not run {runner!r}"
+    assert "generate-sdk-contract.py --check" in steps, \
+        "the ports job does not check the contract against its sources"
+
+    for name in ("pypi", "npm", "gomodule", "image"):
+        needs = jobs[name]["needs"]
+        needs = [needs] if isinstance(needs, str) else needs
+        assert "ports" in needs, (
+            f"the {name!r} job does not depend on the SDK vectors, so it can "
+            f"publish an artifact that disagrees with the protocol")
+
+
+def test_publishing_uses_oidc_rather_than_long_lived_tokens():
+    """
+    PyPI Trusted Publishing needs no API token, so there is none to leak or
+    rotate. npm still needs a token but gets provenance from the same OIDC
+    identity. A project that enforces signed, digest-pinned manifests on
+    everyone else's tools should not be publishing unattested packages.
+    """
+    import yaml
+    wf = (ROOT / ".github" / "workflows" / "release.yml").read_text()
+    d = yaml.safe_load(wf)
+
+    assert d["jobs"]["pypi"]["permissions"]["id-token"] == "write"
+    assert "pypa/gh-action-pypi-publish" in wf
+    assert "attestations: true" in wf, "PyPI distributions are not attested"
+
+    assert d["jobs"]["npm"]["permissions"]["id-token"] == "write"
+    assert "--provenance" in wf, "npm package is published without provenance"
+
+    # A protected environment, so a tag alone cannot publish.
+    for name in ("pypi", "npm"):
+        assert d["jobs"][name].get("environment") == "release", (
+            f"the {name!r} job is not bound to a protected environment")
+
+
+def test_the_wheel_is_verified_before_publication_not_after():
+    """
+    The zero-dependency claim is checked against the BUILT ARTIFACT, because
+    that is where the keccak fallback defect was caught and it was invisible
+    from the source tree.
+    """
+    wf = (ROOT / ".github" / "workflows" / "release.yml").read_text()
+    assert "pip list --format=freeze" in wf
+    assert "python -m sdk" in wf
+    i = wf.index("must install with no dependencies")
+    j = wf.index("pypa/gh-action-pypi-publish")
+    assert i < j, "the wheel is published before it is verified"
+
+
 def test_release_gates_on_tests_and_verifies_the_result():
     wf = (ROOT / ".github" / "workflows" / "release.yml").read_text()
     assert "needs: test" in wf, "images must not publish ahead of the test suite"
     assert "cosign verify" in wf
     assert "refuse" in wf.lower() or "exit 1" in wf, \
         "release must fail if the gateway starts without abuse controls"
+
+
+def test_the_terraform_module_refuses_the_four_bad_combinations():
+    """
+    A values file cannot refuse a combination; Terraform can. These four each
+    produce a node that looks healthy and is not, so the module must stop them
+    at plan time rather than apply cleanly.
+
+    Asserted against the text rather than a parsed AST so this test needs no
+    HCL parser — the dependency-light CI job runs it.
+    """
+    tf = (ROOT / "deploy" / "terraform" / "main.tf").read_text()
+    for name in ("controls_are_acknowledged",
+                 "acknowledgements_are_not_stale",
+                 "private_federation_is_completely_configured",
+                 "residency_has_a_vantage_point"):
+        assert f'check "{name}"' in tf, f"the module lost its {name!r} check"
+    assert tf.count("assert {") >= 5, "a refusal has lost its assertion"
+
+
+def test_the_terraform_module_will_not_accept_a_mutable_image():
+    v = (ROOT / "deploy" / "terraform" / "variables.tf").read_text()
+    assert "sha256:[0-9a-f]{64}" in v, (
+        "image_digest no longer requires a full digest; a tag means the thing "
+        "you reviewed is not necessarily the thing that runs")
+
+
+def test_the_terraform_module_rejects_an_overbroad_peer_cidr():
+    v = (ROOT / "deploy" / "terraform" / "variables.tf").read_text()
+    assert ">= 8" in v, (
+        "peer_cidrs no longer enforces a minimum prefix; a /0 declaration is "
+        "disabling the egress guard with extra steps")
+
+
+def test_the_terraform_module_states_it_is_unvalidated():
+    """
+    No Terraform binary was available when this module was written, so only
+    its HCL syntax was checked. Claiming more than was verified is the failure
+    mode worth a test of its own.
+    """
+    readme = (ROOT / "deploy" / "terraform" / "README.md").read_text()
+    assert "Not validated against a Terraform binary" in readme
+
+
+#: Values declared in values.yaml that no template reads, and why that is
+#: tolerated. An entry here is a promise an operator can set and nothing will
+#: happen, so the list is short and each item names what is missing.
+#:
+#: `server.*` used to be on this list: values.yaml declared server.enabled and
+#: there was no server template, so turning it on did nothing, silently. That
+#: is now templates/server.yaml.
+KNOWN_UNREAD_VALUES = {
+    # Needs a ServiceMonitor resource and the Prometheus Operator CRDs. The
+    # gateway already serves /metrics, so scraping works without it.
+    "serviceMonitor", "serviceMonitor.enabled",
+    # Declarative trust tier. The lattice cell is established per session from
+    # the agent's and human's credentials, not from chart config, so there is
+    # nothing for a template to render this into. Kept because removing a key
+    # breaks existing values files.
+    "trust", "trust.agent", "trust.human",
+}
+
+
+def _chart_value_keys() -> set:
+    import yaml
+    v = yaml.safe_load((ROOT / "deploy" / "helm" / "values.yaml").read_text())
+
+    def flat(d, prefix=""):
+        for k, val in (d or {}).items():
+            name = f"{prefix}.{k}" if prefix else k
+            # Yield the key itself whether or not it is an empty container. An
+            # earlier version of this walk recursed into dicts without
+            # yielding them, so `upstreams: {}` looked undeclared -- which is
+            # a bug in the checker that reads as a bug in the chart.
+            yield name
+            if isinstance(val, dict) and val:
+                yield from flat(val, name)
+
+    return set(flat(v))
+
+
+def _chart_values_read() -> set:
+    out = set()
+    for t in (ROOT / "deploy" / "helm" / "templates").glob("*.yaml"):
+        out |= set(re.findall(r"\.Values\.([A-Za-z0-9_.]+)", t.read_text()))
+    return {r.rstrip(".") for r in out}
+
+
+def test_every_value_a_template_reads_is_declared():
+    """
+    The dangerous direction. A key the template reads and values.yaml does not
+    declare renders cleanly and silently never reaches the pod, which surfaces
+    later as a control the operator believes is on and is not.
+    """
+    missing = sorted(_chart_values_read() - _chart_value_keys())
+    assert not missing, (
+        f"templates read these and values.yaml does not declare them: "
+        f"{missing}. Each one renders as empty and silently never reaches the "
+        f"pod.")
+
+
+def test_every_declared_value_is_read_by_a_template():
+    """
+    The other direction. A value nobody reads is a setting an operator can
+    change with no effect -- less dangerous than a missing control, and still
+    a lie in a file people configure from.
+    """
+    keys = _chart_value_keys()
+    read = _chart_values_read()
+    unread = sorted(
+        k for k in keys
+        if k not in read
+        and not any(r.startswith(k + ".") for r in read)
+        and not any(k.startswith(r + ".") for r in read)
+        and k not in KNOWN_UNREAD_VALUES)
+    assert not unread, (
+        f"values.yaml declares these and no template reads them: {unread}. "
+        f"Either wire them up or add them to KNOWN_UNREAD_VALUES with a note "
+        f"saying what is missing.")
+
+
+def test_the_chart_can_deploy_every_role_the_image_supports():
+    """
+    The image has three roles and the entrypoint fails loudly on a fourth. The
+    chart could deploy two of them while declaring values for the third.
+    """
+    templates = {t.stem for t in
+                 (ROOT / "deploy" / "helm" / "templates").glob("*.yaml")}
+    for role in ("gateway", "server", "verifier"):
+        assert role in templates, f"the chart has no template for {role!r}"
+        t = (ROOT / "deploy" / "helm" / "templates" / f"{role}.yaml").read_text()
+        assert f'value: "{role}"' in t, f"{role}.yaml does not set ROLE"
+
+
+def test_the_server_is_not_exposable_as_a_load_balancer():
+    """
+    The server is reached through the gateway. A configurable service type
+    would let an operator put an MCP endpoint on the internet with
+    REQUIRE_VERIFIED as the only thing between it and an anonymous caller.
+    """
+    t = (ROOT / "deploy" / "helm" / "templates" / "server.yaml").read_text()
+    assert "type: ClusterIP" in t
+    assert ".Values.server.service.type" not in t
+
+
+def test_the_chart_renders_the_abuse_controls_explicitly():
+    """
+    Rendered unconditionally rather than behind an `if`, so `kubectl describe`
+    states the posture instead of relying on the image default.
+    """
+    t = (ROOT / "deploy" / "helm" / "templates" / "gateway.yaml").read_text()
+    for var in ("XCP_RATE_LIMIT", "XCP_LIMIT_FAIL_OPEN",
+                "XCP_NODE_RECORD_PUBLIC"):
+        assert var in t, f"gateway.yaml does not render {var}"
+
+
+def test_the_engine_is_off_by_default_in_the_chart():
+    import yaml
+    v = yaml.safe_load((ROOT / "deploy" / "helm" / "values.yaml").read_text())
+    assert v["engine"]["enabled"] is False, "the decision engine must be opt-in"
+    t = (ROOT / "deploy" / "helm" / "templates" / "gateway.yaml").read_text()
+    assert "XCP_ENGINE" in t and ".Values.engine.enabled" in t
 
 
 if __name__ == "__main__":
