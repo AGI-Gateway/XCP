@@ -22,6 +22,7 @@ test: ## run every test suite
 	@echo "── private federation ──" && $(PY) tests/test_private_federation.py
 	@echo "── cluster membership ──" && $(PY) tests/test_cluster.py
 	@echo "── cross-boundary A2A ──" && $(PY) tests/test_delegation_boundary.py
+	@echo "── locality + residency ──" && $(PY) tests/test_locality.py
 	@echo "── performance ──"        && $(PY) tests/test_performance.py
 	@echo "── triage + runbook ──"   && $(PY) tests/test_triage.py
 	@echo "── telemetry ──"          && $(PY) tests/test_telemetry.py

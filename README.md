@@ -45,6 +45,7 @@ has been delivered. Those are separate claims and XCP reports them separately.
 | **Defence in depth** | Optional `xcpsec`: hardened mTLS, argument firewall, execution sandbox, supply-chain pinning, prompt-injection boundaries. |
 | **Private federation** | Federate your own datacentres: declared internal ranges, your own CA as the peer trust anchor, cluster membership by signed charter, and a node record that stops publishing your topology. |
 | **Authority narrows at a boundary** | An agent delegating across datacentres carries a signed ticket. The destination authenticates it independently and re-derives the tier under **its own** ceiling — so authority can shrink at a boundary and never grow. |
+| **One egress for the estate** | One gateway holds a vendor credential and serves the others. Routing prefers the nearest site; a data-residency list is a *constraint*, so a jurisdiction can't be crossed for a lower latency. |
 | **Wraps, never replaces** | Point it at MCP servers you already run. They don't change. |
 
 ---
@@ -107,6 +108,16 @@ Each one is narrower than the thing it replaced, and that is the whole design:
   protocol versions and the cluster id; the full record needs a signed,
   audience-bound, 60-second membership proof. So a removed node loses discovery
   as well as peering.
+- **Locality is a cost and residency is a constraint**, deliberately not the
+  same lever. A peer in another site is priced, not forbidden — otherwise a
+  local-site failure is an outage. A permitted-site list is checked *before*
+  optimisation, so a jurisdiction cannot be crossed for a lower latency at any
+  price. A peer that declares no site fails it, because not knowing where a
+  peer is isn't the same as it being somewhere permitted.
+- **One gateway can hold a vendor credential for the whole estate.** A call to
+  a tool this site can't reach is routed to a peer that can, nearest permitted
+  site first, and the asking site never sees the key. One place to audit, one
+  rate limit against the vendor's quota, one copy of the secret to rotate.
 
 The charter root is byte-compatible with `NodeRegistry.upsertCluster`, so a
 deployment can run entirely off-chain now and anchor the identical charter

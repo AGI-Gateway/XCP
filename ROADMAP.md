@@ -22,10 +22,11 @@ Dated loosely, ordered firmly. Anything below "next" is a direction, not a promi
 - [x] **Open provider registries** — add an MCP connection or an inference
       model with no approval step (`providers/`)
 
-## Now — private federation
+## Done — private federation
 Several datacentres inside one organisation, with independent agents talking
-A2A across boundaries and reaching common external tools. The first two are
-done; the rest is what a private federation still needs.
+A2A across boundaries and reaching common external tools. Complete, and not
+yet deployed anywhere in anger — the items below are shipped and tested, which
+is a different claim from proven in production.
 
 - [x] **Reachability** — `XCP_PRIVATE_PEER_CIDRS` declares the internal ranges
       that may hold peers, so a production node can peer across datacentres
@@ -54,13 +55,20 @@ done; the rest is what a private federation still needs.
       narrows the asserted tier under its OWN ceiling, leg by leg. Authority
       shrinks at a boundary and never widens. `delivered` now means the
       destination answered, and `admitted` is its own decision
-- [ ] **Datacentre locality in routing** — `PeerMetrics` has `hops` and no
-      region or site, so multi-datacentre latency optimisation has nothing to
-      optimise against. Carries the data-residency constraint for tools too
-- [ ] **Federated tool catalogue** — `XCP_UPSTREAMS` is a static per-gateway
-      map, so every datacentre needs its own egress path and its own copy of
-      each vendor credential. Needs nodes to advertise reachable servers and
-      `_route_mcp` to fall back to a peer that can
+- [x] **Datacentre locality in routing** — `PeerMetrics` carries a site, and
+      crossing one is priced rather than forbidden: a remote peer is worse, not
+      unreachable, so a local-site failure is not an outage. Data residency is
+      the other lever and a different kind — a permitted-site list is a
+      constraint checked before optimisation, so it cannot be outweighed by
+      latency, cost or trust. Path diversity keeps operating inside the local
+      site rather than collapsing onto one peer
+- [x] **Federated tool catalogue** — nodes advertise which upstream servers
+      they can reach, and a call to one this node lacks is routed to a peer
+      that has it, preferring the nearest permitted site. The asking node never
+      holds or sees the vendor credential, which is the point: one place to
+      audit, one rate limit against the vendor's quota, one copy of the secret.
+      A relay is authorised exactly as a delegation is and runs at the tier
+      narrowed under the relaying node's own ceiling
 
 ## Next — close the trust loop
 - [ ] Enterprise SSO connector: map IdP entitlement attributes → mandate narrowing

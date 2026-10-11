@@ -133,6 +133,17 @@ class NodeRecord:
     session_registry: str = ""
     node_registry: str = ""            # NodeRegistry address, if bonded
     bond_minor: int = 0                # stake backing this node's identity
+    #: Which datacentre, region or zone this node is in. An opaque
+    #: operator-chosen label; peers use it to prefer local routes and to
+    #: enforce their own data-residency rules. Published because a peer cannot
+    #: observe it, and trusted only as far as that: a node lying about its site
+    #: mis-prices its own traffic, and residency is checked against the
+    #: operator's permitted list rather than against this claim.
+    site: str = ""
+    #: Upstream server names this node can reach, so a peer that cannot reach
+    #: one itself knows where to ask. An advertisement, not a grant: this node
+    #: re-authorises every relayed call against its own ceiling.
+    serves: list = field(default_factory=list)
     cluster_id: str = ""               # a root commits to the member set
     #: This node's membership proof, when it belongs to a private cluster. A
     #: claim carries a proof and nothing a peer would judge it by: the peer
@@ -206,6 +217,10 @@ class NodeRecord:
     #: Everything a caller needs to negotiate a protocol version and work out
     #: what to prove, and nothing that describes this organisation's inside.
     #: Deliberately an allowlist: a denylist would leak every field added later.
+    #: `site` and `serves` are deliberately NOT here. A stranger learning
+    #: which datacentres exist and which vendor tools each can reach is handed
+    #: the estate's egress map, which is the reconnaissance step before
+    #: choosing what to attack.
     PUBLIC_FIELDS = ("domain", "spec_version", "mcp_spec", "protocol_versions",
                      "features", "accepts_peering", "cluster_id")
 
@@ -272,6 +287,14 @@ class Peer:
     last_seen: int = 0
     revoked: bool = False
     sequence: int = 0          # highest binding sequence seen; blocks replay
+    #: Where this peer says it is, and which upstream servers it says it can
+    #: reach. Both are the peer's own assertions, taken from its record, and
+    #: they are used only to decide where to TRY -- never as authority. A peer
+    #: that over-claims gets asked and refuses; a peer that lies about its site
+    #: mis-prices its own traffic, and residency is enforced against the
+    #: operator's own list of permitted sites rather than against this.
+    site: str = ""
+    serves: list = field(default_factory=list)
 
     def to_dict(self) -> dict[str, Any]:
         d = asdict(self)
@@ -396,7 +419,8 @@ class Federation:
     # ---- direct peering ----
     def add_verified_peer(self, domain: str, node_id: str, gateway_url: str = "",
                           mutual: bool = False, now: Optional[int] = None,
-                          sequence: int = 0) -> Peer:
+                          sequence: int = 0, site: str = "",
+                          serves: Optional[list] = None) -> Peer:
         existing = self.peers.get(domain.lower())
         if existing and sequence and sequence < existing.sequence:
             raise FederationError(
@@ -405,9 +429,23 @@ class Federation:
         p = Peer(domain=domain.lower(), node_id=node_id, gateway_url=gateway_url,
                  trust=PeerTrust.PEERED if mutual else PeerTrust.VERIFIED,
                  hops=1, weight=1.0, last_seen=now or int(time.time()),
-                 sequence=max(sequence, existing.sequence if existing else 0))
+                 sequence=max(sequence, existing.sequence if existing else 0),
+                 site=site, serves=list(serves or []))
         self.peers[p.domain] = p
         return p
+
+    def serving(self, server: str) -> list[Peer]:
+        """
+        Peers that advertise reaching `server`, live and verified.
+
+        What a peer advertises decides where to TRY, not what is permitted.
+        The peer re-authorises every relay against its own ceiling, so an
+        over-claiming peer costs a round trip and a refusal rather than
+        access.
+        """
+        return [p for p in self.peers.values()
+                if not p.revoked and p.trust >= PeerTrust.VERIFIED
+                and server in (p.serves or [])]
 
     def note_rotation(self, domain: str, node_id: str, sequence: int) -> bool:
         """

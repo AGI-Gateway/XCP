@@ -170,6 +170,11 @@ before restarting.
 | `XCP_A2A_ACCEPT` | `0` | Accept delegated tasks from peer gateways at `/v1/a2a/accept`. Off by default: a node that accepts them executes work on another datacentre's say-so. A ticket is still only admitted from a verified peer, in this node's cluster, naming this node, within its expiry, for the exact task committed to. |
 | `XCP_A2A_TIER_CEILING` | `A2xH2` | The most authority a cross-boundary delegation may carry here, whatever the origin asserted. Narrowed leg by leg, so authority can only shrink at a boundary. The gateway refuses to start on a value it cannot parse — a ceiling nobody can read is a ceiling that does not apply. |
 | `XCP_A2A_MAX_HOPS` | `3` | How many boundaries one delegation may cross. The originator sets the budget in the ticket and no hop can raise it. |
+| `XCP_NODE_SITE` | `—` | This node's datacentre, region or zone — an opaque label you choose. Peers prefer local routes and apply their own residency rules against it. Unset means no locality: every peer is equally near. |
+| `XCP_TOOL_RELAY` | `0` | Serve tool calls on a peer's behalf. Off by default: relaying spends THIS node's vendor credential on another datacentre's say-so. Enabling it also advertises this node's server names to peers. |
+| `XCP_TOOL_FALLBACK` | `0` | Ask a peer for a tool this node cannot reach. Off by default: a call leaving for another datacentre is a different data path than the one configured in `XCP_UPSTREAMS`. |
+| `XCP_RESIDENCY_SITES` | `—` | Sites where a relayed call's data may be processed. When set, a peer outside is INADMISSIBLE, not merely expensive. A peer declaring no site fails this. |
+| `XCP_UPSTREAM_RELAY_CREDENTIAL` `#` | `—` | The credential this node presents upstream when serving a relayed call. It belongs to this node; the asking datacentre never holds or sees it. Prefer a `vault://` reference. |
 
 **wrapper**
 
@@ -536,6 +541,95 @@ Every problem is reported at once rather than one per round trip.
 | `ticket is not signed by the node it claims to come from` | the origin's node key does not match the `origin_node` in the ticket |
 | `this node does not accept delegated tasks` | `XCP_A2A_ACCEPT` is unset on the destination |
 
+## One egress gateway for the estate
+
+`XCP_UPSTREAMS` is per-gateway, so by default every datacentre needs its own
+egress path and its own copy of every vendor credential. That means as many
+copies of each secret as you have sites, and the blast radius of one compromise
+is the estate.
+
+Instead, let one site hold the credential and serve the others:
+
+```bash
+# on the EGRESS gateway — it has the tool and the secret
+XCP_NODE_SITE=dc2-frankfurt
+XCP_TOOL_RELAY=1
+XCP_UPSTREAMS='{"stripe":"https://mcp.vendor.example/mcp"}'
+XCP_UPSTREAM_RELAY_CREDENTIAL=vault://prod/stripe-key
+
+# on the ASKING gateways — no credential at all
+XCP_NODE_SITE=dc1-dublin
+XCP_TOOL_FALLBACK=1
+```
+
+A call to a server the asking node doesn't have is routed to a peer that
+advertises it. The asking node never holds or sees the vendor key — that is the
+entire reason to centralise egress: one place to audit, one rate limit against
+the vendor's quota, one copy of the secret to rotate.
+
+Both are **off by default**. Relaying spends your own credential on another
+datacentre's say-so; asking sends a call down a data path you didn't configure
+in `XCP_UPSTREAMS`. Each end opts in.
+
+A node with `XCP_TOOL_RELAY` unset advertises no servers, so it never appears
+as a candidate — you cannot aim a relay at a site that hasn't opted in, and the
+endpoint refuses a direct attempt as well.
+
+### A relay is authorised like any cross-boundary call
+
+Because it spends this node's credential, a relayed call is admitted exactly as
+a delegation is: verified peer, this node's cluster, naming this node, within
+expiry, for the exact call committed to by digest — and it runs at the tier
+**narrowed under this node's ceiling**, through this node's own mandate gate,
+argument firewall and limits. A relay does not forward onward; an advertised
+server it cannot actually reach is refused plainly rather than chained.
+
+### Locality and residency are different levers
+
+```bash
+XCP_NODE_SITE=dc1-dublin                          # where this node is
+XCP_RESIDENCY_SITES=eu-west-1,eu-central-1        # where data MAY be processed
+```
+
+**Locality is a cost.** A peer in another site is worse, not forbidden — when
+the local one is down, routing must still reach it. A preference that cannot be
+overcome is an outage waiting for your local site to fail.
+
+It also closes a real gap: an untested peer has no measured latency and so
+looks *free*. Without a locality prior a node rates a remote peer it has never
+called better than the local one it has measured, and finds out by sending
+traffic. The prior is what stops the first request being the experiment.
+
+**Residency is a constraint.** A jurisdiction is not a quantity you can be
+compensated for crossing, so `XCP_RESIDENCY_SITES` is checked *before*
+optimisation. A peer outside it is refused at any latency, cost or trust level,
+and it beats locality: a node in `dc1` whose residency list names only `dc2`
+routes to `dc2`.
+
+!!! warning "A peer that declares no site fails residency"
+    Not knowing where a peer is is not the same as it being somewhere
+    permitted. Defaulting the other way would make the control absent exactly
+    when it matters. If a peer is refused for an `'undeclared'` site, set
+    `XCP_NODE_SITE` on it.
+
+Site labels are opaque — `dc1-dublin`, `eu-west-1`, whatever your estate uses.
+XCP compares them and never parses them.
+
+### Checking where traffic actually goes
+
+A routing decision reports its site and whether it left yours. The
+concentration index is the thing to watch: locality narrows the pool to the
+local site, and path diversity has to keep operating *inside* it.
+
+```bash
+curl -s -H "Authorization: Bearer $XCP_ADMIN_TOKEN" \
+  https://dc1-gw.internal.example/v1/federation/peers | jq '.summary'
+```
+
+A single peer in your local site means an HHI of 1.0 — everything goes to it.
+That is a property of the deployment, not a routing fault, and the honest fix
+is a second local peer rather than a routing setting.
+
 ### Anchoring on-chain later, if you ever want to
 
 The root is byte-identical to what `NodeRegistry.upsertCluster` takes, and
@@ -544,14 +638,16 @@ can run privately now and anchor the same charter later without recomputing
 anything, or run both at once off one root. Nothing above requires a chain, and
 the test suite asserts the two implementations agree rather than assuming it.
 
-### What this does not yet do
+### What a private federation now covers
 
-Reachability, trust anchoring, membership, gated discovery and cross-boundary
-delegation. Still outstanding: datacentre locality in route selection — routing
-has a hop count and no notion of region, so there is nothing for multi-site
-latency optimisation to optimise against — and a federated tool catalogue, so
-one egress gateway can hold a vendor credential for the whole estate instead of
-every site keeping its own copy. See `ROADMAP.md`.
+Reachability, trust anchoring, cluster membership, gated discovery,
+cross-boundary delegation, site locality with data residency, and one egress
+gateway for the estate. That is the list this section used to end by saying was
+outstanding.
+
+What it still is not: audited by anyone paid to put their name on the result,
+and deployed anywhere in anger. `ROADMAP.md` has what comes next; nothing on it
+is load-bearing for a private federation.
 
 ## Severity, and what it actually means
 

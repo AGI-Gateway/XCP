@@ -144,6 +144,43 @@ SETTINGS: tuple[Setting, ...] = (
             "federation's transitive-trust cap, for the same reason: beyond it "
             "nobody in the chain can reason about what they are part of. The "
             "originator sets the budget in the ticket and no hop can raise it."),
+    Setting("XCP_NODE_SITE", R.NODE, "",
+            "This node's datacentre, region or zone — an opaque label you "
+            "choose, e.g. 'dc1-dublin' or 'eu-west-1'. Peers prefer local "
+            "routes over crossing a site boundary and apply their own "
+            "residency rules against it. Unset means this node has no "
+            "locality, so every peer is equally near and nothing is "
+            "preferred. Published in the node record (a peer cannot observe "
+            "it) and withheld from the reduced one."),
+    Setting("XCP_TOOL_RELAY", R.GATEWAY, "0",
+            "Serve tool calls on a peer's behalf at /v1/tool/relay. OFF by "
+            "default: relaying spends THIS node's vendor credential on another "
+            "datacentre's say-so. A relayed call is admitted exactly as a "
+            "cross-boundary delegation is — verified peer, this node's "
+            "cluster, naming this node, within expiry, for the exact call "
+            "committed to — and runs at the tier narrowed under this node's "
+            "ceiling. Enabling it also advertises this node's upstream server "
+            "names to peers."),
+    Setting("XCP_TOOL_FALLBACK", R.GATEWAY, "0",
+            "Ask a peer for a tool this node cannot reach. OFF by default: a "
+            "call leaving for another datacentre is a different data path than "
+            "the one configured in XCP_UPSTREAMS, and the operator should "
+            "choose it. With it on, an unknown server is routed to a peer that "
+            "advertises it, preferring the nearest site and refusing any site "
+            "XCP_RESIDENCY_SITES does not permit."),
+    Setting("XCP_RESIDENCY_SITES", R.GATEWAY, "",
+            "Comma-separated sites where a relayed tool call's data may be "
+            "processed, e.g. 'eu-west-1,eu-central-1'. When set, a peer "
+            "outside is INADMISSIBLE rather than merely expensive — a "
+            "jurisdiction is not a quantity you can be compensated for "
+            "crossing. A peer that declares no site fails this: not knowing "
+            "where a peer is is not the same as it being somewhere permitted. "
+            "Empty means no residency constraint."),
+    Setting("XCP_UPSTREAM_RELAY_CREDENTIAL", R.GATEWAY, "",
+            "The credential this node presents upstream when serving a relayed "
+            "call. It belongs to THIS node — the asking datacentre never holds "
+            "or sees it, which is the reason to centralise egress at all. "
+            "Prefer a vault:// reference.", secret=True),
     Setting("XCP_NODE_RECORD_PUBLIC", R.NODE, "0",
             "Serve the FULL node record to anyone, even in a closed cluster. A "
             "closed cluster gates its record by default — publishing the "

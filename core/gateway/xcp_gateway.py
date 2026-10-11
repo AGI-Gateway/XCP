@@ -1126,11 +1126,200 @@ def _infer_argspec(args: dict) -> dict:
 H_UPSTREAM_CREDENTIAL = "xcp-upstream-credential"
 
 
+def _peer_metrics(server: str):
+    """The peers that advertise `server`, as routing metrics."""
+    from federation.routing import PeerMetrics
+    out = []
+    for p in _FED.serving(server):
+        out.append(PeerMetrics(
+            domain=p.domain, hops=p.hops, trust_weight=p.weight,
+            site=p.site,
+            # A verified peer in our own federation is a contracted
+            # counterparty, not an unknown one: we hold its certificate
+            # binding and, in a closed cluster, its membership proof.
+            server_class="contracted" if p.trust >= _PeerTrust.PEERED
+                         else "attested",
+            revoked=p.revoked))
+    return out
+
+
+async def _relay_to_peer(server: str, tool: str, args: dict, ctx: Ctx):
+    """
+    Ask a peer to serve a tool this node cannot reach. None if no peer can.
+
+    Locality and residency are applied here rather than taking the first peer
+    that advertises the server: a nearer peer is cheaper, and a tool whose
+    contract pins where its data may be processed must not be reached through
+    a site outside that region at any price.
+    """
+    if _FED is None or _NODE_RECORD is None or not _NODE_KEY:
+        return None
+    from federation.routing import Effect, Policy, RoutingError, select
+    candidates = _peer_metrics(server)
+    if not candidates:
+        return None
+    policy = Policy(
+        # A tool call changes state at the far end as far as this node can
+        # tell, so it is priced as WRITE rather than READ. Routing cannot be
+        # the place that decides an effect is cheaper than it is.
+        effect=Effect.WRITE, home_site=NODE_SITE,
+        permitted_sites=RESIDENCY_SITES)
+    try:
+        chosen = select(candidates, policy)
+    except RoutingError as e:
+        _fed_audit(f"no peer may serve {server}: {e}")
+        return JSONResponse(
+            {"error": f"no peer may serve '{server}' under this node's "
+                      f"routing constraints", "reason": str(e)},
+            status_code=502)
+
+    peer = _FED.peers.get(chosen.peer.domain)
+    if peer is None or not peer.gateway_url:
+        return None
+    from federation.delegation import mint
+    scope = f"mcp:tools/{tool}"
+    ticket = mint(_NODE_KEY, origin_node=_NODE_RECORD.node_id,
+                  origin_domain=_NODE_DOMAIN, audience=peer.domain,
+                  agent_id=ctx.agent_id, chain_id=ctx.chain_id,
+                  footprint=ctx.footprint,
+                  asserted_tier=getattr(ctx.binding, "tier", "") or "A0xH0",
+                  scope=scope, task={"server": server, "tool": tool,
+                                     "arguments": args},
+                  peer=server, cluster_id=(
+                      _CLUSTER.charter.cluster_id
+                      if _CLUSTER is not None and _CLUSTER.configured else ""),
+                  max_hops=A2A_MAX_HOPS)
+    t0 = time.time()
+    try:
+        from federation.peerfetch import peer_verify
+        hc = httpx.AsyncClient(timeout=httpx.Timeout(30.0, connect=5.0),
+                               verify=peer_verify())
+        try:
+            # NOTE what is NOT sent: no upstream credential. The vendor key
+            # stays at the egress gateway, which is the whole benefit --
+            # otherwise every datacentre holds a copy and the blast radius of
+            # one compromise is the estate.
+            r = await hc.post(peer.gateway_url.rstrip("/") + "/v1/tool/relay",
+                              json={"ticket": ticket.to_dict(),
+                                    "task": {"server": server, "tool": tool,
+                                             "arguments": args}})
+        finally:
+            await hc.aclose()
+    except Exception as e:                          # noqa: BLE001
+        _fed_audit(f"relay of {server}.{tool} to {peer.domain} failed: "
+                   f"{type(e).__name__}")
+        return JSONResponse({"error": f"the peer serving '{server}' could not "
+                                      f"be reached"}, status_code=502)
+    audit(ctx, "a2t", f"server={server} tool={tool} RELAYED via {peer.domain} "
+                      f"site={chosen.peer.site or 'undeclared'} "
+                      f"{'off-site' if chosen.off_site else 'local'} "
+                      f"{int((time.time() - t0) * 1000)}ms")
+    return Response(content=r.content, media_type="application/json",
+                    status_code=r.status_code)
+
+
+@app.post("/v1/tool/relay")
+async def tool_relay(request: Request) -> Response:
+    """
+    Serve a tool call on a peer's behalf.
+
+    This node holds the vendor credential; the asking node does not and never
+    sees it. That is the point of the federated catalogue — one place to audit,
+    one rate limit against the vendor's quota, one copy of the secret.
+
+    It is also why this is the same authorisation as a cross-boundary
+    delegation rather than a lighter one. Relaying spends THIS node's
+    credential, so the ticket is admitted exactly as /v1/a2a/accept admits one:
+    from a verified peer, in this node's cluster, naming this node, within its
+    expiry, for the exact call committed to — and the asserted tier is narrowed
+    under this node's own ceiling before the call is made.
+    """
+    if not TOOL_RELAY:
+        return JSONResponse(
+            {"error": "this node does not relay tool calls; set "
+                      "XCP_TOOL_RELAY=1 to enable it"}, status_code=404)
+    if _FED is None or _NODE_RECORD is None:
+        return JSONResponse({"error": "federation not configured"},
+                            status_code=404)
+    limited = _fed_limit(request, "tool-relay")
+    if limited is not None:
+        return limited
+
+    body = json.loads(await request.body() or b"{}")
+    task = body.get("task") or {}
+    try:
+        from federation.delegation import DelegationTicket, admit
+        ticket = DelegationTicket.from_dict(body.get("ticket") or {})
+    except Exception as e:                          # noqa: BLE001
+        return JSONResponse({"admitted": False,
+                             "problems": [f"malformed ticket: {e}"]},
+                            status_code=400)
+
+    origin = _FED.peers.get(ticket.origin_domain)
+    origin_is_peer = bool(origin and not origin.revoked
+                          and origin.node_id.lower() == ticket.origin_node.lower()
+                          and origin.trust >= _PeerTrust.VERIFIED)
+    in_cluster = None
+    if _CLUSTER is not None and _CLUSTER.closed:
+        in_cluster = bool(ticket.cluster_id and _CLUSTER.charter
+                          and ticket.cluster_id.lower()
+                          == _CLUSTER.charter.cluster_id.lower()
+                          and origin_is_peer)
+
+    decision = admit(
+        ticket, audience=_NODE_DOMAIN, self_node_id=_NODE_RECORD.node_id,
+        ceiling=A2A_TIER_CEILING, task=task, origin_is_peer=origin_is_peer,
+        origin_in_cluster=in_cluster,
+        expected_cluster_id=(_CLUSTER.charter.cluster_id
+                             if _CLUSTER is not None and _CLUSTER.configured
+                             else ""))
+    server = str(task.get("server", ""))
+    tool = str(task.get("tool", ""))
+    if not decision.admitted:
+        _fed_audit(f"relay of {server}.{tool} from {ticket.origin_domain} "
+                   f"REFUSED: {decision.problems[0]}")
+        out = decision.to_dict()
+        out["ceiling"] = A2A_TIER_CEILING
+        return JSONResponse(out, status_code=403)
+    if server not in UPSTREAMS:
+        # Advertised and not reachable. Said plainly rather than relayed
+        # onward: a relay that forwards again is a chain nobody configured.
+        return JSONResponse(
+            {"error": f"this node does not serve '{server}'"}, status_code=404)
+
+    _fed_audit(f"relaying {server}.{tool} for {ticket.origin_domain} "
+               f"agent={ticket.agent_id} at {decision.effective_tier}")
+    # Routed as a local call at the NARROWED tier, through this node's own
+    # mandate gate, argument firewall and limits.
+    relayed = Ctx(agent_id=ticket.agent_id, chain_id=ticket.chain_id,
+                  footprint=ticket.footprint, verified=True,
+                  binding=Binding(agent_id=ticket.agent_id,
+                                  footprint=ticket.footprint,
+                                  mandate_root="", rails=0,
+                                  not_after=ticket.expires_at,
+                                  tier=decision.effective_tier))
+    limited = _limit(relayed, "tools/call", f"mcp:tools/{tool}")
+    if limited is not None:
+        return limited
+    return await _route_mcp(server, tool, task.get("arguments") or {}, relayed,
+                            upstream_credential=UPSTREAM_RELAY_CREDENTIAL)
+
+
 async def _route_mcp(server: str, tool: str, args: dict, ctx: Ctx,
                      upstream_credential: str = "") -> Response:
     """Forward a verified tool call to the upstream MCP server."""
     url = UPSTREAMS.get(server)
     if not url:
+        # Not reachable here. A peer may be able to reach it, which is the
+        # point of the federated catalogue: one egress gateway holds the
+        # vendor credential for the estate instead of every site keeping a
+        # copy. Off unless the operator asked for it -- a call leaving for
+        # another datacentre is a different data path than the one they
+        # configured in XCP_UPSTREAMS.
+        if TOOL_FALLBACK:
+            relayed = await _relay_to_peer(server, tool, args, ctx)
+            if relayed is not None:
+                return relayed
         return JSONResponse({"error": f"unknown server '{server}'"}, 404)
     rpc = {"jsonrpc": "2.0", "id": 1, "method": "tools/call",
            "params": {"name": tool, "arguments": args}}
@@ -1179,6 +1368,40 @@ async def metrics() -> Response:
     return Response(content=generate_latest(), media_type=CONTENT_TYPE_LATEST)
 
 
+# ── federated tool catalogue ───────────────────────────────────────────────
+# XCP_UPSTREAMS is per-gateway, so every datacentre needed its own egress path
+# and its own copy of every vendor credential. One egress gateway holding the
+# credential for the estate means one place to audit, one rate limit against
+# the vendor's quota, and one copy of the secret to rotate.
+#
+# Serving relayed calls is OFF by default, for the same reason as A2A_ACCEPT:
+# a node that relays is spending its own vendor credential on another
+# datacentre's say-so.
+TOOL_RELAY = os.getenv("XCP_TOOL_RELAY", "0") == "1"
+
+#: Whether this node will ASK a peer for a tool it cannot reach itself. Off by
+#: default too: a call leaving for another datacentre is a different data path
+#: than the operator configured in XCP_UPSTREAMS, and they should choose it.
+TOOL_FALLBACK = os.getenv("XCP_TOOL_FALLBACK", "0") == "1"
+
+#: This node's datacentre, region or zone. Peers prefer local routes and apply
+#: their own residency rules against it.
+NODE_SITE = os.getenv("XCP_NODE_SITE", "").strip()
+
+#: Sites where a relayed tool call's data may be processed. When set, a peer
+#: outside is INADMISSIBLE -- not merely expensive. This is the residency
+#: control: a jurisdiction is not a quantity you can be compensated for
+#: crossing. Comma-separated; empty means no residency constraint.
+RESIDENCY_SITES = frozenset(
+    s.strip() for s in os.getenv("XCP_RESIDENCY_SITES", "").split(",")
+    if s.strip()) or None
+
+#: The credential this node presents upstream when serving a relayed call. It
+#: belongs to THIS node: the asking datacentre never holds it and never sees
+#: it, which is the reason to centralise egress at all. A vault:// reference
+#: is resolved by the wrapper, as for any other upstream credential.
+UPSTREAM_RELAY_CREDENTIAL = os.getenv("XCP_UPSTREAM_RELAY_CREDENTIAL", "")
+
 # ── federation ─────────────────────────────────────────────────────────────
 # Everything in federation/ was a library nothing could reach: a node had no way
 # to publish its identity or peer with anyone over the wire. These endpoints are
@@ -1212,10 +1435,28 @@ if _NODE_KEY and _NODE_DOMAIN:
             cluster_id=(_CLUSTER.charter.cluster_id
                         if _CLUSTER is not None and _CLUSTER.configured else ""),
             membership=(_CLUSTER.claim.to_dict()
-                        if _CLUSTER is not None and _CLUSTER.claim else None))
+                        if _CLUSTER is not None and _CLUSTER.claim else None),
+            # Where we are, and which upstreams we can reach. Advertised so a
+            # peer that cannot reach a tool knows where to ask -- and withheld
+            # from the reduced record, because the set of datacentres and what
+            # each can reach is this organisation's egress map.
+            site=NODE_SITE,
+            serves=sorted(UPSTREAMS.keys()) if TOOL_RELAY else [])
         _FED = Federation(self_domain=_NODE_DOMAIN, self_node_id=_ident.node_id)
     except Exception as _e:
-        print(f"[gateway] federation disabled: {_e}", flush=True)
+        # Fatal, not a warning. Setting XCP_NODE_KEY and XCP_NODE_DOMAIN is an
+        # operator saying "I want this node to federate", so failing to build
+        # the identity is a control they asked for and did not get.
+        #
+        # This used to print and carry on, and it hid a real bug: a NameError
+        # from reading NODE_SITE before it was defined came out as
+        # "federation disabled", so a configuration error looked exactly like
+        # a feature being switched off. Every peering attempt then answered
+        # "federation not configured" and nothing said why.
+        raise RuntimeError(
+            f"XCP_NODE_KEY and XCP_NODE_DOMAIN are set but this node's "
+            f"federation identity could not be built: "
+            f"{type(_e).__name__}: {_e}\nRefusing to start.")
 
 # The claim has to be about THIS node. load_posture() verifies the claim
 # against the charter but cannot check whose it is, because the node identity
@@ -1281,6 +1522,7 @@ A2A_ACCEPT = os.getenv("XCP_A2A_ACCEPT", "0") == "1"
 A2A_TIER_CEILING = os.getenv("XCP_A2A_TIER_CEILING", "A2xH2").strip()
 
 A2A_MAX_HOPS = int(os.getenv("XCP_A2A_MAX_HOPS", "3"))
+
 
 try:
     from federation.delegation import canonical_tier as _canon_tier
@@ -1544,7 +1786,14 @@ async def federation_peer(request: Request) -> JSONResponse:
         # This path now grants at most VERIFIED. PEERED requires the peer to
         # confirm independently, which is a separate exchange.
         p = _FED.add_verified_peer(domain, rec.node_id, rec.gateway_url,
-                                   mutual=False, sequence=rec.sequence)
+                                   mutual=False, sequence=rec.sequence,
+                                   # Recorded from the peer's record: where it
+                                   # says it is, and what it says it can reach.
+                                   # Both decide where to TRY. Neither grants
+                                   # anything -- the peer re-authorises every
+                                   # relay against its own ceiling.
+                                   site=rec.site,
+                                   serves=list(rec.serves or []))
     except Exception as e:
         return JSONResponse({"error": str(e)}, status_code=409)
     _fed_audit(f"peered {domain} seq={rec.sequence}")

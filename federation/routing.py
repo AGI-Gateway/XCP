@@ -84,6 +84,25 @@ EWMA_ALPHA = 0.2
 #: Without it, two near-equal peers trade load indefinitely.
 SWITCH_MARGIN = 0.15
 
+#: What crossing a site boundary costs, in the same units as transport price.
+#:
+#: LOCALITY IS A COST, RESIDENCY IS A CONSTRAINT, and the two are not the same
+#: lever. A remote peer is worse, not forbidden: when the local one is down,
+#: routing must still reach the remote one, so preference has to be something
+#: optimisation can overcome. Where a tool's contract pins where its data may
+#: be processed, that is not a preference at any price, so it is enforced in
+#: `admissible` -- this module's own rule being that a constraint which can be
+#: outweighed is a preference wearing a constraint's name.
+#:
+#: Why a cost at all, when latency is already measured: an UNTESTED peer has
+#: latency_ms 0.0 and therefore looks free. Without a locality prior, a node
+#: that has never called a remote peer rates it better than the local one it
+#: has measured, and finds out it was wrong by sending traffic. Locality is the
+#: prior that stops the first request being the experiment. It also prices
+#: something latency does not see: a cross-site hop crosses a failure domain,
+#: and usually a billing boundary.
+CROSS_SITE_COST = 25
+
 
 class Effect(IntEnum):
     """What the caller needs to be able to do. Ordered by how much trust it
@@ -129,6 +148,18 @@ class PeerMetrics:
     domain: str
     hops: int = 1
     trust_weight: float = 1.0          # as observed by us, before decay
+    #: Which datacentre, region or availability zone this peer sits in. An
+    #: opaque operator-chosen label: this module compares it for equality and
+    #: membership and never parses it, because any structure it assumed would
+    #: be wrong for somebody's naming scheme.
+    #:
+    #: Unlike everything else here this is NOT a local observation -- a peer
+    #: tells us where it is. That is acceptable for the locality COST, where a
+    #: peer lying only mis-prices its own traffic. It is not acceptable on its
+    #: own for residency, which is why `Policy.permitted_sites` is a
+    #: constraint an operator sets rather than a fact a peer asserts: the
+    #: operator decides which labels they will accept.
+    site: str = ""
     server_class: str = "unknown"
     price_minor: int = 0               # what the peer charges per routed call
     latency_ms: float = 0.0            # smoothed
@@ -170,12 +201,14 @@ class Candidate:
     total_cost: int
     trust: float
     reason: str = ""
+    off_site: bool = False
 
     def to_dict(self) -> dict[str, Any]:
         return {"domain": self.peer.domain, "score": round(self.score, 4),
                 "latencyMs": round(self.latency_ms, 2),
                 "totalCost": self.total_cost, "trust": round(self.trust, 3),
-                "hops": self.peer.hops, "reason": self.reason}
+                "hops": self.peer.hops, "site": self.peer.site,
+                "offSite": self.off_site, "reason": self.reason}
 
 
 @dataclass
@@ -188,6 +221,22 @@ class Policy:
     max_latency_ms: Optional[float] = None
     max_cost_minor: Optional[int] = None
     require_class: Optional[str] = None
+    #: This node's own site. A peer elsewhere is priced at CROSS_SITE_COST --
+    #: preferred against, not excluded.
+    home_site: str = ""
+    cross_site_cost: int = CROSS_SITE_COST
+    #: Sites where this request's data may be processed. When set, a peer
+    #: outside is INADMISSIBLE. This is the residency lever: a tool whose
+    #: contract pins processing to the EU is not reachable through a peer in
+    #: another jurisdiction at any latency, cost or trust level.
+    permitted_sites: Optional[frozenset] = None
+
+    def crosses(self, peer: "PeerMetrics") -> bool:
+        """True when choosing this peer leaves our site. Unknown counts as
+        crossing: an unlabelled peer is not evidence of being local."""
+        if not self.home_site:
+            return False              # a node that declares no site has no locality
+        return peer.site != self.home_site
 
 
 def admissible(peer: PeerMetrics, policy: Policy) -> tuple[bool, str]:
@@ -203,14 +252,31 @@ def admissible(peer: PeerMetrics, policy: Policy) -> tuple[bool, str]:
     if peer.effective_trust < floor:
         return False, (f"trust {peer.effective_trust:.2f} below the "
                        f"{floor:.2f} required for {policy.effect.name}")
+    if policy.permitted_sites is not None:
+        # Residency. Checked here rather than priced, because a jurisdiction is
+        # not a quantity you can be compensated for crossing. An unlabelled
+        # peer fails this: not knowing where a peer is is not the same as it
+        # being somewhere permitted, and defaulting the other way would make
+        # the control absent exactly when it matters.
+        if peer.site not in policy.permitted_sites:
+            return False, (f"site {peer.site or 'undeclared'!r} is outside the "
+                           f"permitted processing region")
     if policy.require_class and peer.server_class != policy.require_class:
         return False, f"class {peer.server_class} is not {policy.require_class}"
     if policy.max_latency_ms is not None and peer.latency_ms > policy.max_latency_ms:
         return False, "exceeds the latency budget"
-    total = peer.price_minor + OBLIGATION_COST.get(peer.server_class, 40)
+    total = _total_cost(peer, policy)
     if policy.max_cost_minor is not None and total > policy.max_cost_minor:
         return False, "exceeds the cost budget"
     return True, ""
+
+
+def _total_cost(peer: PeerMetrics, policy: Policy) -> int:
+    """Transport price, the obligations a weaker trust class imposes, and the
+    cost of leaving our own site."""
+    return (peer.price_minor
+            + OBLIGATION_COST.get(peer.server_class, 40)
+            + (policy.cross_site_cost if policy.crosses(peer) else 0))
 
 
 def score(peer: PeerMetrics, policy: Policy) -> Candidate:
@@ -218,13 +284,14 @@ def score(peer: PeerMetrics, policy: Policy) -> Candidate:
     Lower is better. Latency and cost are additive; trust has already served
     its purpose as a constraint and is not traded against them here.
     """
-    total_cost = peer.price_minor + OBLIGATION_COST.get(peer.server_class, 40)
+    total_cost = _total_cost(peer, policy)
     # An unreliable peer costs a retry, so failure rate inflates both terms.
     penalty = 1.0 / max(peer.success_rate, 0.05)
     s = (policy.latency_weight * peer.latency_ms
          + policy.cost_weight * total_cost) * penalty
     return Candidate(peer=peer, score=s, latency_ms=peer.latency_ms,
-                     total_cost=total_cost, trust=peer.effective_trust)
+                     total_cost=total_cost, trust=peer.effective_trust,
+                     off_site=policy.crosses(peer))
 
 
 def select(peers: Iterable[PeerMetrics], policy: Optional[Policy] = None,
@@ -296,4 +363,5 @@ def concentration(history: Iterable[str]) -> dict[str, Any]:
 
 __all__ = ["SWITCH_MARGIN", "Effect", "PeerMetrics", "Policy", "Candidate", "select",
            "admissible", "score", "concentration", "RoutingError",
-           "EFFECT_FLOOR", "OBLIGATION_COST", "HOP_DECAY", "MAX_HOPS"]
+           "EFFECT_FLOOR", "OBLIGATION_COST", "HOP_DECAY", "MAX_HOPS",
+           "CROSS_SITE_COST"]

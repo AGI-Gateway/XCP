@@ -17,11 +17,22 @@ sys.path.insert(0, str(ROOT))
 from trustfirewall.oauth_bridge import (Grant, derive_mandate, map_scopes,
                                         widens, GrantError)
 
-NOW = int(time.time())
+def NOW() -> int:
+    """
+    Read the clock when a test runs, not when this module is imported.
+
+    It used to be a module-level constant, and a grant minted at NOW + 60 was
+    therefore already expired by the time the test ran: pytest imports every
+    module during collection, and once the whole suite took longer than a
+    minute this test failed for reasons that had nothing to do with the OAuth
+    bridge. It passed in isolation and failed in the suite, which is the
+    shape of bug that trains people to re-run rather than look.
+    """
+    return int(time.time())
 
 
 def _grant(**kw):
-    base = dict(sub="user@corp.example", scope="read", exp=NOW + 600,
+    base = dict(sub="user@corp.example", scope="read", exp=NOW() + 600,
                 client_id="agent-42")
     base.update(kw)
     return Grant(**base)
@@ -58,13 +69,13 @@ def test_a_grant_with_no_usable_scope_is_refused():
 
 
 def test_a_mandate_cannot_outlive_its_grant():
-    m = derive_mandate(_grant(exp=NOW + 60), max_ttl=86400)
-    assert m["notAfter"] <= NOW + 60
+    m = derive_mandate(_grant(exp=NOW() + 60), max_ttl=86400)
+    assert m["notAfter"] <= NOW() + 60
 
 
 def test_an_expired_grant_yields_nothing():
     try:
-        derive_mandate(_grant(exp=NOW - 1)); assert False
+        derive_mandate(_grant(exp=NOW() - 1)); assert False
     except GrantError:
         pass
 

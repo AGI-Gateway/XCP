@@ -213,6 +213,59 @@ false claim; the capability did not exist. Now it does.
   trip. A refused ticket still reports the tier it *would* have been granted,
   so an audit line tells an operator whether the ceiling is the problem.
 
+### Site locality, data residency, and one egress gateway for the estate
+
+Routing had a hop count and no notion of region, so multi-site latency
+optimisation had nothing to optimise against. `XCP_UPSTREAMS` was per-gateway,
+so every datacentre needed its own egress path and its own copy of every vendor
+credential — as many copies of each secret as you have sites.
+
+- **Locality is a cost; residency is a constraint**, and conflating them would
+  have broken one or the other. A peer in another site is priced
+  (`CROSS_SITE_COST`), not forbidden: when the local one is down, routing must
+  still reach it, and a preference that cannot be overcome is an outage waiting
+  for the local site to fail. A permitted-site list is enforced in
+  `admissible()`, before optimisation, because a jurisdiction is not a quantity
+  you can be compensated for crossing — this module's own rule being that a
+  constraint which can be outweighed is a preference wearing a constraint's
+  name. Residency therefore beats locality: a node in `dc1` whose list names
+  only `dc2` routes to `dc2`.
+
+- **The gap locality actually closes:** an untested peer has `latency_ms` 0.0
+  and so looks *free*. Without a prior, a node rates a remote peer it has never
+  called better than the local one it has measured, and finds out by sending
+  traffic. A peer that declares no site counts as off-site, and fails residency
+  outright — not knowing where a peer is is not the same as it being somewhere
+  permitted, and defaulting the other way would make the control absent exactly
+  when it matters.
+
+- **Path diversity survives.** Locality narrows the pool to the local site,
+  which is the point, and the tolerance band keeps operating inside it: four
+  local peers hold an HHI under 0.3 over 600 selections. A site with one peer
+  gives 1.0, which is a property of the deployment and now something an
+  operator can see rather than infer.
+
+- **A federated tool catalogue.** Nodes advertise which upstream servers they
+  reach; a call to one this node lacks is routed to a peer that has it,
+  preferring the nearest permitted site. The asking node never holds or sees
+  the vendor credential — one place to audit, one rate limit against the
+  vendor's quota, one copy of the secret to rotate. Both halves are off by
+  default (`XCP_TOOL_RELAY`, `XCP_TOOL_FALLBACK`): relaying spends your own
+  credential on another datacentre's say-so, and asking sends a call down a
+  path you did not configure.
+
+- A relay is authorised **exactly** as a cross-boundary delegation is, because
+  it spends this node's credential: same ticket, same six checks, and it runs
+  at the tier narrowed under this node's ceiling through its own mandate gate,
+  argument firewall and limits. A node that does not relay advertises nothing,
+  so it never becomes a candidate — you cannot aim a relay at a site that has
+  not opted in — and the endpoint refuses a direct attempt as well. A relay
+  does not forward onward.
+
+- `site` and `serves` are withheld from the reduced node record. Which
+  datacentres exist and what each can reach is the estate's egress map, which
+  is the reconnaissance step before choosing what to attack.
+
 ### Test infrastructure
 
 - Contract tests signalled "skip" by raising `RuntimeError("SKIP: …")`, which
@@ -226,6 +279,17 @@ false claim; the capability did not exist. Now it does.
   server), and the certificate-retrieval invariant is asserted across the call
   chain. A companion test refuses a second HTTP client in the handler, which is
   how the first one came to have verification disabled.
+- The gateway printed `federation disabled` and carried on when its node
+  identity could not be built, which hid a real bug: a `NameError` from reading
+  a setting defined further down the file came out as a feature being switched
+  off, and every peering attempt then answered `federation not configured`
+  without saying why. Setting `XCP_NODE_KEY` is an operator asking to
+  federate, so failing to build the identity is now fatal.
+- A grant in the OAuth bridge tests expired at a timestamp captured when the
+  module was **imported**, so once the whole suite took longer than a minute
+  the test failed for reasons unrelated to the OAuth bridge. It passed in
+  isolation and failed in the suite, which is the shape of defect that trains
+  people to re-run rather than look. The clock is now read when the test runs.
 - `_gateway` in the private-federation tests applied its own defaults *after*
   the caller's overrides, so a test that set `XCP_NODE_KEY` silently got the
   default instead. It surfaced as the gateway refusing to start — correctly,
