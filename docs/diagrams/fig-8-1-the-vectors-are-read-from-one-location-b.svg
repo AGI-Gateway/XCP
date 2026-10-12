@@ -1,0 +1,94 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="500" viewBox="0 0 1040 500" role="img" aria-label="One contract and several ports. A generator reads the Python sources of truth and emits a descriptor and vector files, which are committed. Three language ports read the same vector files and must reproduce every case. A regenerate-and-diff gate in CI stops the contract drifting from its sources, and every publishing job depends on the ports passing.">
+  <style>
+    :root { --bg:#f6f8f7; --surface:#ffffff; --surface-2:#edf2f0; --fg:#141d1c; --fg-2:#3b4a47; --muted:#5f6e6b; --rule:#d5deda; --rule-2:#bdc9c6; --accent:#0a6a62; --accent-wash:#e2efec; --refuse:#9a3326; --refuse-wash:#f8e9e6; color: var(--fg); }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b1110; --surface:#121a18; --surface-2:#1a2422; --fg:#e6ecea; --fg-2:#c2cecb; --muted:#8b9a96; --rule:#233230; --rule-2:#2e403d; --accent:#49d0be; --accent-wash:#14302c; --refuse:#ef9079; --refuse-wash:#32201b; color: var(--fg); }
+    }
+    .t{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; fill:currentColor}
+    .tb{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; font-weight:600; fill:currentColor}
+    .tm{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:11.5px; fill:currentColor}
+    .ts{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:11px; fill:currentColor; opacity:.72}
+    .tl{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:10px; letter-spacing:.1em; fill:currentColor; opacity:.62}
+    .big{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:19px; font-weight:500; fill:currentColor}
+    .acc{fill:var(--accent)} .ref{fill:var(--refuse)}
+    .bx{fill:var(--surface-2); stroke:var(--rule-2); stroke-width:1}
+    .bx-a{fill:var(--accent-wash); stroke:var(--accent); stroke-width:1.4}
+    .bx-r{fill:var(--refuse-wash); stroke:var(--refuse); stroke-width:1.2}
+    .env{fill:none; stroke:var(--rule-2); stroke-width:1; stroke-dasharray:5 4}
+    .ln{stroke:currentColor; stroke-width:1.3; fill:none}
+    .ln-a{stroke:var(--accent); stroke-width:1.8; fill:none}
+    .ln-r{stroke:var(--refuse); stroke-width:1.3; fill:none; stroke-dasharray:5 3}
+  </style>
+  <rect width="100%" height="100%" fill="var(--bg)"/>
+          <defs>
+            <marker id="g3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="g3b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+            <marker id="g3r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--refuse)"/></marker>
+          </defs>
+
+          <!-- sources -->
+          <text x="16" y="30" class="tl">SOURCES OF TRUTH — PYTHON</text>
+          <rect x="16" y="42" width="210" height="150" rx="4" class="bx"/>
+          <text x="28" y="64" class="tm">protocol/version.py</text>
+          <text x="28" y="82" class="tm">protocol/identity.py</text>
+          <text x="28" y="100" class="tm">trust/tiers.py</text>
+          <text x="28" y="118" class="tm">trustfirewall/stateless.py</text>
+          <text x="28" y="136" class="tm">federation/delegation.py</text>
+          <text x="28" y="154" class="tm">ops/config.py</text>
+          <text x="28" y="172" class="tm">conformance/suite.py</text>
+
+          <line x1="226" y1="117" x2="266" y2="117" class="ln" marker-end="url(#g3a)"/>
+          <rect x="266" y="92" width="150" height="50" rx="4" class="bx-a"/>
+          <text x="278" y="112" class="tb acc">generator</text>
+          <text x="278" y="130" class="ts">derived, never hand-listed</text>
+          <line x1="416" y1="117" x2="456" y2="117" class="ln-a" marker-end="url(#g3b)"/>
+
+          <!-- the contract -->
+          <rect x="456" y="42" width="230" height="150" rx="4" class="bx-a"/>
+          <text x="468" y="64" class="tb acc">THE CONTRACT</text>
+          <text x="468" y="86" class="tm">descriptor.json</text>
+          <text x="468" y="104" class="ts">16 endpoints · 9 cells</text>
+          <text x="468" y="118" class="ts">18 checks · 62 settings</text>
+          <text x="468" y="142" class="tm">vectors/*.json</text>
+          <text x="468" y="160" class="ts">139 cases, offline-checkable</text>
+          <text x="468" y="178" class="ts">committed, diffed in CI</text>
+
+          <!-- ports -->
+          <text x="726" y="30" class="tl">PORTS — SAME FILES, NO COPIES</text>
+          <line x1="686" y1="80" x2="722" y2="62" class="ln-a" marker-end="url(#g3b)"/>
+          <rect x="726" y="42" width="264" height="36" rx="4" class="bx-a"/>
+          <text x="738" y="65" class="tm acc">Python · 260 comparisons · green</text>
+          <line x1="686" y1="100" x2="722" y2="100" class="ln-a" marker-end="url(#g3b)"/>
+          <rect x="726" y="82" width="264" height="36" rx="4" class="bx-a"/>
+          <text x="738" y="105" class="tm acc">TypeScript · 262 · green</text>
+          <line x1="686" y1="124" x2="722" y2="140" class="ln-a" marker-end="url(#g3b)"/>
+          <rect x="726" y="122" width="264" height="36" rx="4" class="bx-a"/>
+          <text x="738" y="145" class="tm acc">Go · green</text>
+          <rect x="726" y="162" width="264" height="36" rx="4" class="bx"/>
+          <text x="738" y="185" class="ts">Java · toolchain available, not written</text>
+          <rect x="726" y="202" width="264" height="36" rx="4" class="bx"/>
+          <text x="738" y="225" class="ts">.NET · unverifiable here, not written</text>
+
+          <!-- the two gates -->
+          <text x="16" y="276" class="tl">TWO GATES, FOR TWO DIFFERENT FAILURES</text>
+
+          <rect x="16" y="288" width="480" height="92" rx="4" class="bx"/>
+          <text x="30" y="310" class="tb">Regenerate and diff</text>
+          <text x="30" y="330" class="tm">generate-sdk-contract.py --check</text>
+          <text x="30" y="350" class="ts">Catches the contract drifting from the code it describes —</text>
+          <text x="30" y="366" class="ts">a committed file edited by hand, or stale after a change.</text>
+          <path d="M256,288 L256,208 L571,208 L571,192" class="ln" stroke-dasharray="4 3" marker-end="url(#g3a)"/>
+
+          <rect x="510" y="288" width="480" height="92" rx="4" class="bx"/>
+          <text x="524" y="310" class="tb">Every port reproduces every case</text>
+          <text x="524" y="330" class="tm">python -m sdk · node vectors.mjs · go test</text>
+          <text x="524" y="350" class="ts">Catches a port that is individually plausible and</text>
+          <text x="524" y="366" class="ts">disagrees with the gateway about the same bytes.</text>
+
+          <!-- publish gate -->
+          <line x1="503" y1="380" x2="503" y2="404" class="ln-a" marker-end="url(#g3b)"/>
+          <rect x="16" y="406" width="974" height="80" rx="4" class="bx-a"/>
+          <text x="30" y="428" class="tb acc">Nothing publishes until both gates pass</text>
+          <text x="30" y="450" class="ts">PyPI (Trusted Publishing, no token to leak) · npm (provenance) · Go module proxy (tag must resolve) · the container image</text>
+          <text x="30" y="468" class="ts">A package whose primitives disagree with the gateway fails at the integration boundary, against a gateway the integrator does not control — and the failure looks like the gateway's fault.</text>
+        </svg>

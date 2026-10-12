@@ -1,0 +1,103 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="520" viewBox="0 0 1040 520" role="img" aria-label="The ecosystem loop. Publishers expose node records and catalogues at well-known paths; nodes discover and peer with each other; the conformance suite with eighteen levelled checks gates every implementation, and a second independent Node implementation must pass it; receipts and settlement rails close the commercial loop; and a compliance map covering fifteen frameworks records what XCP implements, enables, leaves to the operator, and does not cover.">
+  <style>
+    :root { --bg:#f6f8f7; --surface:#ffffff; --surface-2:#edf2f0; --fg:#141d1c; --fg-2:#3b4a47; --muted:#5f6e6b; --rule:#d5deda; --rule-2:#bdc9c6; --accent:#0a6a62; --accent-wash:#e2efec; --refuse:#9a3326; --refuse-wash:#f8e9e6; color: var(--fg); }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b1110; --surface:#121a18; --surface-2:#1a2422; --fg:#e6ecea; --fg-2:#c2cecb; --muted:#8b9a96; --rule:#233230; --rule-2:#2e403d; --accent:#49d0be; --accent-wash:#14302c; --refuse:#ef9079; --refuse-wash:#32201b; color: var(--fg); }
+    }
+    .t{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; fill:currentColor}
+    .tb{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; font-weight:600; fill:currentColor}
+    .tm{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:11.5px; fill:currentColor}
+    .ts{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:11px; fill:currentColor; opacity:.72}
+    .tl{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:10px; letter-spacing:.1em; fill:currentColor; opacity:.62}
+    .big{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:19px; font-weight:500; fill:currentColor}
+    .acc{fill:var(--accent)} .ref{fill:var(--refuse)}
+    .bx{fill:var(--surface-2); stroke:var(--rule-2); stroke-width:1}
+    .bx-a{fill:var(--accent-wash); stroke:var(--accent); stroke-width:1.4}
+    .bx-r{fill:var(--refuse-wash); stroke:var(--refuse); stroke-width:1.2}
+    .env{fill:none; stroke:var(--rule-2); stroke-width:1; stroke-dasharray:5 4}
+    .ln{stroke:currentColor; stroke-width:1.3; fill:none}
+    .ln-a{stroke:var(--accent); stroke-width:1.8; fill:none}
+    .ln-r{stroke:var(--refuse); stroke-width:1.3; fill:none; stroke-dasharray:5 3}
+  </style>
+  <rect width="100%" height="100%" fill="var(--bg)"/>
+          <defs>
+            <marker id="fba" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="fbb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+          </defs>
+
+          <!-- publish -->
+          <text x="16" y="28" class="tl">1 · PUBLISH</text>
+          <rect x="16" y="40" width="228" height="128" rx="4" class="bx"/>
+          <text x="30" y="62" class="tb">Anyone with a domain</text>
+          <text x="30" y="84" class="tm">/.well-known/xcp-node.json</text>
+          <text x="30" y="100" class="tm">/.well-known/ai-catalog.json</text>
+          <text x="30" y="120" class="ts">RFC 8615 well-known URIs.</text>
+          <text x="30" y="136" class="ts">No registry to join, no gatekeeper</text>
+          <text x="30" y="152" class="ts">to ask. <tspan class="tm">xcp init &amp;&amp; xcp publish</tspan></text>
+
+          <line x1="244" y1="104" x2="300" y2="104" class="ln" marker-end="url(#fba)"/>
+
+          <!-- discover -->
+          <text x="300" y="28" class="tl">2 · DISCOVER &amp; PEER</text>
+          <rect x="300" y="40" width="228" height="128" rx="4" class="bx"/>
+          <text x="314" y="62" class="tb">discovery.ard</text>
+          <text x="314" y="84" class="ts">Reads the record, resolves the</text>
+          <text x="314" y="100" class="ts">keys, offers to peer. The peer</text>
+          <text x="314" y="116" class="ts">table carries a trust label, and</text>
+          <text x="314" y="132" class="ts">a label is earned per-node, not</text>
+          <text x="314" y="148" class="ts">inherited from a federation.</text>
+
+          <line x1="528" y1="104" x2="584" y2="104" class="ln-a" marker-end="url(#fbb)"/>
+
+          <!-- conform -->
+          <text x="584" y="28" class="tl">3 · CONFORM — THE GATE</text>
+          <rect x="584" y="40" width="440" height="128" rx="4" class="bx-a"/>
+          <text x="598" y="62" class="tb acc">conformance.run(profiles)</text>
+          <text x="598" y="86" class="tm">CORE 10</text><text x="598" y="104" class="ts">mandate required, expiry honoured, reasons given</text>
+          <text x="598" y="124" class="tm">STATELESS 2</text><text x="598" y="142" class="ts">a node may legitimately hold no session state</text>
+          <text x="820" y="86" class="tm">SECURITY 3</text><text x="820" y="104" class="ts">rate limit, Retry-After, body cap</text>
+          <text x="820" y="124" class="tm">FEDERATION 3</text><text x="820" y="142" class="ts">node record present and well formed</text>
+          <text x="598" y="162" class="tm acc">13 MUST · 5 SHOULD — a SHOULD failure is reported, not fatal</text>
+
+          <!-- second impl -->
+          <line x1="804" y1="168" x2="804" y2="202" class="ln-a" marker-end="url(#fbb)"/>
+          <rect x="584" y="204" width="440" height="86" rx="4" class="bx"/>
+          <text x="598" y="226" class="tb">A second implementation must pass it</text>
+          <text x="598" y="246" class="tm">core/gateway-ts/gateway.mjs — Node, 15/15</text>
+          <text x="598" y="266" class="ts">CI runs the suite against the TypeScript gateway on every push. A check that only the</text>
+          <text x="598" y="282" class="ts">Python reference can pass is a check that encodes the reference, not the protocol.</text>
+
+          <!-- differential -->
+          <line x1="804" y1="290" x2="804" y2="324" class="ln" marker-end="url(#fba)"/>
+          <rect x="584" y="326" width="440" height="78" rx="4" class="bx"/>
+          <text x="598" y="348" class="tb">Differential testing · 21/21</text>
+          <text x="598" y="368" class="ts">Two implementations given the same input must reach the same decision. Where they</text>
+          <text x="598" y="384" class="ts">cannot — a refusal that is unimplementable because Node's HTTP layer strips the</text>
+          <text x="598" y="400" class="ts">whitespace first, per RFC 9110 §5.5 — the spec says so instead of pretending.</text>
+
+          <!-- settle -->
+          <text x="16" y="212" class="tl">4 · SETTLE</text>
+          <rect x="16" y="224" width="512" height="106" rx="4" class="bx"/>
+          <text x="30" y="246" class="tb">receipts · four rails · escrow</text>
+          <text x="30" y="268" class="ts">A hash-chained call record is what makes a call billable and a dispute arguable.</text>
+          <text x="30" y="286" class="ts">Settlement mode comes from the lattice cell: none, escrow, metered, full — and</text>
+          <text x="30" y="302" class="ts">seven of nine cells require proof of delivery before settlement.</text>
+          <text x="30" y="322" class="tm">X402 · AP2 · MPP · ACP</text>
+
+          <!-- comply -->
+          <text x="16" y="366" class="tl">5 · ACCOUNT FOR IT</text>
+          <rect x="16" y="378" width="512" height="126" rx="4" class="bx"/>
+          <text x="30" y="400" class="tb">compliance — 15 frameworks, 51 controls</text>
+          <text x="30" y="424" class="tm acc">implemented 10</text><text x="176" y="424" class="ts">XCP does this</text>
+          <text x="30" y="442" class="tm">enabler 9</text><text x="176" y="442" class="ts">XCP makes it possible</text>
+          <text x="30" y="460" class="tm">partial 22</text><text x="176" y="460" class="ts">part of the requirement</text>
+          <text x="30" y="478" class="tm">operator 5</text><text x="176" y="478" class="ts">the deployer's job</text>
+          <text x="316" y="424" class="tm ref">gap 5</text><text x="376" y="424" class="ts">not covered — said so</text>
+          <text x="316" y="446" class="ts">EU AI Act 11 · GDPR 11 · DORA 9 ·</text>
+          <text x="316" y="462" class="ts">SOC 2 8 · NIS2 2 · and ten more</text>
+          <text x="316" y="484" class="ts">16 operational covenants · 10 data classes</text>
+
+          <!-- loop back -->
+          <path d="M584,364 L556,364 L556,104" class="ln-a" stroke-dasharray="5 4" marker-end="url(#fbb)"/>
+          <text x="470" y="200" class="tm acc">certifies</text>
+        </svg>

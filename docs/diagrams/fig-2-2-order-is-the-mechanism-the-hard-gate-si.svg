@@ -1,0 +1,92 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="452" viewBox="0 0 1040 452" role="img" aria-label="The egress decision for a URL: surface checks on scheme and credentials, then resolution to every address, then a hard gate of never-permitted addresses that runs before the operator's declared private ranges are consulted, so a declaration spanning the cloud metadata address cannot admit it.">
+  <style>
+    :root { --bg:#f6f8f7; --surface:#ffffff; --surface-2:#edf2f0; --fg:#141d1c; --fg-2:#3b4a47; --muted:#5f6e6b; --rule:#d5deda; --rule-2:#bdc9c6; --accent:#0a6a62; --accent-wash:#e2efec; --refuse:#9a3326; --refuse-wash:#f8e9e6; color: var(--fg); }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b1110; --surface:#121a18; --surface-2:#1a2422; --fg:#e6ecea; --fg-2:#c2cecb; --muted:#8b9a96; --rule:#233230; --rule-2:#2e403d; --accent:#49d0be; --accent-wash:#14302c; --refuse:#ef9079; --refuse-wash:#32201b; color: var(--fg); }
+    }
+    .t{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; fill:currentColor}
+    .tb{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; font-weight:600; fill:currentColor}
+    .tm{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:11.5px; fill:currentColor}
+    .ts{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:11px; fill:currentColor; opacity:.72}
+    .tl{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:10px; letter-spacing:.1em; fill:currentColor; opacity:.62}
+    .big{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:19px; font-weight:500; fill:currentColor}
+    .acc{fill:var(--accent)} .ref{fill:var(--refuse)}
+    .bx{fill:var(--surface-2); stroke:var(--rule-2); stroke-width:1}
+    .bx-a{fill:var(--accent-wash); stroke:var(--accent); stroke-width:1.4}
+    .bx-r{fill:var(--refuse-wash); stroke:var(--refuse); stroke-width:1.2}
+    .env{fill:none; stroke:var(--rule-2); stroke-width:1; stroke-dasharray:5 4}
+    .ln{stroke:currentColor; stroke-width:1.3; fill:none}
+    .ln-a{stroke:var(--accent); stroke-width:1.8; fill:none}
+    .ln-r{stroke:var(--refuse); stroke-width:1.3; fill:none; stroke-dasharray:5 3}
+  </style>
+  <rect width="100%" height="100%" fill="var(--bg)"/>
+          <defs>
+            <marker id="f4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="f4r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--refuse)"/></marker>
+            <marker id="f4b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+          </defs>
+
+          <rect x="16" y="40" width="186" height="46" rx="4" class="bx"/>
+          <text x="28" y="60" class="tm">check_url(url)</text><text x="28" y="78" class="ts">peer, upstream, redirect</text>
+          <line x1="202" y1="63" x2="246" y2="63" class="ln" marker-end="url(#f4a)"/>
+
+          <rect x="246" y="40" width="210" height="46" rx="4" class="bx"/>
+          <text x="258" y="60" class="tb">scheme · credentials · port</text>
+          <text x="258" y="78" class="ts">plain HTTP refused, even internally</text>
+          <line x1="456" y1="63" x2="500" y2="63" class="ln" marker-end="url(#f4a)"/>
+
+          <rect x="500" y="40" width="230" height="46" rx="4" class="bx"/>
+          <text x="512" y="60" class="tb">resolved_addresses(host)</text>
+          <text x="512" y="78" class="ts">all of them must pass, not the name</text>
+
+          <line x1="615" y1="86" x2="615" y2="112" class="ln" marker-end="url(#f4a)"/>
+          <text x="628" y="104" class="ts">for every address</text>
+
+          <!-- hard gate -->
+          <rect x="396" y="114" width="438" height="62" rx="4" class="bx-a"/>
+          <text x="410" y="136" class="tb acc">HARD GATE · _never_permitted(addr)</text>
+          <text x="410" y="154" class="tm">loopback · link-local · multicast · reserved · unspecified</text>
+          <text x="410" y="170" class="tm">+ _EXTRA_DENY</text>
+          <line x1="834" y1="145" x2="906" y2="145" class="ln-r" marker-end="url(#f4r)"/>
+          <text x="856" y="138" class="tm ref">REFUSE</text>
+
+          <line x1="615" y1="176" x2="615" y2="202" class="ln-a" marker-end="url(#f4b)"/>
+
+          <rect x="446" y="204" width="338" height="46" rx="4" class="bx"/>
+          <text x="460" y="224" class="tb">addr.is_private ?</text>
+          <text x="460" y="242" class="ts">a public address that passed the gate is permitted</text>
+          <line x1="784" y1="227" x2="906" y2="227" class="ln-a" marker-end="url(#f4b)"/>
+          <text x="856" y="220" class="tm acc">PERMIT</text>
+
+          <line x1="615" y1="250" x2="615" y2="276" class="ln" marker-end="url(#f4a)"/>
+          <text x="628" y="268" class="ts">private</text>
+
+          <rect x="446" y="278" width="338" height="62" rx="4" class="bx"/>
+          <text x="460" y="300" class="tb">in a declared range ?</text>
+          <text x="460" y="318" class="tm">XCP_PRIVATE_PEER_CIDRS</text>
+          <text x="460" y="334" class="ts">min prefix /8 v4, /7 v6 — a declaration may not be the whole space</text>
+          <line x1="784" y1="300" x2="906" y2="300" class="ln-a" marker-end="url(#f4b)"/>
+          <text x="856" y="293" class="tm acc">PERMIT</text>
+          <line x1="784" y1="326" x2="906" y2="326" class="ln-r" marker-end="url(#f4r)"/>
+          <text x="856" y="344" class="tm ref">REFUSE</text>
+
+          <!-- the attack -->
+          <rect x="16" y="150" width="340" height="80" rx="4" class="bx-r"/>
+          <text x="30" y="172" class="tb ref">The case this ordering exists for</text>
+          <text x="30" y="192" class="tm">operator declares 169.254.0.0/16</text>
+          <text x="30" y="208" class="tm">attacker asks for 169.254.169.254</text>
+          <text x="30" y="224" class="ts">The declaration is never consulted. Link-local is refused above it.</text>
+          <line x1="356" y1="178" x2="392" y2="150" class="ln-r" marker-end="url(#f4r)"/>
+
+          <!-- redirect loop -->
+          <rect x="16" y="300" width="340" height="62" rx="4" class="bx"/>
+          <text x="30" y="322" class="tb">guard_redirect(location)</text>
+          <text x="30" y="340" class="ts">Every hop re-enters at the top. A permitted host that</text>
+          <text x="30" y="356" class="ts">redirects to a forbidden one gets no further than one hop.</text>
+          <path d="M186,300 L186,282 L420,282 L420,70 L500,70" class="ln" stroke-dasharray="4 3" marker-end="url(#f4a)"/>
+
+          <!-- refusal text note -->
+          <rect x="16" y="382" width="818" height="50" rx="4" class="bx"/>
+          <text x="30" y="404" class="tb">What the caller is told</text>
+          <text x="30" y="422" class="ts">“host does not resolve to a permitted address” — never which address, never why, never which ranges are declared. The caller learns that this host is not a permitted peer, and nothing about the shape of the network.</text>
+        </svg>

@@ -124,7 +124,7 @@ deployment can run entirely off-chain now and anchor the identical charter
 later, or run both off one root. Setup, removal and failure modes:
 **[docs/runbook.md](docs/runbook.md)**.
 
-## The catalog — 9,576 entries, classified
+## The catalog — 9,555 entries, classified
 
 ```bash
 xcp catalog --categories                          # every category, with counts
@@ -143,11 +143,11 @@ Twenty categories derived from the corpus itself, largest first:
 
 | | | | |
 |---|---|---|---|
-| `dev-tools` 1,611 | `other` 1,591 | `cloud-infra` 1,269 | `finance-payments` 757 |
-| `ai-agents` 695 | `data-stores` 648 | `security` 436 | `science-research` 342 |
-| `media-design` 334 | `communication` 259 | `productivity` 248 | `observability` 228 |
-| `browsing-scraping` 227 | `knowledge-memory` 218 | `location-weather` 201 | `search-web` 199 |
-| `crm-sales` 116 | `ecommerce` 97 | `iot-hardware` 56 | `gaming` 44 |
+| `dev-tools` 1,608 | `other` 1,591 | `cloud-infra` 1,267 | `finance-payments` 754 |
+| `ai-agents` 695 | `data-stores` 645 | `security` 436 | `science-research` 342 |
+| `media-design` 333 | `communication` 258 | `productivity` 246 | `browsing-scraping` 227 |
+| `observability` 227 | `knowledge-memory` 216 | `location-weather` 201 | `search-web` 199 |
+| `crm-sales` 113 | `ecommerce` 97 | `iot-hardware` 56 | `gaming` 44 |
 
 **Category tells you what a server claims to do. Only verification tells you
 whether to believe it.** Full breakdown: [`connectors/README.md`](connectors/README.md).
@@ -321,6 +321,14 @@ repository (Settings → Pages → Source: GitHub Actions) — until then the de
 step fails and there is no site, so this list points at the files rather than
 at a URL that would not resolve.
 
+- **[Technical diagrams](docs/diagrams.md)** — fourteen figures covering the
+  architecture, the guardrail ordering, the trust lattice, the external tool
+  surface, deployment shapes, the ecosystem loop, the System One classifier and
+  the SDK contract. Each is traced from the code it describes rather than from
+  the prose about it, and each renders in light or dark to match how you are
+  reading. The same figures with their full narrative are in
+  [`docs/diagrams.html`](docs/diagrams.html) — open it from a clone, since
+  GitHub serves HTML as source rather than rendering it.
 - [Operator runbook](docs/runbook.md) — day zero, private federation, the
   first five minutes of an incident
 - [Internet-Draft](rfc/draft-xcp-trust-envelope-00.txt) — XCP as a wire

@@ -1,0 +1,57 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="272" viewBox="0 0 1040 272" role="img" aria-label="One container image whose entrypoint selects between three roles by the ROLE environment variable: gateway on port 8080, server on 9001, verifier on 8500. An unknown role exits with status 2. The image runs as user 10001 and is published with provenance, an SBOM and a keyless cosign signature.">
+  <style>
+    :root { --bg:#f6f8f7; --surface:#ffffff; --surface-2:#edf2f0; --fg:#141d1c; --fg-2:#3b4a47; --muted:#5f6e6b; --rule:#d5deda; --rule-2:#bdc9c6; --accent:#0a6a62; --accent-wash:#e2efec; --refuse:#9a3326; --refuse-wash:#f8e9e6; color: var(--fg); }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b1110; --surface:#121a18; --surface-2:#1a2422; --fg:#e6ecea; --fg-2:#c2cecb; --muted:#8b9a96; --rule:#233230; --rule-2:#2e403d; --accent:#49d0be; --accent-wash:#14302c; --refuse:#ef9079; --refuse-wash:#32201b; color: var(--fg); }
+    }
+    .t{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; fill:currentColor}
+    .tb{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; font-weight:600; fill:currentColor}
+    .tm{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:11.5px; fill:currentColor}
+    .ts{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:11px; fill:currentColor; opacity:.72}
+    .tl{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:10px; letter-spacing:.1em; fill:currentColor; opacity:.62}
+    .big{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:19px; font-weight:500; fill:currentColor}
+    .acc{fill:var(--accent)} .ref{fill:var(--refuse)}
+    .bx{fill:var(--surface-2); stroke:var(--rule-2); stroke-width:1}
+    .bx-a{fill:var(--accent-wash); stroke:var(--accent); stroke-width:1.4}
+    .bx-r{fill:var(--refuse-wash); stroke:var(--refuse); stroke-width:1.2}
+    .env{fill:none; stroke:var(--rule-2); stroke-width:1; stroke-dasharray:5 4}
+    .ln{stroke:currentColor; stroke-width:1.3; fill:none}
+    .ln-a{stroke:var(--accent); stroke-width:1.8; fill:none}
+    .ln-r{stroke:var(--refuse); stroke-width:1.3; fill:none; stroke-dasharray:5 3}
+  </style>
+  <rect width="100%" height="100%" fill="var(--bg)"/>
+          <defs><marker id="f9a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+          <marker id="f9r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--refuse)"/></marker></defs>
+
+          <rect x="16" y="76" width="232" height="104" rx="4" class="bx-a"/>
+          <text x="30" y="98" class="tb acc">One image</text>
+          <text x="30" y="118" class="tm">ghcr.io/agi-gateway/xcp</text>
+          <text x="30" y="136" class="tm">@sha256:…</text>
+          <text x="30" y="156" class="ts">USER 10001 · never root</text>
+          <text x="30" y="172" class="ts">provenance · SBOM · cosign</text>
+
+          <line x1="248" y1="128" x2="300" y2="128" class="ln" marker-end="url(#f9a)"/>
+          <rect x="300" y="104" width="170" height="48" rx="4" class="bx"/>
+          <text x="312" y="124" class="tm">entrypoint.sh</text><text x="312" y="142" class="ts">case "${ROLE:-gateway}"</text>
+
+          <path d="M470,116 L504,116 L504,48 L560,48" class="ln" marker-end="url(#f9a)"/>
+          <path d="M470,128 L504,128 L504,120 L560,120" class="ln" marker-end="url(#f9a)"/>
+          <path d="M470,140 L504,140 L504,192 L560,192" class="ln" marker-end="url(#f9a)"/>
+          <path d="M470,146 L490,146 L490,244 L560,244" class="ln-r" marker-end="url(#f9r)"/>
+
+          <rect x="560" y="26" width="300" height="46" rx="4" class="bx"/>
+          <text x="572" y="46" class="tb">gateway · :8080</text><text x="572" y="62" class="tm">core.gateway.xcp_gateway:app</text>
+          <text x="874" y="52" class="ts">the policy engine</text>
+
+          <rect x="560" y="98" width="300" height="46" rx="4" class="bx"/>
+          <text x="572" y="118" class="tb">server · :9001</text><text x="572" y="134" class="tm">core.server.xcp_server:app</text>
+          <text x="874" y="124" class="ts">a reference MCP upstream</text>
+
+          <rect x="560" y="170" width="300" height="46" rx="4" class="bx"/>
+          <text x="572" y="190" class="tb">verifier · :8500</text><text x="572" y="206" class="tm">core.verifier.xcp_verifier:app</text>
+          <text x="874" y="196" class="ts">ERC-8004 identity lookups</text>
+
+          <rect x="560" y="222" width="300" height="38" rx="4" class="bx-r"/>
+          <text x="572" y="246" class="tm ref">unknown ROLE → exit 2</text>
+          <text x="874" y="246" class="ts">never a silent default</text>
+        </svg>

@@ -1,0 +1,111 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="468" viewBox="0 0 1040 468" role="img" aria-label="The classifier cascade: a cache, then deterministic rules at two microseconds, then a fastText linear model at two hundred microseconds, then a latency budget gate that excludes the twenty-five millisecond SetFit semantic tier by default, then abstention. Any tier that answers exits to advice; abstention falls through to the conservative route.">
+  <style>
+    :root { --bg:#f6f8f7; --surface:#ffffff; --surface-2:#edf2f0; --fg:#141d1c; --fg-2:#3b4a47; --muted:#5f6e6b; --rule:#d5deda; --rule-2:#bdc9c6; --accent:#0a6a62; --accent-wash:#e2efec; --refuse:#9a3326; --refuse-wash:#f8e9e6; color: var(--fg); }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b1110; --surface:#121a18; --surface-2:#1a2422; --fg:#e6ecea; --fg-2:#c2cecb; --muted:#8b9a96; --rule:#233230; --rule-2:#2e403d; --accent:#49d0be; --accent-wash:#14302c; --refuse:#ef9079; --refuse-wash:#32201b; color: var(--fg); }
+    }
+    .t{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; fill:currentColor}
+    .tb{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; font-weight:600; fill:currentColor}
+    .tm{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:11.5px; fill:currentColor}
+    .ts{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:11px; fill:currentColor; opacity:.72}
+    .tl{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:10px; letter-spacing:.1em; fill:currentColor; opacity:.62}
+    .big{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:19px; font-weight:500; fill:currentColor}
+    .acc{fill:var(--accent)} .ref{fill:var(--refuse)}
+    .bx{fill:var(--surface-2); stroke:var(--rule-2); stroke-width:1}
+    .bx-a{fill:var(--accent-wash); stroke:var(--accent); stroke-width:1.4}
+    .bx-r{fill:var(--refuse-wash); stroke:var(--refuse); stroke-width:1.2}
+    .env{fill:none; stroke:var(--rule-2); stroke-width:1; stroke-dasharray:5 4}
+    .ln{stroke:currentColor; stroke-width:1.3; fill:none}
+    .ln-a{stroke:var(--accent); stroke-width:1.8; fill:none}
+    .ln-r{stroke:var(--refuse); stroke-width:1.3; fill:none; stroke-dasharray:5 3}
+  </style>
+  <rect width="100%" height="100%" fill="var(--bg)"/>
+          <defs>
+            <marker id="g1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="g1b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+            <marker id="g1r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--refuse)"/></marker>
+          </defs>
+
+          <!-- the advice rail -->
+          <rect x="300" y="24" width="690" height="50" rx="4" class="bx-a"/>
+          <text x="314" y="45" class="tb acc">ADVICE — a route preference, and nothing else</text>
+          <text x="314" y="63" class="ts">Whichever tier answers, the output has the same shape and the same (zero) authority.</text>
+
+          <!-- ladder -->
+          <text x="16" y="124" class="tl">FEATURES</text>
+          <rect x="16" y="136" width="120" height="58" rx="4" class="bx"/>
+          <text x="28" y="158" class="tb">request shape</text>
+          <text x="28" y="176" class="ts">keys and types only;</text>
+          <text x="28" y="190" class="ts">values never included</text>
+          <line x1="136" y1="165" x2="168" y2="165" class="ln" marker-end="url(#g1a)"/>
+
+          <rect x="168" y="136" width="118" height="58" rx="4" class="bx"/>
+          <text x="180" y="158" class="tb">cache?</text>
+          <text x="180" y="176" class="ts">keyed on shape</text>
+          <text x="180" y="190" class="tm">0 us</text>
+          <line x1="227" y1="136" x2="227" y2="78" class="ln-a" marker-end="url(#g1b)"/>
+          <text x="233" y="110" class="tm acc">hit</text>
+          <line x1="286" y1="165" x2="318" y2="165" class="ln" marker-end="url(#g1a)"/>
+
+          <rect x="318" y="136" width="150" height="58" rx="4" class="bx-a"/>
+          <text x="330" y="158" class="tb acc">tier 0 · rules</text>
+          <text x="330" y="176" class="tm acc">2 us typical</text>
+          <text x="330" y="190" class="ts">explainable; no model</text>
+          <line x1="393" y1="136" x2="393" y2="78" class="ln-a" marker-end="url(#g1b)"/>
+          <text x="399" y="110" class="tm acc">answered</text>
+          <line x1="468" y1="165" x2="500" y2="165" class="ln" marker-end="url(#g1a)"/>
+          <text x="470" y="214" class="ts">abstain</text>
+
+          <rect x="500" y="136" width="150" height="58" rx="4" class="bx"/>
+          <text x="512" y="158" class="tb">tier 1 · fastText</text>
+          <text x="512" y="176" class="tm">200 us typical</text>
+          <text x="512" y="190" class="ts">linear, n-grams, CPU</text>
+          <line x1="575" y1="136" x2="575" y2="78" class="ln-a" marker-end="url(#g1b)"/>
+          <text x="581" y="110" class="tm acc">answered</text>
+          <line x1="650" y1="165" x2="682" y2="165" class="ln" marker-end="url(#g1a)"/>
+          <text x="652" y="214" class="ts">abstain</text>
+
+          <rect x="682" y="136" width="128" height="58" rx="4" class="env"/>
+          <text x="694" y="158" class="tb">budget gate</text>
+          <text x="694" y="176" class="tm">2 000 us</text>
+          <text x="694" y="190" class="ts">default</text>
+          <line x1="810" y1="165" x2="842" y2="165" class="ln-r" marker-end="url(#g1r)"/>
+          <text x="786" y="214" class="ts ref">skipped</text>
+
+          <rect x="842" y="136" width="148" height="58" rx="4" class="bx" opacity=".55"/>
+          <text x="854" y="158" class="tb">tier 2 · SetFit</text>
+          <text x="854" y="176" class="tm">25 000 us</text>
+          <text x="854" y="190" class="ts">off by default</text>
+          <line x1="916" y1="136" x2="916" y2="78" class="ln-a" stroke-dasharray="4 3" marker-end="url(#g1b)"/>
+          <text x="922" y="110" class="ts">if opted in</text>
+
+          <!-- abstain floor -->
+          <rect x="318" y="238" width="672" height="62" rx="4" class="bx-r"/>
+          <text x="332" y="260" class="tb ref">ABSTAIN — the conservative route</text>
+          <text x="332" y="280" class="ts">No model installed, a corrupt label set, an exception inside a tokenizer, a budget too small for the tier that could have answered:</text>
+          <text x="332" y="294" class="ts">every one of these is an abstention with a recorded reason, and resolves to the route the node would have taken with no classifier at all.</text>
+          <path d="M393,194 L393,222 L654,222 L654,238" class="ln-r" stroke-dasharray="4 3"/>
+          <path d="M575,194 L575,222" class="ln-r" stroke-dasharray="4 3"/>
+          <path d="M916,194 L916,222 L660,222" class="ln-r" stroke-dasharray="4 3"/>
+
+          <!-- measured -->
+          <rect x="16" y="330" width="974" height="122" rx="4" class="bx"/>
+          <text x="30" y="352" class="tb">Measured, no models installed</text>
+          <text x="30" y="376" class="tm">features only</text><text x="300" y="376" class="tm" text-anchor="end">5.1 us</text>
+          <text x="30" y="394" class="tm">tier 0 answers, cold cache</text><text x="300" y="394" class="tm" text-anchor="end">17.3 us</text>
+          <text x="30" y="412" class="tm">tier 0 answers, warm cache</text><text x="300" y="412" class="tm" text-anchor="end">6.8 us</text>
+          <text x="30" y="430" class="tm acc">classify() + resolve route</text><text x="300" y="430" class="tm acc" text-anchor="end">19.6 us p50</text>
+
+          <text x="360" y="376" class="ts">Jev, hosted, as LiteLLM published it</text>
+          <text x="700" y="376" class="tm" text-anchor="end">126 810 us p50</text>
+          <text x="360" y="394" class="ts">this cascade</text>
+          <text x="700" y="394" class="tm" text-anchor="end">19.6 us p50</text>
+          <text x="360" y="418" class="ts ref">A COST comparison, not a quality one. Jev's latency buys a semantic model over a</text>
+          <text x="360" y="432" class="ts ref">network; tier 0 is rules. Where semantics are genuinely needed, tier 0 abstains.</text>
+
+          <text x="730" y="376" class="tl">WHAT IT SHOWS</text>
+          <text x="730" y="396" class="ts">The size of the prize for</text>
+          <text x="730" y="410" class="ts">routing the structurally-</text>
+          <text x="730" y="424" class="ts">decidable majority locally.</text>
+          <text x="730" y="440" class="ts">Nothing more.</text>
+        </svg>

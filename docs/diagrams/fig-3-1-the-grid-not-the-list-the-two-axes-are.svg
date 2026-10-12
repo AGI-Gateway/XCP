@@ -1,0 +1,89 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="492" viewBox="0 0 1040 492" role="img" aria-label="The nine-cell trust lattice as a grid: agent tiers A0 free, A1 registry and A2 company as rows, human tiers H0 public, H1 general single sign-on and H2 enterprise as columns. Authority rises to the top right. Cell A0 by H2 is capped to read-only observation by the weaker agent leg, and cell A2 by H0 is the deliberate exception where a company-backed agent is not capped by the absent human.">
+  <style>
+    :root { --bg:#f6f8f7; --surface:#ffffff; --surface-2:#edf2f0; --fg:#141d1c; --fg-2:#3b4a47; --muted:#5f6e6b; --rule:#d5deda; --rule-2:#bdc9c6; --accent:#0a6a62; --accent-wash:#e2efec; --refuse:#9a3326; --refuse-wash:#f8e9e6; color: var(--fg); }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b1110; --surface:#121a18; --surface-2:#1a2422; --fg:#e6ecea; --fg-2:#c2cecb; --muted:#8b9a96; --rule:#233230; --rule-2:#2e403d; --accent:#49d0be; --accent-wash:#14302c; --refuse:#ef9079; --refuse-wash:#32201b; color: var(--fg); }
+    }
+    .t{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; fill:currentColor}
+    .tb{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; font-weight:600; fill:currentColor}
+    .tm{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:11.5px; fill:currentColor}
+    .ts{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:11px; fill:currentColor; opacity:.72}
+    .tl{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:10px; letter-spacing:.1em; fill:currentColor; opacity:.62}
+    .big{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:19px; font-weight:500; fill:currentColor}
+    .acc{fill:var(--accent)} .ref{fill:var(--refuse)}
+    .bx{fill:var(--surface-2); stroke:var(--rule-2); stroke-width:1}
+    .bx-a{fill:var(--accent-wash); stroke:var(--accent); stroke-width:1.4}
+    .bx-r{fill:var(--refuse-wash); stroke:var(--refuse); stroke-width:1.2}
+    .env{fill:none; stroke:var(--rule-2); stroke-width:1; stroke-dasharray:5 4}
+    .ln{stroke:currentColor; stroke-width:1.3; fill:none}
+    .ln-a{stroke:var(--accent); stroke-width:1.8; fill:none}
+    .ln-r{stroke:var(--refuse); stroke-width:1.3; fill:none; stroke-dasharray:5 3}
+  </style>
+  <rect width="100%" height="100%" fill="var(--bg)"/>
+          <defs>
+            <marker id="f5a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="f5b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+          </defs>
+
+          <!-- axes -->
+          <text x="16" y="30" class="tl">AGENT TIER ↑   ·   HUMAN TIER →</text>
+          <line x1="150" y1="430" x2="150" y2="56" class="ln" marker-end="url(#f5a)"/>
+          <line x1="150" y1="430" x2="846" y2="430" class="ln" marker-end="url(#f5a)"/>
+
+          <!-- row labels -->
+          <text x="16" y="92" class="tb">A2 · Company</text><text x="16" y="108" class="ts">a legal entity signs the root</text>
+          <text x="16" y="212" class="tb">A1 · Registry</text><text x="16" y="228" class="ts">ERC-8004 identity + reputation</text>
+          <text x="16" y="332" class="tb">A0 · Free</text><text x="16" y="348" class="ts">self-asserted keypair</text>
+
+          <!-- col labels -->
+          <text x="170" y="452" class="tb">H0 · Public</text><text x="170" y="468" class="ts">no principal</text>
+          <text x="400" y="452" class="tb">H1 · General SSO</text><text x="400" y="468" class="ts">consumer IdP</text>
+          <text x="630" y="452" class="tb">H2 · Enterprise</text><text x="630" y="468" class="ts">employer IdP + entitlements</text>
+
+          <!-- row A2 -->
+          <rect x="170" y="56" width="212" height="96" rx="4" class="bx-a"/>
+          <text x="184" y="76" class="tm acc">A2×H0</text><text x="184" y="94" class="tb">Service agent</text>
+          <text x="184" y="112" class="ts">chain · X402+AP2 · 1 d</text><text x="184" y="128" class="ts">cap 100 000 · metered</text>
+          <text x="184" y="146" class="tm acc">NOT capped by H0</text>
+
+          <rect x="400" y="56" width="212" height="96" rx="4" class="bx"/>
+          <text x="414" y="76" class="tm">A2×H1</text><text x="414" y="94" class="tb">Professional</text>
+          <text x="414" y="112" class="ts">chain · X402+AP2+MPP · 1 d</text><text x="414" y="128" class="ts">cap 500 000 · metered</text>
+
+          <rect x="630" y="56" width="212" height="96" rx="4" class="bx"/>
+          <text x="644" y="76" class="tm">A2×H2</text><text x="644" y="94" class="tb">Full settlement</text>
+          <text x="644" y="112" class="ts">chain + pay:* · all four rails</text><text x="644" y="128" class="ts">7 d · no protocol cap · full</text>
+          <text x="644" y="146" class="ts">the entitlement sets the real limit</text>
+
+          <!-- row A1 -->
+          <rect x="170" y="176" width="212" height="96" rx="4" class="bx"/>
+          <text x="184" y="196" class="tm">A1×H0</text><text x="184" y="214" class="tb">Open marketplace</text>
+          <text x="184" y="232" class="ts">write · X402 · 8 h</text><text x="184" y="248" class="ts">cap 2 000 · escrow only</text>
+
+          <rect x="400" y="176" width="212" height="96" rx="4" class="bx"/>
+          <text x="414" y="196" class="tm">A1×H1</text><text x="414" y="214" class="tb">Consumer commerce</text>
+          <text x="414" y="232" class="ts">chain · X402+AP2 · 1 d</text><text x="414" y="248" class="ts">cap 25 000 · metered</text>
+
+          <rect x="630" y="176" width="212" height="96" rx="4" class="bx"/>
+          <text x="644" y="196" class="tm">A1×H2</text><text x="644" y="214" class="tb">Delegated corporate</text>
+          <text x="644" y="232" class="ts">chain · X402+AP2+MPP · 1 d</text><text x="644" y="248" class="ts">cap 250 000 · metered</text>
+
+          <!-- row A0 -->
+          <rect x="170" y="296" width="212" height="96" rx="4" class="bx"/>
+          <text x="184" y="316" class="tm">A0×H0</text><text x="184" y="334" class="tb">Sandbox</text>
+          <text x="184" y="352" class="ts">read only · no rails · 1 h</text><text x="184" y="368" class="ts">no settlement · enforce</text>
+
+          <rect x="400" y="296" width="212" height="96" rx="4" class="bx"/>
+          <text x="414" y="316" class="tm">A0×H1</text><text x="414" y="334" class="tb">Metered</text>
+          <text x="414" y="352" class="ts">write · X402 · 4 h</text><text x="414" y="368" class="ts">cap 500 · metered</text>
+
+          <rect x="630" y="296" width="212" height="96" rx="4" class="bx-r"/>
+          <text x="644" y="316" class="tm ref">A0×H2</text><text x="644" y="334" class="tb">Shadowed</text>
+          <text x="644" y="352" class="ts">read only · no rails · 1 h</text><text x="644" y="368" class="ts">observe · audit only</text>
+          <text x="644" y="386" class="tm ref">capped by the weaker leg</text>
+
+          <!-- authority gradient arrow -->
+          <line x1="884" y1="400" x2="884" y2="70" class="ln-a" marker-end="url(#f5b)"/>
+          <text x="900" y="300" class="tm acc" transform="rotate(-90 900 300)">authority increases</text>
+          <text x="924" y="300" class="ts" transform="rotate(-90 924 300)">scopes · rails · TTL · spend</text>
+        </svg>

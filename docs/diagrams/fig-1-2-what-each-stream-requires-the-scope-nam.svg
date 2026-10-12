@@ -1,0 +1,69 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="332" viewBox="0 0 1040 332" role="img" aria-label="Four streams drawn as separate lanes: session establishes a binding with a TTL; agent-to-tool routes a verified agent to an upstream MCP server; agent-to-agent crosses two gateways carrying a delegation ticket; tool-to-tool chains one tool into a second under a chain scope.">
+  <style>
+    :root { --bg:#f6f8f7; --surface:#ffffff; --surface-2:#edf2f0; --fg:#141d1c; --fg-2:#3b4a47; --muted:#5f6e6b; --rule:#d5deda; --rule-2:#bdc9c6; --accent:#0a6a62; --accent-wash:#e2efec; --refuse:#9a3326; --refuse-wash:#f8e9e6; color: var(--fg); }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b1110; --surface:#121a18; --surface-2:#1a2422; --fg:#e6ecea; --fg-2:#c2cecb; --muted:#8b9a96; --rule:#233230; --rule-2:#2e403d; --accent:#49d0be; --accent-wash:#14302c; --refuse:#ef9079; --refuse-wash:#32201b; color: var(--fg); }
+    }
+    .t{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; fill:currentColor}
+    .tb{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; font-weight:600; fill:currentColor}
+    .tm{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:11.5px; fill:currentColor}
+    .ts{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:11px; fill:currentColor; opacity:.72}
+    .tl{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:10px; letter-spacing:.1em; fill:currentColor; opacity:.62}
+    .big{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:19px; font-weight:500; fill:currentColor}
+    .acc{fill:var(--accent)} .ref{fill:var(--refuse)}
+    .bx{fill:var(--surface-2); stroke:var(--rule-2); stroke-width:1}
+    .bx-a{fill:var(--accent-wash); stroke:var(--accent); stroke-width:1.4}
+    .bx-r{fill:var(--refuse-wash); stroke:var(--refuse); stroke-width:1.2}
+    .env{fill:none; stroke:var(--rule-2); stroke-width:1; stroke-dasharray:5 4}
+    .ln{stroke:currentColor; stroke-width:1.3; fill:none}
+    .ln-a{stroke:var(--accent); stroke-width:1.8; fill:none}
+    .ln-r{stroke:var(--refuse); stroke-width:1.3; fill:none; stroke-dasharray:5 3}
+  </style>
+  <rect width="100%" height="100%" fill="var(--bg)"/>
+          <defs><marker id="f2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker></defs>
+
+          <!-- lane 1: session -->
+          <text x="16" y="26" class="tl">SESSION · BINDING</text>
+          <rect x="16" y="38" width="104" height="40" rx="4" class="bx"/><text x="30" y="63" class="t">Agent</text>
+          <line x1="120" y1="58" x2="196" y2="58" class="ln" marker-end="url(#f2a)"/>
+          <text x="128" y="51" class="tm">open</text>
+          <rect x="196" y="38" width="118" height="40" rx="4" class="bx-a"/><text x="210" y="63" class="t acc">Gateway</text>
+          <text x="330" y="54" class="tm">binding + TTL</text>
+          <text x="330" y="70" class="ts">1 h … 7 d, set by the lattice cell</text>
+          <text x="604" y="54" class="tm">POST /v1/session/{open,close}</text>
+          <text x="604" y="70" class="ts">a stateless profile skips this entirely</text>
+
+          <!-- lane 2: a2t -->
+          <text x="16" y="116" class="tl">A2T · AGENT TO TOOL</text>
+          <rect x="16" y="128" width="104" height="40" rx="4" class="bx"/><text x="30" y="153" class="t">Agent</text>
+          <line x1="120" y1="148" x2="196" y2="148" class="ln" marker-end="url(#f2a)"/>
+          <rect x="196" y="128" width="118" height="40" rx="4" class="bx-a"/><text x="210" y="153" class="t acc">Gateway</text>
+          <line x1="314" y1="148" x2="430" y2="148" class="ln" marker-end="url(#f2a)"/>
+          <text x="322" y="141" class="tm">mcp:tools/*</text>
+          <rect x="430" y="128" width="150" height="40" rx="4" class="bx"/><text x="444" y="153" class="t">MCP server</text>
+          <text x="604" y="144" class="tm">POST /v1/a2t/call</text>
+          <text x="604" y="160" class="ts">one side verified: the caller</text>
+
+          <!-- lane 3: a2a -->
+          <text x="16" y="206" class="tl">A2A · ACROSS A BOUNDARY</text>
+          <rect x="16" y="218" width="104" height="40" rx="4" class="bx"/><text x="30" y="243" class="t">Agent</text>
+          <line x1="120" y1="238" x2="196" y2="238" class="ln" marker-end="url(#f2a)"/>
+          <rect x="196" y="218" width="118" height="40" rx="4" class="bx-a"/><text x="210" y="243" class="t acc">Gateway A</text>
+          <line x1="314" y1="238" x2="430" y2="238" class="ln" marker-end="url(#f2a)"/>
+          <text x="318" y="231" class="tm">ticket</text>
+          <rect x="430" y="218" width="118" height="40" rx="4" class="bx-a"/><text x="444" y="243" class="t acc">Gateway B</text>
+          <line x1="548" y1="238" x2="580" y2="238" class="ln" marker-end="url(#f2a)"/>
+          <text x="604" y="234" class="tm">POST /v1/a2a/{delegate,accept}</text>
+          <text x="604" y="250" class="ts">both sides verified; B decides independently</text>
+
+          <!-- lane 4: t2t -->
+          <text x="16" y="296" class="tl">T2T · TOOL CHAINING</text>
+          <rect x="16" y="308" width="104" height="18" rx="3" class="bx"/><text x="26" y="321" class="ts">Tool</text>
+          <line x1="120" y1="317" x2="196" y2="317" class="ln" marker-end="url(#f2a)"/>
+          <rect x="196" y="308" width="118" height="18" rx="3" class="bx-a"/><text x="206" y="321" class="ts acc">Gateway</text>
+          <line x1="314" y1="317" x2="430" y2="317" class="ln" marker-end="url(#f2a)"/>
+          <text x="322" y="311" class="tl">T2T:CHAIN/*</text>
+          <rect x="430" y="308" width="150" height="18" rx="3" class="bx"/><text x="440" y="321" class="ts">Second tool</text>
+          <text x="604" y="314" class="tm">POST /v1/t2t/pipe</text>
+          <text x="604" y="328" class="ts">chain scope exists only at A1×H1 and above</text>
+        </svg>

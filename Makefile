@@ -34,6 +34,7 @@ test: ## run every test suite
 	@echo "── SDK contract ──"       && $(PY) tests/test_sdk_contract.py
 	@echo "── config profiles ──"    && $(PY) tests/test_config_profiles.py
 	@echo "── decision engine ──"    && $(PY) tests/test_engine.py
+	@echo "── documentation ──"      && $(PY) tests/test_docs.py
 	@echo "── security audit ──"     && $(PY) tests/test_security_audit.py
 	@echo "── conformance ──"        && $(PY) tests/test_conformance.py
 	@echo "── version negotiation ──" && $(PY) tests/test_version.py

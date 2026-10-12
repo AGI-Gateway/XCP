@@ -40,6 +40,7 @@ jobs:
           python tests/test_sdk_contract.py
           python tests/test_config_profiles.py
           python tests/test_engine.py
+          python tests/test_docs.py
           python tests/test_security_audit.py
           python tests/test_version.py
           python tests/test_performance.py
@@ -90,6 +91,11 @@ jobs:
         run: python tests/test_locality.py
       - name: Triage and runbook
         run: python tests/test_triage.py
+      - name: Diagram assets must match their source
+        # docs/diagrams.md and docs/diagrams/*.svg are generated from
+        # docs/diagrams.html. A figure edited in one place and not the
+        # other would ship as two versions of the same diagram.
+        run: python scripts/generate-diagram-assets.py --check
       - name: SDK contract must match its sources
         # Same guard as the committed ABIs: regenerate and diff. Five SDKs
         # are built from these files, so a contract that has drifted from

@@ -1,0 +1,99 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="420" viewBox="0 0 1040 420" role="img" aria-label="The catalogue's three endpoint kinds and what each needs before it becomes routable. Routable entries speak MCP over HTTPS and reach the trust firewall directly. Wrappable entries speak REST and need a generated MCP facade. Installable entries are packages and need someone to host them. Only routable entries may be published to peers.">
+  <style>
+    :root { --bg:#f6f8f7; --surface:#ffffff; --surface-2:#edf2f0; --fg:#141d1c; --fg-2:#3b4a47; --muted:#5f6e6b; --rule:#d5deda; --rule-2:#bdc9c6; --accent:#0a6a62; --accent-wash:#e2efec; --refuse:#9a3326; --refuse-wash:#f8e9e6; color: var(--fg); }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b1110; --surface:#121a18; --surface-2:#1a2422; --fg:#e6ecea; --fg-2:#c2cecb; --muted:#8b9a96; --rule:#233230; --rule-2:#2e403d; --accent:#49d0be; --accent-wash:#14302c; --refuse:#ef9079; --refuse-wash:#32201b; color: var(--fg); }
+    }
+    .t{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; fill:currentColor}
+    .tb{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; font-weight:600; fill:currentColor}
+    .tm{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:11.5px; fill:currentColor}
+    .ts{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:11px; fill:currentColor; opacity:.72}
+    .tl{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:10px; letter-spacing:.1em; fill:currentColor; opacity:.62}
+    .big{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:19px; font-weight:500; fill:currentColor}
+    .acc{fill:var(--accent)} .ref{fill:var(--refuse)}
+    .bx{fill:var(--surface-2); stroke:var(--rule-2); stroke-width:1}
+    .bx-a{fill:var(--accent-wash); stroke:var(--accent); stroke-width:1.4}
+    .bx-r{fill:var(--refuse-wash); stroke:var(--refuse); stroke-width:1.2}
+    .env{fill:none; stroke:var(--rule-2); stroke-width:1; stroke-dasharray:5 4}
+    .ln{stroke:currentColor; stroke-width:1.3; fill:none}
+    .ln-a{stroke:var(--accent); stroke-width:1.8; fill:none}
+    .ln-r{stroke:var(--refuse); stroke-width:1.3; fill:none; stroke-dasharray:5 3}
+  </style>
+  <rect width="100%" height="100%" fill="var(--bg)"/>
+          <defs>
+            <marker id="f7a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="f7b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+          </defs>
+
+          <rect x="16" y="56" width="176" height="130" rx="4" class="bx"/>
+          <text x="30" y="78" class="tl">FIVE UPSTREAM LISTS</text>
+          <text x="30" y="100" class="big">9,555</text>
+          <text x="30" y="120" class="ts">official · punkpeye</text>
+          <text x="30" y="136" class="ts">appcypher · wong2</text>
+          <text x="30" y="152" class="ts">abordage</text>
+          <text x="30" y="176" class="tm">connectors.sources</text>
+          <line x1="192" y1="121" x2="240" y2="121" class="ln" marker-end="url(#f7a)"/>
+
+          <!-- routable -->
+          <rect x="240" y="36" width="250" height="78" rx="4" class="bx-a"/>
+          <text x="254" y="58" class="tm acc">ROUTABLE</text>
+          <text x="254" y="80" class="big acc">158</text>
+          <text x="330" y="80" class="ts">speaks MCP over HTTPS, now</text>
+          <text x="254" y="102" class="ts">a destination the firewall can reason about</text>
+          <line x1="490" y1="75" x2="676" y2="75" class="ln-a" marker-end="url(#f7b)"/>
+          <text x="520" y="68" class="tm acc">direct</text>
+
+          <!-- wrappable -->
+          <rect x="240" y="128" width="250" height="78" rx="4" class="bx"/>
+          <text x="254" y="150" class="tm">WRAPPABLE</text>
+          <text x="254" y="172" class="big">2,528</text>
+          <text x="346" y="166" class="ts">online, but speaks REST</text>
+          <text x="346" y="182" class="ts">2,462 carry an API base</text>
+          <text x="254" y="196" class="ts">a facade must exist before it is a destination</text>
+          <line x1="490" y1="167" x2="560" y2="167" class="ln" marker-end="url(#f7a)"/>
+          <rect x="560" y="144" width="116" height="46" rx="4" class="bx"/>
+          <text x="572" y="164" class="tm">connectors</text><text x="572" y="180" class="tm">.wrap</text>
+          <path d="M676,167 L690,167 L690,90" class="ln-a" marker-end="url(#f7b)"/>
+
+          <!-- installable -->
+          <rect x="240" y="220" width="250" height="78" rx="4" class="bx"/>
+          <text x="254" y="242" class="tm">INSTALLABLE</text>
+          <text x="254" y="264" class="big">6,869</text>
+          <text x="346" y="258" class="ts">a package: npm, pip, a repo</text>
+          <text x="346" y="274" class="ts">stdio-only, no address to route to</text>
+          <text x="254" y="288" class="ts">a lead, not a destination</text>
+          <line x1="490" y1="259" x2="560" y2="259" class="ln" stroke-dasharray="4 3" marker-end="url(#f7a)"/>
+          <rect x="560" y="236" width="116" height="46" rx="4" class="bx"/>
+          <text x="572" y="256" class="ts">someone must</text><text x="572" y="272" class="ts">host it first</text>
+          <path d="M676,259 L690,259 L690,96" class="ln" stroke-dasharray="4 3" marker-end="url(#f7a)"/>
+
+          <!-- firewall -->
+          <rect x="716" y="36" width="308" height="78" rx="4" class="bx-a"/>
+          <text x="730" y="58" class="tb acc">Trust Firewall · scope_for(headers)</text>
+          <text x="730" y="78" class="ts">derives mcp:tools/&lt;name&gt; from Mcp-Method / Mcp-Name</text>
+          <text x="730" y="96" class="ts">a REST endpoint here fails in the wrong place</text>
+
+          <line x1="870" y1="114" x2="870" y2="146" class="ln-a" marker-end="url(#f7b)"/>
+          <rect x="716" y="148" width="308" height="62" rx="4" class="bx"/>
+          <text x="730" y="170" class="tb">GET /v1/federation/catalog</text>
+          <text x="730" y="190" class="ts">what this node is willing to publish to peers —</text>
+          <text x="730" y="204" class="ts">routable entries only, filtered by the node's own policy</text>
+
+          <!-- validation -->
+          <rect x="716" y="236" width="308" height="140" rx="4" class="bx"/>
+          <text x="730" y="258" class="tb">Probed, not assumed</text>
+          <text x="730" y="280" class="tm">alive</text><text x="900" y="280" class="tm" text-anchor="end">1 051</text>
+          <text x="730" y="298" class="tm">gone</text><text x="900" y="298" class="tm" text-anchor="end">26</text>
+          <text x="730" y="316" class="tm">archived</text><text x="900" y="316" class="tm" text-anchor="end">23</text>
+          <text x="730" y="334" class="tm">unchecked</text><text x="900" y="334" class="tm" text-anchor="end">5 927</text>
+          <text x="730" y="360" class="ts">An entry carries its validation state, so a stale link is visibly stale rather than silently broken.</text>
+
+          <!-- kinds note -->
+          <rect x="16" y="220" width="176" height="78" rx="4" class="bx"/>
+          <text x="30" y="242" class="tb">20 categories</text>
+          <text x="30" y="262" class="ts">dev-tools 1 608 · cloud-infra</text>
+          <text x="30" y="278" class="ts">1 267 · finance 754 ·</text>
+          <text x="30" y="294" class="ts">ai-agents 695 · data 645</text>
+
+          <text x="16" y="400" class="ts">Snapshot <tspan class="tm">connectors/snapshot/servers.json</tspan> · specVersion 0.1-draft. The three kinds are an <tspan class="tm">EndpointKind</tspan> enum, not a heuristic applied at read time.</text>
+        </svg>

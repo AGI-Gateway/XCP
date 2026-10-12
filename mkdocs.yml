@@ -53,6 +53,7 @@ nav:
       - Trust lattice: trust-lattice.md
       - Trust Firewall: trust-firewall.md
   - Build:
+      - Technical diagrams: diagrams.md
       - Architecture: architecture.md
       - Protocol reference: protocol.md
       - Receipts & settlement: receipts.md

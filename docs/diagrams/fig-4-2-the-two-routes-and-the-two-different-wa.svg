@@ -1,0 +1,78 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="412" viewBox="0 0 1040 412" role="img" aria-label="Two routes to an external tool. The local route goes through the home site's gateway and egress check. The relayed route crosses to a peer in another site, adding a cross-site cost of twenty-five, and is cut entirely when the peer's site is outside the permitted residency set.">
+  <style>
+    :root { --bg:#f6f8f7; --surface:#ffffff; --surface-2:#edf2f0; --fg:#141d1c; --fg-2:#3b4a47; --muted:#5f6e6b; --rule:#d5deda; --rule-2:#bdc9c6; --accent:#0a6a62; --accent-wash:#e2efec; --refuse:#9a3326; --refuse-wash:#f8e9e6; color: var(--fg); }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b1110; --surface:#121a18; --surface-2:#1a2422; --fg:#e6ecea; --fg-2:#c2cecb; --muted:#8b9a96; --rule:#233230; --rule-2:#2e403d; --accent:#49d0be; --accent-wash:#14302c; --refuse:#ef9079; --refuse-wash:#32201b; color: var(--fg); }
+    }
+    .t{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; fill:currentColor}
+    .tb{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; font-weight:600; fill:currentColor}
+    .tm{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:11.5px; fill:currentColor}
+    .ts{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:11px; fill:currentColor; opacity:.72}
+    .tl{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:10px; letter-spacing:.1em; fill:currentColor; opacity:.62}
+    .big{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:19px; font-weight:500; fill:currentColor}
+    .acc{fill:var(--accent)} .ref{fill:var(--refuse)}
+    .bx{fill:var(--surface-2); stroke:var(--rule-2); stroke-width:1}
+    .bx-a{fill:var(--accent-wash); stroke:var(--accent); stroke-width:1.4}
+    .bx-r{fill:var(--refuse-wash); stroke:var(--refuse); stroke-width:1.2}
+    .env{fill:none; stroke:var(--rule-2); stroke-width:1; stroke-dasharray:5 4}
+    .ln{stroke:currentColor; stroke-width:1.3; fill:none}
+    .ln-a{stroke:var(--accent); stroke-width:1.8; fill:none}
+    .ln-r{stroke:var(--refuse); stroke-width:1.3; fill:none; stroke-dasharray:5 3}
+  </style>
+  <rect width="100%" height="100%" fill="var(--bg)"/>
+          <defs>
+            <marker id="f8a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="f8r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--refuse)"/></marker>
+            <marker id="f8b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+          </defs>
+
+          <rect x="16" y="110" width="124" height="52" rx="4" class="bx"/>
+          <text x="28" y="132" class="tb">Agent</text><text x="28" y="150" class="ts">site eu-west</text>
+          <line x1="140" y1="136" x2="190" y2="136" class="ln" marker-end="url(#f8a)"/>
+
+          <rect x="190" y="98" width="150" height="76" rx="4" class="bx-a"/>
+          <text x="202" y="120" class="tb acc">Home gateway</text>
+          <text x="202" y="138" class="tm">home_site =</text>
+          <text x="202" y="154" class="tm">eu-west</text>
+          <text x="202" y="170" class="ts">routing.select()</text>
+
+          <!-- route A -->
+          <text x="384" y="44" class="tl">ROUTE A · LOCAL — COST = TRANSPORT PRICE</text>
+          <path d="M340,118 L384,118 L384,74" class="ln-a"/>
+          <line x1="384" y1="74" x2="470" y2="74" class="ln-a" marker-end="url(#f8b)"/>
+          <rect x="470" y="52" width="178" height="46" rx="4" class="bx"/>
+          <text x="482" y="72" class="tm">xcpsec.egress.check_url</text><text x="482" y="88" class="ts">every resolved address</text>
+          <line x1="648" y1="74" x2="720" y2="74" class="ln-a" marker-end="url(#f8b)"/>
+          <rect x="720" y="52" width="196" height="46" rx="4" class="bx"/>
+          <text x="732" y="72" class="tb">Tool in eu-west</text><text x="732" y="88" class="ts">local upstream, XCP_UPSTREAMS</text>
+
+          <!-- route B -->
+          <text x="384" y="214" class="tl">ROUTE B · RELAYED THROUGH A PEER — COST + 25</text>
+          <path d="M340,150 L384,150 L384,244" class="ln"/>
+          <line x1="384" y1="244" x2="446" y2="244" class="ln" marker-end="url(#f8a)"/>
+          <rect x="446" y="222" width="190" height="46" rx="4" class="bx"/>
+          <text x="458" y="242" class="tm">POST /v1/tool/relay</text><text x="458" y="258" class="ts">mTLS via peerfetch, pinned CA</text>
+          <line x1="636" y1="244" x2="700" y2="244" class="ln" marker-end="url(#f8a)"/>
+          <rect x="700" y="208" width="216" height="76" rx="4" class="bx"/>
+          <text x="712" y="230" class="tb">Peer gateway · us-east</text>
+          <text x="712" y="248" class="ts">applies its OWN policy to the call</text>
+          <text x="712" y="266" class="ts">a relay is a request, not a command</text>
+          <line x1="916" y1="246" x2="960" y2="246" class="ln" marker-end="url(#f8a)"/>
+          <text x="930" y="292" class="ts">tool</text>
+
+          <!-- cost / constraint panel -->
+          <rect x="16" y="300" width="494" height="96" rx="4" class="bx-a"/>
+          <text x="30" y="322" class="tb acc">Locality is a COST</text>
+          <text x="30" y="342" class="tm">CROSS_SITE_COST = 25</text>
+          <text x="30" y="360" class="ts">Added to the peer's transport price when it is off-site. A cheap enough</text>
+          <text x="30" y="376" class="ts">off-site peer still wins — which is correct, because latency is not the</text>
+          <text x="30" y="392" class="ts">only thing a cross-site hop spends.</text>
+
+          <rect x="530" y="300" width="494" height="96" rx="4" class="bx-r"/>
+          <text x="544" y="322" class="tb ref">Residency is a CONSTRAINT</text>
+          <text x="544" y="342" class="tm">Policy.permitted_sites</text>
+          <text x="544" y="360" class="ts">A peer outside the set is inadmissible. No price makes it admissible,</text>
+          <text x="544" y="376" class="ts">because a constraint which can be outweighed is a preference wearing</text>
+          <text x="544" y="392" class="ts">a constraint's name.</text>
+          <line x1="806" y1="300" x2="806" y2="288" class="ln-r" marker-end="url(#f8r)"/>
+        </svg>

@@ -1,0 +1,1851 @@
+<title>XCP Technical Diagrams</title>
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500&family=IBM+Plex+Sans:wght@400;500;600&family=IBM+Plex+Serif:wght@400;500&display=swap">
+<style>
+  :root{
+    --bg:#f6f8f7; --surface:#ffffff; --surface-2:#edf2f0;
+    --fg:#141d1c; --fg-2:#3b4a47; --muted:#5f6e6b;
+    --rule:#d5deda; --rule-2:#bdc9c6;
+    --accent:#0a6a62; --accent-wash:#e2efec; --accent-ink:#064b45;
+    --refuse:#9a3326; --refuse-wash:#f8e9e6;
+    --code-bg:#edf2f0;
+    --sans:"IBM Plex Sans",system-ui,-apple-system,"Segoe UI",sans-serif;
+    --serif:"IBM Plex Serif",Georgia,"Times New Roman",serif;
+    --mono:"IBM Plex Mono",ui-monospace,"SF Mono",Menlo,Consolas,monospace;
+    color-scheme:light;
+  }
+  @media (prefers-color-scheme:dark){
+    :root:not([data-theme="light"]){
+      --bg:#0b1110; --surface:#121a18; --surface-2:#1a2422;
+      --fg:#e6ecea; --fg-2:#c2cecb; --muted:#8b9a96;
+      --rule:#233230; --rule-2:#2e403d;
+      --accent:#49d0be; --accent-wash:#14302c; --accent-ink:#9fe8de;
+      --refuse:#ef9079; --refuse-wash:#32201b;
+      --code-bg:#1a2422;
+      color-scheme:dark;
+    }
+  }
+  :root[data-theme="dark"]{
+    --bg:#0b1110; --surface:#121a18; --surface-2:#1a2422;
+    --fg:#e6ecea; --fg-2:#c2cecb; --muted:#8b9a96;
+    --rule:#233230; --rule-2:#2e403d;
+    --accent:#49d0be; --accent-wash:#14302c; --accent-ink:#9fe8de;
+    --refuse:#ef9079; --refuse-wash:#32201b;
+    --code-bg:#1a2422;
+    color-scheme:dark;
+  }
+
+  *{box-sizing:border-box}
+  body{
+    background:var(--bg); color:var(--fg);
+    font-family:var(--sans); font-size:15px; line-height:1.65;
+    -webkit-font-smoothing:antialiased;
+  }
+  .wrap{max-width:1120px; margin:0 auto; padding-inline:16px; padding-block:0}
+
+  /* ── masthead ─────────────────────────────────────────────── */
+  header.top{
+    position:sticky; top:env(safe-area-inset-top,0px); z-index:20;
+    background:var(--bg);
+    background:color-mix(in srgb, var(--bg) 92%, transparent);
+    backdrop-filter:blur(8px);
+    border-bottom:1px solid var(--rule);
+  }
+  .top .wrap{display:flex; flex-wrap:wrap; gap:8px 18px; align-items:center; padding-block:10px}
+  .brand{font-family:var(--mono); font-size:12px; font-weight:500; letter-spacing:.09em;
+         text-transform:uppercase; color:var(--accent); margin-right:auto; white-space:nowrap}
+  nav.toc{display:flex; flex-wrap:wrap; gap:4px 14px; font-size:12.5px}
+  nav.toc a{color:var(--muted); text-decoration:none; border-bottom:1px solid transparent; padding-bottom:1px}
+  nav.toc a:hover{color:var(--fg); border-bottom-color:var(--accent)}
+  button.theme{
+    font-family:var(--mono); font-size:11px; letter-spacing:.06em; text-transform:uppercase;
+    background:transparent; color:var(--muted); border:1px solid var(--rule-2);
+    border-radius:3px; padding:4px 8px; cursor:pointer;
+  }
+  button.theme:hover{color:var(--fg); border-color:var(--accent)}
+
+  /* ── front matter ─────────────────────────────────────────── */
+  .front{padding-block:56px 10px; border-bottom:1px solid var(--rule)}
+  h1{
+    font-family:var(--sans); font-weight:600; font-size:clamp(28px,5.2vw,46px);
+    line-height:1.12; letter-spacing:-.02em; margin:0 0 14px; text-wrap:balance; max-width:22ch;
+  }
+  .standfirst{font-family:var(--serif); font-size:clamp(16px,2.3vw,19px); line-height:1.6;
+              color:var(--fg-2); max-width:62ch; margin:0 0 28px}
+  dl.meta{
+    display:grid; grid-template-columns:repeat(auto-fit,minmax(150px,1fr));
+    gap:16px 24px; margin:0 0 44px; padding-top:22px; border-top:1px solid var(--rule);
+  }
+  dl.meta dt{font-family:var(--mono); font-size:10.5px; letter-spacing:.1em;
+             text-transform:uppercase; color:var(--muted); margin-bottom:3px}
+  dl.meta dd{margin:0; font-family:var(--mono); font-size:13px; color:var(--fg)}
+
+  /* ── sections ─────────────────────────────────────────────── */
+  section.sec{padding-block:52px; border-bottom:1px solid var(--rule)}
+  section.sec:last-of-type{border-bottom:0}
+  .sec-no{font-family:var(--mono); font-size:11px; letter-spacing:.14em; color:var(--accent);
+          text-transform:uppercase; display:block; margin-bottom:10px}
+  h2{font-size:clamp(21px,3.4vw,30px); font-weight:600; letter-spacing:-.015em;
+     line-height:1.2; margin:0 0 18px; text-wrap:balance; max-width:30ch}
+  h3{font-size:16.5px; font-weight:600; margin:40px 0 12px; letter-spacing:-.005em; max-width:44ch}
+  h4{font-family:var(--mono); font-size:11.5px; font-weight:500; letter-spacing:.1em;
+     text-transform:uppercase; color:var(--muted); margin:30px 0 10px}
+  p{max-width:68ch; margin:0 0 16px; color:var(--fg-2)}
+  p strong{color:var(--fg); font-weight:600}
+  p.lede{font-size:16.5px; color:var(--fg); max-width:66ch}
+  ul,ol{max-width:68ch; margin:0 0 16px; padding-left:20px; color:var(--fg-2)}
+  li{margin-bottom:7px}
+  li::marker{color:var(--muted)}
+  code{font-family:var(--mono); font-size:.88em; background:var(--code-bg);
+       padding:1px 4px; border-radius:3px; color:var(--fg); word-break:break-word}
+  a{color:var(--accent)}
+
+  .rule-note{
+    border-left:2px solid var(--accent); background:var(--accent-wash);
+    padding:14px 18px; margin:26px 0; max-width:68ch; border-radius:0 4px 4px 0;
+  }
+  .rule-note p{margin:0; color:var(--fg)}
+  .rule-note p + p{margin-top:10px}
+
+  /* ── figures ──────────────────────────────────────────────── */
+  figure{margin:30px 0 34px}
+  .fig-scroll{overflow-x:auto; border:1px solid var(--rule); border-radius:5px;
+              background:var(--surface); padding:16px}
+  .fig-scroll svg{display:block; width:100%; min-width:700px; max-width:1060px;
+                  height:auto; margin:0 auto; color:var(--fg)}
+  figcaption{font-size:13px; color:var(--muted); margin-top:11px; max-width:72ch;
+             line-height:1.55; display:flex; gap:9px}
+  figcaption b{font-family:var(--mono); font-size:11px; letter-spacing:.07em;
+               text-transform:uppercase; color:var(--accent); white-space:nowrap; padding-top:2px}
+
+  /* svg type helpers */
+  .t{font-family:var(--sans); font-size:12.5px; fill:currentColor}
+  .tb{font-family:var(--sans); font-size:12.5px; font-weight:600; fill:currentColor}
+  .tm{font-family:var(--mono); font-size:11.5px; fill:currentColor}
+  .ts{font-family:var(--sans); font-size:11px; fill:currentColor; opacity:.72}
+  .tl{font-family:var(--mono); font-size:10px; letter-spacing:.1em; fill:currentColor; opacity:.62}
+  .big{font-family:var(--mono); font-size:19px; font-weight:500; fill:currentColor}
+  .acc{fill:var(--accent)} .ref{fill:var(--refuse)}
+  .bx{fill:var(--surface-2); stroke:var(--rule-2); stroke-width:1}
+  .bx-a{fill:var(--accent-wash); stroke:var(--accent); stroke-width:1.4}
+  .bx-r{fill:var(--refuse-wash); stroke:var(--refuse); stroke-width:1.2}
+  .env{fill:none; stroke:var(--rule-2); stroke-width:1; stroke-dasharray:5 4}
+  .ln{stroke:currentColor; stroke-width:1.3; fill:none}
+  .ln-a{stroke:var(--accent); stroke-width:1.8; fill:none}
+  .ln-r{stroke:var(--refuse); stroke-width:1.3; fill:none; stroke-dasharray:5 3}
+
+  /* ── tables ───────────────────────────────────────────────── */
+  .tw{overflow-x:auto; border:1px solid var(--rule); border-radius:5px; margin:26px 0}
+  table{border-collapse:collapse; width:100%; min-width:620px; font-size:12.5px;
+        font-variant-numeric:tabular-nums; background:var(--surface)}
+  caption{text-align:left; font-size:13px; color:var(--muted); padding:0 0 10px; max-width:70ch}
+  th,td{text-align:left; padding:8px 12px; border-bottom:1px solid var(--rule); vertical-align:top}
+  thead th{font-family:var(--mono); font-size:10.5px; letter-spacing:.08em; text-transform:uppercase;
+           color:var(--muted); font-weight:500; background:var(--surface-2);
+           border-bottom:1px solid var(--rule-2); white-space:nowrap}
+  tbody tr:last-child td{border-bottom:0}
+  td.m,th.m{font-family:var(--mono); font-size:11.5px; white-space:nowrap}
+  td.num{text-align:right; font-family:var(--mono); font-size:11.5px}
+  .ok{color:var(--accent); font-weight:500}
+  .no{color:var(--refuse); font-weight:500}
+
+  /* ── stat strip ───────────────────────────────────────────── */
+  .stats{display:grid; grid-template-columns:repeat(auto-fit,minmax(132px,1fr));
+         gap:1px; background:var(--rule); border:1px solid var(--rule);
+         border-radius:5px; overflow:hidden; margin:26px 0}
+  .stats div{background:var(--surface); padding:14px 16px}
+  .stats .v{font-family:var(--mono); font-size:21px; font-weight:500; color:var(--fg); line-height:1.1}
+  .stats .k{font-family:var(--mono); font-size:10px; letter-spacing:.09em; text-transform:uppercase;
+            color:var(--muted); margin-top:5px}
+
+  footer.foot{padding-block:40px 60px; border-top:1px solid var(--rule); margin-top:12px}
+  footer.foot p{font-size:12.5px; color:var(--muted); max-width:70ch}
+
+  @media (max-width:560px){
+    body{font-size:14.5px}
+    .front{padding-block:36px 8px}
+    section.sec{padding-block:40px}
+    nav.toc{display:none}
+  }
+</style>
+
+<header class="top">
+  <div class="wrap">
+    <span class="brand">XCP · technical diagrams</span>
+    <nav class="toc" aria-label="Sections">
+      <a href="#architecture">Architecture</a>
+      <a href="#guardrails">Guardrails</a>
+      <a href="#capabilities">Capabilities</a>
+      <a href="#external">External&nbsp;tools</a>
+      <a href="#deployment">Deployment</a>
+      <a href="#ecosystem">Ecosystem</a>
+      <a href="#classifier">System&nbsp;One</a>
+      <a href="#sdk">SDK</a>
+    </nav>
+    <button class="theme" id="themeBtn" type="button" aria-label="Switch colour theme">Theme</button>
+  </div>
+</header>
+
+<div class="wrap">
+
+  <div class="front">
+    <h1>XCP: the mechanisms, drawn</h1>
+    <p class="standfirst">XCP is a trust layer for the agentic internet: a gateway that decides, per call, what
+      authority an agent actually holds and refuses everything outside it. This document draws the mechanisms
+      that decision rests on — the order of the guardrails, the shape of the authority lattice, what narrows at a
+      datacentre boundary, what changes between deployment options, and the two newest pieces: a local System One
+      classifier that makes routing cheap without touching authorization, and the one contract every language SDK
+      is held to. Every figure is traced from the code it describes, not from the prose about it.</p>
+    <dl class="meta">
+      <div><dt>Commit</dt><dd>2da50b6 · main</dd></div>
+      <div><dt>Release</dt><dd>v0.1.0 · signed</dd></div>
+      <div><dt>Protocol</dt><dd>MCP 2026-07-28</dd></div>
+      <div><dt>Suite</dt><dd>812 pass · CI green</dd></div>
+      <div><dt>Conformance</dt><dd>18 checks · 2 impls</dd></div>
+      <div><dt>SDK vectors</dt><dd>139 cases · 3 ports</dd></div>
+    </dl>
+  </div>
+
+  <!-- ══════════════════════════ 1 ══════════════════════════ -->
+  <section class="sec" id="architecture">
+    <span class="sec-no">Section 1</span>
+    <h2>XCP Architecture</h2>
+
+    <p class="lede">A node is one container image with a role selector. In the gateway role it is a policy engine
+      sitting between agents and everything they want to reach, and its internals divide cleanly into four planes
+      that each request crosses in order.</p>
+
+    <p>The planes matter more than the file layout. <strong>Admission</strong> decides whether to spend any work on
+      this caller at all. <strong>Authority</strong> establishes what the caller may ask for, by resolving the trust
+      lattice and checking the mandate against the derived scope. <strong>Policy</strong> applies the operator's own
+      narrowing — firewall rules, delegation admission, peer admissibility. <strong>Egress</strong> is the last
+      boundary before bytes leave the process. Each plane can only refuse; none of them can widen what an earlier
+      plane established.</p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1040 596" role="img" aria-label="A gateway node showing four internal planes — admission, authority, policy, egress — crossed in order by requests arriving from agents, peer nodes and tools, with upstream MCP servers, verified peers, the verifier and the credential vault on the far side, and a hash-chained decision record beneath.">
+          <defs>
+            <marker id="f1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="f1b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+          </defs>
+
+          <!-- callers -->
+          <text x="16" y="34" class="tl">CALLERS</text>
+          <rect x="16" y="52" width="150" height="54" rx="4" class="bx"/>
+          <text x="30" y="74" class="tb">Agent</text><text x="30" y="92" class="ts">holds a session binding</text>
+          <rect x="16" y="130" width="150" height="54" rx="4" class="bx"/>
+          <text x="30" y="152" class="tb">Peer gateway</text><text x="30" y="170" class="ts">another datacentre</text>
+          <rect x="16" y="208" width="150" height="54" rx="4" class="bx"/>
+          <text x="30" y="230" class="tb">Tool</text><text x="30" y="248" class="ts">chaining to a second tool</text>
+
+          <line x1="166" y1="79"  x2="214" y2="112" class="ln" marker-end="url(#f1a)"/>
+          <line x1="166" y1="157" x2="214" y2="124" class="ln" marker-end="url(#f1a)"/>
+          <line x1="166" y1="235" x2="214" y2="136" class="ln" marker-end="url(#f1a)"/>
+
+          <!-- gateway envelope -->
+          <rect x="222" y="30" width="520" height="538" rx="6" class="env"/>
+          <text x="238" y="52" class="tl">XCP GATEWAY · ROLE=gateway · :8080</text>
+
+          <!-- plane 1 -->
+          <rect x="238" y="66" width="488" height="104" rx="4" class="bx"/>
+          <text x="252" y="88" class="tb acc">1 · Admission</text>
+          <text x="252" y="108" class="tm">_negotiate</text><text x="252" y="124" class="ts">protocol version</text>
+          <text x="400" y="108" class="tm">trustfirewall.limits</text><text x="400" y="124" class="ts">token bucket, pre-auth</text>
+          <text x="590" y="108" class="tm">parse_ctx</text><text x="590" y="124" class="ts">XCP-Context → binding</text>
+          <text x="252" y="152" class="ts">Refuses before any signature is verified, so a flood costs the node a bucket decrement.</text>
+
+          <line x1="482" y1="170" x2="482" y2="194" class="ln-a" marker-end="url(#f1b)"/>
+
+          <!-- plane 2 -->
+          <rect x="238" y="196" width="488" height="104" rx="4" class="bx"/>
+          <text x="252" y="218" class="tb acc">2 · Authority</text>
+          <text x="252" y="238" class="tm">trust.tiers.resolve</text><text x="252" y="254" class="ts">lattice → mandate envelope</text>
+          <text x="440" y="238" class="tm">check_mandate</text><text x="440" y="254" class="ts">scope ⊆ envelope</text>
+          <text x="590" y="238" class="tm">vault.sealed</text><text x="590" y="254" class="ts">upstream credential</text>
+          <text x="252" y="282" class="ts">Scope is derived from the Mcp-Method / Mcp-Name headers, so it is known only after the body is read.</text>
+
+          <line x1="482" y1="300" x2="482" y2="324" class="ln-a" marker-end="url(#f1b)"/>
+
+          <!-- plane 3 -->
+          <rect x="238" y="326" width="488" height="104" rx="4" class="bx"/>
+          <text x="252" y="348" class="tb acc">3 · Policy</text>
+          <text x="252" y="368" class="tm">trustfirewall.firewall</text><text x="252" y="384" class="ts">operator rules</text>
+          <text x="440" y="368" class="tm">delegation.admit</text><text x="440" y="384" class="ts">cross-boundary ticket</text>
+          <text x="590" y="368" class="tm">routing.admissible</text><text x="590" y="384" class="ts">residency, locality</text>
+          <text x="252" y="412" class="ts">The operator's narrowing. It may only restrict what plane 2 resolved.</text>
+
+          <line x1="482" y1="430" x2="482" y2="454" class="ln-a" marker-end="url(#f1b)"/>
+
+          <!-- plane 4 -->
+          <rect x="238" y="456" width="488" height="100" rx="4" class="bx-a"/>
+          <text x="252" y="478" class="tb acc">4 · Egress</text>
+          <text x="252" y="498" class="tm">xcpsec.argfirewall</text><text x="252" y="514" class="ts">injection, SSRF in args</text>
+          <text x="430" y="498" class="tm">xcpsec.egress</text><text x="430" y="514" class="ts">check_url, every address</text>
+          <text x="582" y="498" class="tm">mtls · peerfetch</text><text x="582" y="514" class="ts">pinned peer trust store</text>
+          <text x="252" y="542" class="ts">The last boundary before bytes leave the process.</text>
+
+          <!-- right side -->
+          <text x="786" y="34" class="tl">DESTINATIONS &amp; SERVICES</text>
+          <rect x="786" y="52" width="238" height="54" rx="4" class="bx"/>
+          <text x="800" y="74" class="tb">Upstream MCP servers</text><text x="800" y="92" class="tm">XCP_UPSTREAMS</text>
+          <rect x="786" y="130" width="238" height="54" rx="4" class="bx"/>
+          <text x="800" y="152" class="tb">Verified peers</text><text x="800" y="170" class="tm">federation.node</text>
+          <rect x="786" y="300" width="238" height="54" rx="4" class="bx"/>
+          <text x="800" y="322" class="tb">Verifier · :8500</text><text x="800" y="340" class="tm">ERC-8004 · NodeRegistry</text>
+          <rect x="786" y="378" width="238" height="54" rx="4" class="bx"/>
+          <text x="800" y="400" class="tb">Credential vault</text><text x="800" y="418" class="tm">vault.sealed · vault.idp</text>
+
+          <line x1="726" y1="490" x2="770" y2="420" class="ln"/>
+          <line x1="726" y1="490" x2="790" y2="106" class="ln" marker-end="url(#f1a)"/>
+          <line x1="726" y1="500" x2="790" y2="166" class="ln" marker-end="url(#f1a)"/>
+          <text x="742" y="258" class="ts" transform="rotate(-76 742 258)">allowed call</text>
+          <line x1="726" y1="248" x2="782" y2="320" class="ln" stroke-dasharray="4 3" marker-end="url(#f1a)"/>
+          <text x="738" y="300" class="ts">verify</text>
+          <line x1="726" y1="240" x2="782" y2="398" class="ln" stroke-dasharray="4 3" marker-end="url(#f1a)"/>
+
+          <!-- record rail -->
+          <rect x="16" y="300" width="150" height="256" rx="4" class="bx"/>
+          <text x="30" y="322" class="tb">Decision record</text>
+          <text x="30" y="342" class="tm">receipts</text>
+          <text x="30" y="358" class="tm">.CallChain</text>
+          <text x="30" y="382" class="ts">Every outcome —</text>
+          <text x="30" y="398" class="ts">allow, reject, block,</text>
+          <text x="30" y="414" class="ts">deny — is recorded</text>
+          <text x="30" y="430" class="ts">with its reason.</text>
+          <text x="30" y="456" class="ts">Hash-chained, so</text>
+          <text x="30" y="472" class="ts">tampering changes</text>
+          <text x="30" y="488" class="ts">the root.</text>
+          <text x="30" y="528" class="tl">EU AI ACT ART. 12</text>
+          <text x="30" y="546" class="tl">SOC 2 · DORA</text>
+          <line x1="222" y1="118" x2="170" y2="330" class="ln" stroke-dasharray="3 3" marker-end="url(#f1a)"/>
+          <line x1="222" y1="248" x2="170" y2="360" class="ln" stroke-dasharray="3 3" marker-end="url(#f1a)"/>
+          <line x1="222" y1="378" x2="170" y2="400" class="ln" stroke-dasharray="3 3" marker-end="url(#f1a)"/>
+          <line x1="222" y1="506" x2="170" y2="440" class="ln" stroke-dasharray="3 3" marker-end="url(#f1a)"/>
+        </svg>
+      </div>
+      <figcaption><b>Fig 1.1</b><span>Four planes crossed in order. The solid centre line is the only path to a
+        destination; every plane can divert off it, and none can put a request back on it. Dashed lines are lookups
+        and records, not request flow.</span></figcaption>
+    </figure>
+
+    <h3>One parser, one digest</h3>
+
+    <p>Two primitives sit beneath every plane and had to be consolidated before five language SDKs could exist,
+      because each was quietly a <em>family</em> of implementations rather than one.</p>
+
+    <p><code>protocol.identity</code> is now the only parser for <code>XCP-Agent-Identity</code>. It was written
+      three times — inline in the Python gateway, again in the Node gateway, and a third time in the Python client
+      — and it stripped whitespace with Python's <code>str.strip()</code> while citing RFC 9110 §5.5, where OWS is
+      <strong>exactly space and horizontal tab</strong>. That removed ten further codepoint classes, so a footprint
+      with a trailing non-breaking space (U+00A0) matched a registered binding here and answered 401 on an
+      RFC-faithful node. Same bytes, two verdicts, nothing in either log about whitespace.</p>
+
+    <p><code>protocol.hashing</code> is now the only digest. Eleven modules each carried
+      <code>if _ETH: keccak(data) else: sha3_256(data)</code>, and those are different functions. A node installed
+      as <code>xcp[client]</code> and one installed as the base distribution computed different binding digests for
+      identical bytes, so each rejected every credential the other minted — both healthy, neither aware there was a
+      choice of hash. It now <strong>refuses</strong> rather than substituting, because a digest is not a checksum
+      with a local consumer; it is the value two implementations must agree on, and one nobody else can reproduce is
+      worse than an error.</p>
+
+    <div class="rule-note">
+      <p><strong>Both were invisible to testing, for the same reason.</strong> A suite run without
+        <code>eth_utils</code> exercises the fallback consistently and passes. It proves the implementation agrees
+        with itself, which was never in question. Self-consistency is not agreement — which is the premise the
+        project's differential harness already rested on, and the fallback was sitting inside the code that harness
+        was written to guard.</p>
+    </div>
+
+    <h3>The four streams</h3>
+    <p>XCP distinguishes four conversation shapes, because each needs a different pair of things verified. The
+      difference is not cosmetic: <code>/v1/a2a/delegate</code> requires <em>both</em> peers verified, where
+      <code>/v1/a2t/call</code> requires only the caller.</p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1040 332" role="img" aria-label="Four streams drawn as separate lanes: session establishes a binding with a TTL; agent-to-tool routes a verified agent to an upstream MCP server; agent-to-agent crosses two gateways carrying a delegation ticket; tool-to-tool chains one tool into a second under a chain scope.">
+          <defs><marker id="f2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker></defs>
+
+          <!-- lane 1: session -->
+          <text x="16" y="26" class="tl">SESSION · BINDING</text>
+          <rect x="16" y="38" width="104" height="40" rx="4" class="bx"/><text x="30" y="63" class="t">Agent</text>
+          <line x1="120" y1="58" x2="196" y2="58" class="ln" marker-end="url(#f2a)"/>
+          <text x="128" y="51" class="tm">open</text>
+          <rect x="196" y="38" width="118" height="40" rx="4" class="bx-a"/><text x="210" y="63" class="t acc">Gateway</text>
+          <text x="330" y="54" class="tm">binding + TTL</text>
+          <text x="330" y="70" class="ts">1 h … 7 d, set by the lattice cell</text>
+          <text x="604" y="54" class="tm">POST /v1/session/{open,close}</text>
+          <text x="604" y="70" class="ts">a stateless profile skips this entirely</text>
+
+          <!-- lane 2: a2t -->
+          <text x="16" y="116" class="tl">A2T · AGENT TO TOOL</text>
+          <rect x="16" y="128" width="104" height="40" rx="4" class="bx"/><text x="30" y="153" class="t">Agent</text>
+          <line x1="120" y1="148" x2="196" y2="148" class="ln" marker-end="url(#f2a)"/>
+          <rect x="196" y="128" width="118" height="40" rx="4" class="bx-a"/><text x="210" y="153" class="t acc">Gateway</text>
+          <line x1="314" y1="148" x2="430" y2="148" class="ln" marker-end="url(#f2a)"/>
+          <text x="322" y="141" class="tm">mcp:tools/*</text>
+          <rect x="430" y="128" width="150" height="40" rx="4" class="bx"/><text x="444" y="153" class="t">MCP server</text>
+          <text x="604" y="144" class="tm">POST /v1/a2t/call</text>
+          <text x="604" y="160" class="ts">one side verified: the caller</text>
+
+          <!-- lane 3: a2a -->
+          <text x="16" y="206" class="tl">A2A · ACROSS A BOUNDARY</text>
+          <rect x="16" y="218" width="104" height="40" rx="4" class="bx"/><text x="30" y="243" class="t">Agent</text>
+          <line x1="120" y1="238" x2="196" y2="238" class="ln" marker-end="url(#f2a)"/>
+          <rect x="196" y="218" width="118" height="40" rx="4" class="bx-a"/><text x="210" y="243" class="t acc">Gateway A</text>
+          <line x1="314" y1="238" x2="430" y2="238" class="ln" marker-end="url(#f2a)"/>
+          <text x="318" y="231" class="tm">ticket</text>
+          <rect x="430" y="218" width="118" height="40" rx="4" class="bx-a"/><text x="444" y="243" class="t acc">Gateway B</text>
+          <line x1="548" y1="238" x2="580" y2="238" class="ln" marker-end="url(#f2a)"/>
+          <text x="604" y="234" class="tm">POST /v1/a2a/{delegate,accept}</text>
+          <text x="604" y="250" class="ts">both sides verified; B decides independently</text>
+
+          <!-- lane 4: t2t -->
+          <text x="16" y="296" class="tl">T2T · TOOL CHAINING</text>
+          <rect x="16" y="308" width="104" height="18" rx="3" class="bx"/><text x="26" y="321" class="ts">Tool</text>
+          <line x1="120" y1="317" x2="196" y2="317" class="ln" marker-end="url(#f2a)"/>
+          <rect x="196" y="308" width="118" height="18" rx="3" class="bx-a"/><text x="206" y="321" class="ts acc">Gateway</text>
+          <line x1="314" y1="317" x2="430" y2="317" class="ln" marker-end="url(#f2a)"/>
+          <text x="322" y="311" class="tl">T2T:CHAIN/*</text>
+          <rect x="430" y="308" width="150" height="18" rx="3" class="bx"/><text x="440" y="321" class="ts">Second tool</text>
+          <text x="604" y="314" class="tm">POST /v1/t2t/pipe</text>
+          <text x="604" y="328" class="ts">chain scope exists only at A1×H1 and above</text>
+        </svg>
+      </div>
+      <figcaption><b>Fig 1.2</b><span>What each stream requires. The scope names on the arrows are the literal
+        values <code>trustfirewall.scope_for()</code> derives, which is why the lattice and the firewall can be
+        compared without translation.</span></figcaption>
+    </figure>
+
+    <h3>The surface, in full</h3>
+    <p>Sixteen endpoints. The node record at <code>/.well-known/xcp-node.json</code> is the discovery root, placed
+      per RFC 8615, and is what a prospective peer reads before it will talk to this node at all.</p>
+
+    <div class="tw">
+      <table>
+        <caption>Every endpoint a gateway exposes, grouped by what it is for.</caption>
+        <thead><tr><th>Group</th><th class="m">Endpoint</th><th>Purpose</th></tr></thead>
+        <tbody>
+          <tr><td>Discovery</td><td class="m">GET /.well-known/xcp-node.json</td><td>Signed node record: domain, keys, policy, cluster commitment</td></tr>
+          <tr><td>Discovery</td><td class="m">GET /health</td><td>Liveness; the release gate boots each role and reads this</td></tr>
+          <tr><td>Discovery</td><td class="m">GET /metrics</td><td>Prometheus: requests by stream and decision, denials by scope</td></tr>
+          <tr><td>Session</td><td class="m">POST /v1/session/open</td><td>Establish a binding; TTL comes from the resolved lattice cell</td></tr>
+          <tr><td>Session</td><td class="m">POST /v1/session/close</td><td>Surrender a binding before its TTL</td></tr>
+          <tr><td>A2T</td><td class="m">POST /v1/a2t/call</td><td>Agent calls a tool through the full guardrail pipeline</td></tr>
+          <tr><td>A2A</td><td class="m">POST /v1/a2a/delegate</td><td>Mint a delegation ticket for a named peer and one task</td></tr>
+          <tr><td>A2A</td><td class="m">POST /v1/a2a/accept</td><td>Destination admits or refuses an inbound ticket</td></tr>
+          <tr><td>T2T</td><td class="m">POST /v1/t2t/pipe</td><td>Chain one tool's output into a second tool</td></tr>
+          <tr><td>Relay</td><td class="m">POST /v1/tool/relay</td><td>Reach a tool a peer holds, under the peer's own policy</td></tr>
+          <tr><td>Federation</td><td class="m">POST /v1/federation/peer</td><td>Offer to peer; membership-gated when a charter is loaded</td></tr>
+          <tr><td>Federation</td><td class="m">GET /v1/federation/peers</td><td>Current peer table with trust labels and metrics</td></tr>
+          <tr><td>Federation</td><td class="m">GET /v1/federation/trust</td><td>This node's trust anchors and cluster epoch</td></tr>
+          <tr><td>Federation</td><td class="m">GET /v1/federation/catalog</td><td>Tools this node is willing to publish to peers</td></tr>
+          <tr><td>Federation</td><td class="m">POST /v1/federation/revoke</td><td>Drop a peer; propagates by epoch bump, not a revocation list</td></tr>
+          <tr><td>Admin</td><td class="m">POST /admin/revoke</td><td>Operator kill switch for a binding or an agent</td></tr>
+        </tbody>
+      </table>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════ 2 ══════════════════════════ -->
+  <section class="sec" id="guardrails">
+    <span class="sec-no">Section 2</span>
+    <h2>Security guardrails</h2>
+
+    <p class="lede">The guardrails are not a set; they are a sequence. Two orderings in that sequence carry almost
+      all of the security value, and both are invisible in a list of features.</p>
+
+    <p>First, the rate limiter runs <strong>before</strong> authentication. An unauthenticated flood is stopped by a
+      token-bucket decrement rather than by signature verification, which is the expensive part. Second, the mandate
+      check runs <strong>after</strong> the body is read, because the scope being authorised is derived from the
+      request's own method and tool name — checking a mandate before knowing the scope would be checking nothing.</p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1040 744" role="img" aria-label="The guardrail pipeline for a tool call, ten stages in order from protocol negotiation to egress, each with its refusal branching to the right, and every outcome recorded to the hash-chained decision log.">
+          <defs>
+            <marker id="f3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="f3r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--refuse)"/></marker>
+            <marker id="f3b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+          </defs>
+
+          <text x="16" y="24" class="tl">POST /V1/A2T/CALL</text>
+          <text x="560" y="24" class="tl">REFUSAL</text>
+          <text x="878" y="24" class="tl">RECORDED AS</text>
+
+          <rect x="16" y="36" width="240" height="30" rx="4" class="bx"/>
+          <text x="28" y="56" class="tm">request arrives</text>
+          <line x1="136" y1="66" x2="136" y2="84" class="ln-a" marker-end="url(#f3b)"/>
+
+          <!-- 1 -->
+          <rect x="16" y="86" width="430" height="46" rx="4" class="bx"/>
+          <text x="28" y="105" class="tb">1 · _negotiate</text><text x="28" y="122" class="ts">supported protocol revision?</text>
+          <line x1="446" y1="109" x2="548" y2="109" class="ln-r" marker-end="url(#f3r)"/>
+          <text x="560" y="106" class="tm ref">400</text><text x="560" y="122" class="ts">unsupported revision</text>
+          <line x1="136" y1="132" x2="136" y2="150" class="ln-a" marker-end="url(#f3b)"/>
+
+          <!-- 2 -->
+          <rect x="16" y="152" width="430" height="46" rx="4" class="bx-a"/>
+          <text x="28" y="171" class="tb acc">2 · _limit(preauth=True)</text><text x="28" y="188" class="ts">token bucket — runs before any signature work</text>
+          <line x1="446" y1="175" x2="548" y2="175" class="ln-r" marker-end="url(#f3r)"/>
+          <text x="560" y="172" class="tm ref">429 + Retry-After</text><text x="560" y="188" class="ts">bucket empty</text>
+          <line x1="136" y1="198" x2="136" y2="216" class="ln-a" marker-end="url(#f3b)"/>
+
+          <!-- 3 -->
+          <rect x="16" y="218" width="430" height="46" rx="4" class="bx"/>
+          <text x="28" y="237" class="tb">3 · parse_ctx</text><text x="28" y="254" class="ts">XCP-Context header → session binding</text>
+          <line x1="136" y1="264" x2="136" y2="282" class="ln-a" marker-end="url(#f3b)"/>
+
+          <!-- 4 -->
+          <rect x="16" y="284" width="430" height="46" rx="4" class="bx"/>
+          <text x="28" y="303" class="tb">4 · binding verified?</text><text x="28" y="320" class="ts">only decisive when XCP_POSTURE=enforce</text>
+          <line x1="446" y1="307" x2="548" y2="307" class="ln-r" marker-end="url(#f3r)"/>
+          <text x="560" y="304" class="tm ref">reject</text><text x="560" y="320" class="ts">observe mode audits and continues</text>
+          <line x1="136" y1="330" x2="136" y2="348" class="ln-a" marker-end="url(#f3b)"/>
+
+          <!-- 5 -->
+          <rect x="16" y="350" width="430" height="46" rx="4" class="bx"/>
+          <text x="28" y="369" class="tb">5 · read body · _limit(scope, bytes)</text><text x="28" y="386" class="ts">second decrement, now priced by scope and size</text>
+          <line x1="446" y1="373" x2="548" y2="373" class="ln-r" marker-end="url(#f3r)"/>
+          <text x="560" y="370" class="tm ref">413 / 429</text><text x="560" y="386" class="ts">oversized body</text>
+          <line x1="136" y1="396" x2="136" y2="414" class="ln-a" marker-end="url(#f3b)"/>
+
+          <!-- 6 -->
+          <rect x="16" y="416" width="430" height="46" rx="4" class="bx-a"/>
+          <text x="28" y="435" class="tb acc">6 · check_mandate(mandate, binding, scope)</text><text x="28" y="452" class="ts">scope now known — derived from Mcp-Method / Mcp-Name</text>
+          <line x1="446" y1="439" x2="548" y2="439" class="ln-r" marker-end="url(#f3r)"/>
+          <text x="560" y="436" class="tm ref">deny</text><text x="560" y="452" class="ts">scope outside the mandate</text>
+          <line x1="136" y1="462" x2="136" y2="480" class="ln-a" marker-end="url(#f3b)"/>
+
+          <!-- 7 -->
+          <rect x="16" y="482" width="430" height="46" rx="4" class="bx"/>
+          <text x="28" y="501" class="tb">7 · _check_upstream_credential</text><text x="28" y="518" class="ts">a sealed reference, never a bearer token in transit</text>
+          <line x1="446" y1="505" x2="548" y2="505" class="ln-r" marker-end="url(#f3r)"/>
+          <text x="560" y="502" class="tm ref">refuse</text><text x="560" y="518" class="ts">credential not sealed for this upstream</text>
+          <line x1="136" y1="528" x2="136" y2="546" class="ln-a" marker-end="url(#f3b)"/>
+
+          <!-- 8 -->
+          <rect x="16" y="548" width="430" height="46" rx="4" class="bx"/>
+          <text x="28" y="567" class="tb">8 · _policy_check(ctx, scope, arguments)</text><text x="28" y="584" class="ts">operator rules and entitlement narrowing</text>
+          <line x1="446" y1="571" x2="548" y2="571" class="ln-r" marker-end="url(#f3r)"/>
+          <text x="560" y="568" class="tm ref">block</text><text x="560" y="584" class="ts">denied scope, budget, counterparty</text>
+          <line x1="136" y1="594" x2="136" y2="612" class="ln-a" marker-end="url(#f3b)"/>
+
+          <!-- 9 -->
+          <rect x="16" y="614" width="430" height="46" rx="4" class="bx"/>
+          <text x="28" y="633" class="tb">9 · xcpsec.argfirewall</text><text x="28" y="650" class="ts">command injection and SSRF in tool arguments</text>
+          <line x1="446" y1="637" x2="548" y2="637" class="ln-r" marker-end="url(#f3r)"/>
+          <text x="560" y="634" class="tm ref">400</text><text x="560" y="650" class="ts">argument firewall violation</text>
+          <line x1="136" y1="660" x2="136" y2="678" class="ln-a" marker-end="url(#f3b)"/>
+
+          <!-- 10 -->
+          <rect x="16" y="680" width="430" height="46" rx="4" class="bx-a"/>
+          <text x="28" y="699" class="tb acc">10 · _route_mcp → xcpsec.egress.check_url</text><text x="28" y="716" class="ts">scheme, credentials, and every resolved address</text>
+          <line x1="446" y1="703" x2="548" y2="703" class="ln-r" marker-end="url(#f3r)"/>
+          <text x="560" y="700" class="tm ref">EgressDenied</text><text x="560" y="716" class="ts">host does not resolve to a permitted address</text>
+
+          <!-- record rail -->
+          <rect x="860" y="36" width="164" height="690" rx="4" class="bx"/>
+          <text x="874" y="60" class="tb">record_decision</text>
+          <text x="874" y="78" class="tm">+ audit()</text>
+          <text x="874" y="110" class="ts">Called on every</text>
+          <text x="874" y="126" class="ts">branch above —</text>
+          <text x="874" y="142" class="ts">including allow —</text>
+          <text x="874" y="158" class="ts">with the decision,</text>
+          <text x="874" y="174" class="ts">the reason, the</text>
+          <text x="874" y="190" class="ts">scope and the tier.</text>
+          <text x="874" y="222" class="ts">A refusal with no</text>
+          <text x="874" y="238" class="ts">record is a refusal</text>
+          <text x="874" y="254" class="ts">nobody can audit,</text>
+          <text x="874" y="270" class="ts">so the record is</text>
+          <text x="874" y="286" class="ts">not optional.</text>
+          <text x="874" y="326" class="tl">PROMETHEUS</text>
+          <text x="874" y="346" class="ts">requests{stream,</text>
+          <text x="874" y="362" class="ts">decision}</text>
+          <text x="874" y="382" class="ts">denials{scope}</text>
+          <line x1="840" y1="109" x2="854" y2="109" class="ln" stroke-dasharray="3 3" marker-end="url(#f3a)"/>
+          <line x1="840" y1="307" x2="854" y2="307" class="ln" stroke-dasharray="3 3" marker-end="url(#f3a)"/>
+          <line x1="840" y1="439" x2="854" y2="439" class="ln" stroke-dasharray="3 3" marker-end="url(#f3a)"/>
+          <line x1="840" y1="571" x2="854" y2="571" class="ln" stroke-dasharray="3 3" marker-end="url(#f3a)"/>
+          <line x1="840" y1="703" x2="854" y2="703" class="ln" stroke-dasharray="3 3" marker-end="url(#f3a)"/>
+        </svg>
+      </div>
+      <figcaption><b>Fig 2.1</b><span>The pipeline for one tool call. Stages 2, 6 and 10 are highlighted because
+        their <em>position</em> is the control: move 2 later and a flood becomes expensive, move 6 earlier and it
+        has no scope to check, move 10 anywhere but last and something has already left.</span></figcaption>
+    </figure>
+
+    <h3>Egress: the gate no declaration can open</h3>
+
+    <p>A private federation needs the gateway to reach internal addresses, which is exactly what SSRF protection
+      normally forbids. The naive fix is a flag that disables the address check; that flag also re-admits cloud
+      metadata endpoints, and <code>169.254.169.254</code> sits inside several plausible internal declarations.</p>
+
+    <p>So the one flag became two decisions. <code>_never_permitted</code> runs <strong>before</strong> the declared
+      ranges are consulted, which is the whole reason declaring a CIDR is safer than disabling the guard: a
+      declaration of <code>169.254.0.0/16</code> cannot reach the metadata service, because the hard gate has
+      already refused it.</p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1040 452" role="img" aria-label="The egress decision for a URL: surface checks on scheme and credentials, then resolution to every address, then a hard gate of never-permitted addresses that runs before the operator's declared private ranges are consulted, so a declaration spanning the cloud metadata address cannot admit it.">
+          <defs>
+            <marker id="f4a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="f4r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--refuse)"/></marker>
+            <marker id="f4b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+          </defs>
+
+          <rect x="16" y="40" width="186" height="46" rx="4" class="bx"/>
+          <text x="28" y="60" class="tm">check_url(url)</text><text x="28" y="78" class="ts">peer, upstream, redirect</text>
+          <line x1="202" y1="63" x2="246" y2="63" class="ln" marker-end="url(#f4a)"/>
+
+          <rect x="246" y="40" width="210" height="46" rx="4" class="bx"/>
+          <text x="258" y="60" class="tb">scheme · credentials · port</text>
+          <text x="258" y="78" class="ts">plain HTTP refused, even internally</text>
+          <line x1="456" y1="63" x2="500" y2="63" class="ln" marker-end="url(#f4a)"/>
+
+          <rect x="500" y="40" width="230" height="46" rx="4" class="bx"/>
+          <text x="512" y="60" class="tb">resolved_addresses(host)</text>
+          <text x="512" y="78" class="ts">all of them must pass, not the name</text>
+
+          <line x1="615" y1="86" x2="615" y2="112" class="ln" marker-end="url(#f4a)"/>
+          <text x="628" y="104" class="ts">for every address</text>
+
+          <!-- hard gate -->
+          <rect x="396" y="114" width="438" height="62" rx="4" class="bx-a"/>
+          <text x="410" y="136" class="tb acc">HARD GATE · _never_permitted(addr)</text>
+          <text x="410" y="154" class="tm">loopback · link-local · multicast · reserved · unspecified</text>
+          <text x="410" y="170" class="tm">+ _EXTRA_DENY</text>
+          <line x1="834" y1="145" x2="906" y2="145" class="ln-r" marker-end="url(#f4r)"/>
+          <text x="856" y="138" class="tm ref">REFUSE</text>
+
+          <line x1="615" y1="176" x2="615" y2="202" class="ln-a" marker-end="url(#f4b)"/>
+
+          <rect x="446" y="204" width="338" height="46" rx="4" class="bx"/>
+          <text x="460" y="224" class="tb">addr.is_private ?</text>
+          <text x="460" y="242" class="ts">a public address that passed the gate is permitted</text>
+          <line x1="784" y1="227" x2="906" y2="227" class="ln-a" marker-end="url(#f4b)"/>
+          <text x="856" y="220" class="tm acc">PERMIT</text>
+
+          <line x1="615" y1="250" x2="615" y2="276" class="ln" marker-end="url(#f4a)"/>
+          <text x="628" y="268" class="ts">private</text>
+
+          <rect x="446" y="278" width="338" height="62" rx="4" class="bx"/>
+          <text x="460" y="300" class="tb">in a declared range ?</text>
+          <text x="460" y="318" class="tm">XCP_PRIVATE_PEER_CIDRS</text>
+          <text x="460" y="334" class="ts">min prefix /8 v4, /7 v6 — a declaration may not be the whole space</text>
+          <line x1="784" y1="300" x2="906" y2="300" class="ln-a" marker-end="url(#f4b)"/>
+          <text x="856" y="293" class="tm acc">PERMIT</text>
+          <line x1="784" y1="326" x2="906" y2="326" class="ln-r" marker-end="url(#f4r)"/>
+          <text x="856" y="344" class="tm ref">REFUSE</text>
+
+          <!-- the attack -->
+          <rect x="16" y="150" width="340" height="80" rx="4" class="bx-r"/>
+          <text x="30" y="172" class="tb ref">The case this ordering exists for</text>
+          <text x="30" y="192" class="tm">operator declares 169.254.0.0/16</text>
+          <text x="30" y="208" class="tm">attacker asks for 169.254.169.254</text>
+          <text x="30" y="224" class="ts">The declaration is never consulted. Link-local is refused above it.</text>
+          <line x1="356" y1="178" x2="392" y2="150" class="ln-r" marker-end="url(#f4r)"/>
+
+          <!-- redirect loop -->
+          <rect x="16" y="300" width="340" height="62" rx="4" class="bx"/>
+          <text x="30" y="322" class="tb">guard_redirect(location)</text>
+          <text x="30" y="340" class="ts">Every hop re-enters at the top. A permitted host that</text>
+          <text x="30" y="356" class="ts">redirects to a forbidden one gets no further than one hop.</text>
+          <path d="M186,300 L186,282 L420,282 L420,70 L500,70" class="ln" stroke-dasharray="4 3" marker-end="url(#f4a)"/>
+
+          <!-- refusal text note -->
+          <rect x="16" y="382" width="818" height="50" rx="4" class="bx"/>
+          <text x="30" y="404" class="tb">What the caller is told</text>
+          <text x="30" y="422" class="ts">“host does not resolve to a permitted address” — never which address, never why, never which ranges are declared. The caller learns that this host is not a permitted peer, and nothing about the shape of the network.</text>
+        </svg>
+      </div>
+      <figcaption><b>Fig 2.2</b><span>Order is the mechanism. The hard gate sits above the operator's declaration,
+        so the declaration cannot reach past it — which is what makes “declare your CIDRs” a safe instruction and
+        “disable the check” an unsafe one.</span></figcaption>
+    </figure>
+
+    <h3>The rest of the security surface</h3>
+    <p>Six modules under <code>security/xcpsec/</code>, each answering one question:</p>
+    <ul>
+      <li><code>argfirewall</code> — do the tool arguments contain a shell metacharacter, a path traversal, or a URL pointed somewhere it should not be?</li>
+      <li><code>contentfirewall</code> — does the response body carry an injection aimed at the model that will read it?</li>
+      <li><code>egress</code> — may this process open a connection to this address? (Fig 2.2)</li>
+      <li><code>mtls</code> — is the certificate on the other end one this node has anchored, as opposed to one a public CA will vouch for? <code>XCP_PEER_CA_BUNDLE</code> <em>replaces</em> the public trust store rather than adding to it.</li>
+      <li><code>sandbox</code> — does this tool run with a filesystem and a network it cannot escape?</li>
+      <li><code>supplychain</code> — is this tool manifest signed and pinned to a digest?</li>
+    </ul>
+
+    <p>One more stage can run after all ten, and deliberately only after. When <code>XCP_ENGINE=1</code> the
+      System One classifier is consulted <em>last</em> — after the mandate check, the policy check and the argument
+      firewall, with the allow already recorded with its own reason. The placement is the argument: a classifier
+      that runs there cannot affect an outcome that is already decided, and a reviewer can see that it does not.
+      Section 7 draws the boundary.</p>
+
+    <div class="rule-note">
+      <p><strong>The supply-chain rule applies to XCP itself.</strong> The project enforces signed, digest-pinned
+        manifests on everyone else's tools, so publishing unsigned images would be indefensible. The v0.1.0 release
+        signs with keyless cosign through GitHub OIDC and then <em>verifies</em> in a job that depends on the build —
+        because the first attempt published an image, failed to sign it, and skipped verification, so the only check
+        that would have noticed never ran.</p>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════ 3 ══════════════════════════ -->
+  <section class="sec" id="capabilities">
+    <span class="sec-no">Section 3</span>
+    <h2>Capabilities available</h2>
+
+    <p class="lede">Authority in XCP has two independent legs: how well the <em>agent</em> is backed, and how well
+      the <em>human</em> behind it is identified. Three levels each gives nine cells, and each cell resolves to a
+      concrete envelope — scope set, payment rails, session TTL, spend ceiling, settlement mode, posture.</p>
+
+    <p>The governing rule is that the ceiling is the <strong>weaker leg</strong>. A corporate human driving an
+      unregistered agent gets read-only observation, not enterprise authority, because the agent is the thing that
+      will act and nobody has vouched for it. There is one deliberate exception, and it is the most interesting cell
+      on the grid.</p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1040 492" role="img" aria-label="The nine-cell trust lattice as a grid: agent tiers A0 free, A1 registry and A2 company as rows, human tiers H0 public, H1 general single sign-on and H2 enterprise as columns. Authority rises to the top right. Cell A0 by H2 is capped to read-only observation by the weaker agent leg, and cell A2 by H0 is the deliberate exception where a company-backed agent is not capped by the absent human.">
+          <defs>
+            <marker id="f5a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="f5b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+          </defs>
+
+          <!-- axes -->
+          <text x="16" y="30" class="tl">AGENT TIER ↑   ·   HUMAN TIER →</text>
+          <line x1="150" y1="430" x2="150" y2="56" class="ln" marker-end="url(#f5a)"/>
+          <line x1="150" y1="430" x2="846" y2="430" class="ln" marker-end="url(#f5a)"/>
+
+          <!-- row labels -->
+          <text x="16" y="92" class="tb">A2 · Company</text><text x="16" y="108" class="ts">a legal entity signs the root</text>
+          <text x="16" y="212" class="tb">A1 · Registry</text><text x="16" y="228" class="ts">ERC-8004 identity + reputation</text>
+          <text x="16" y="332" class="tb">A0 · Free</text><text x="16" y="348" class="ts">self-asserted keypair</text>
+
+          <!-- col labels -->
+          <text x="170" y="452" class="tb">H0 · Public</text><text x="170" y="468" class="ts">no principal</text>
+          <text x="400" y="452" class="tb">H1 · General SSO</text><text x="400" y="468" class="ts">consumer IdP</text>
+          <text x="630" y="452" class="tb">H2 · Enterprise</text><text x="630" y="468" class="ts">employer IdP + entitlements</text>
+
+          <!-- row A2 -->
+          <rect x="170" y="56" width="212" height="96" rx="4" class="bx-a"/>
+          <text x="184" y="76" class="tm acc">A2×H0</text><text x="184" y="94" class="tb">Service agent</text>
+          <text x="184" y="112" class="ts">chain · X402+AP2 · 1 d</text><text x="184" y="128" class="ts">cap 100 000 · metered</text>
+          <text x="184" y="146" class="tm acc">NOT capped by H0</text>
+
+          <rect x="400" y="56" width="212" height="96" rx="4" class="bx"/>
+          <text x="414" y="76" class="tm">A2×H1</text><text x="414" y="94" class="tb">Professional</text>
+          <text x="414" y="112" class="ts">chain · X402+AP2+MPP · 1 d</text><text x="414" y="128" class="ts">cap 500 000 · metered</text>
+
+          <rect x="630" y="56" width="212" height="96" rx="4" class="bx"/>
+          <text x="644" y="76" class="tm">A2×H2</text><text x="644" y="94" class="tb">Full settlement</text>
+          <text x="644" y="112" class="ts">chain + pay:* · all four rails</text><text x="644" y="128" class="ts">7 d · no protocol cap · full</text>
+          <text x="644" y="146" class="ts">the entitlement sets the real limit</text>
+
+          <!-- row A1 -->
+          <rect x="170" y="176" width="212" height="96" rx="4" class="bx"/>
+          <text x="184" y="196" class="tm">A1×H0</text><text x="184" y="214" class="tb">Open marketplace</text>
+          <text x="184" y="232" class="ts">write · X402 · 8 h</text><text x="184" y="248" class="ts">cap 2 000 · escrow only</text>
+
+          <rect x="400" y="176" width="212" height="96" rx="4" class="bx"/>
+          <text x="414" y="196" class="tm">A1×H1</text><text x="414" y="214" class="tb">Consumer commerce</text>
+          <text x="414" y="232" class="ts">chain · X402+AP2 · 1 d</text><text x="414" y="248" class="ts">cap 25 000 · metered</text>
+
+          <rect x="630" y="176" width="212" height="96" rx="4" class="bx"/>
+          <text x="644" y="196" class="tm">A1×H2</text><text x="644" y="214" class="tb">Delegated corporate</text>
+          <text x="644" y="232" class="ts">chain · X402+AP2+MPP · 1 d</text><text x="644" y="248" class="ts">cap 250 000 · metered</text>
+
+          <!-- row A0 -->
+          <rect x="170" y="296" width="212" height="96" rx="4" class="bx"/>
+          <text x="184" y="316" class="tm">A0×H0</text><text x="184" y="334" class="tb">Sandbox</text>
+          <text x="184" y="352" class="ts">read only · no rails · 1 h</text><text x="184" y="368" class="ts">no settlement · enforce</text>
+
+          <rect x="400" y="296" width="212" height="96" rx="4" class="bx"/>
+          <text x="414" y="316" class="tm">A0×H1</text><text x="414" y="334" class="tb">Metered</text>
+          <text x="414" y="352" class="ts">write · X402 · 4 h</text><text x="414" y="368" class="ts">cap 500 · metered</text>
+
+          <rect x="630" y="296" width="212" height="96" rx="4" class="bx-r"/>
+          <text x="644" y="316" class="tm ref">A0×H2</text><text x="644" y="334" class="tb">Shadowed</text>
+          <text x="644" y="352" class="ts">read only · no rails · 1 h</text><text x="644" y="368" class="ts">observe · audit only</text>
+          <text x="644" y="386" class="tm ref">capped by the weaker leg</text>
+
+          <!-- authority gradient arrow -->
+          <line x1="884" y1="400" x2="884" y2="70" class="ln-a" marker-end="url(#f5b)"/>
+          <text x="900" y="300" class="tm acc" transform="rotate(-90 900 300)">authority increases</text>
+          <text x="924" y="300" class="ts" transform="rotate(-90 924 300)">scopes · rails · TTL · spend</text>
+        </svg>
+      </div>
+      <figcaption><b>Fig 3.1</b><span>The grid, not the list. The two axes are independent, so the envelope is a
+        function of both legs — and the two marked cells are where the rule and its exception live: A0×H2 is
+        demoted to observation by its weak agent leg, A2×H0 is deliberately <em>not</em> demoted, because the
+        company is itself the principal.</span></figcaption>
+    </figure>
+
+    <div class="rule-note">
+      <p><strong>Why A2×H0 is the exception.</strong> Everywhere else, a missing leg caps the cell. An autonomous
+        company agent has no human in the loop by design — a batch reconciliation job at 03:00 has nobody signed in
+        behind it. Capping it to H0's authority would make the most accountable class of agent the least capable
+        one. The company signed the root; the company is the principal; liability is already located. So the cell
+        keeps chain scopes and a 100 000-minor-unit ceiling.</p>
+    </div>
+
+    <div class="tw">
+      <table>
+        <caption>The nine envelopes as <code>trust.tiers.resolve()</code> returns them. Spend caps are in minor
+          units; <code>0</code> means no protocol cap, not an unlimited one — at A2×H2 the entitlement from the
+          employer's IdP supplies the real limit.</caption>
+        <thead><tr>
+          <th class="m">Cell</th><th>Name</th><th>Scopes</th><th>Rails</th><th class="m">TTL</th>
+          <th class="m">Spend cap</th><th>Settlement</th><th>Posture</th><th>Receipt</th>
+        </tr></thead>
+        <tbody>
+          <tr><td class="m">A0×H0</td><td>Sandbox</td><td>read</td><td class="m">—</td><td class="m">1 h</td><td class="num">0</td><td>none</td><td>enforce</td><td class="no">no</td></tr>
+          <tr><td class="m">A0×H1</td><td>Metered</td><td>write</td><td class="m">X402</td><td class="m">4 h</td><td class="num">500</td><td>metered</td><td>enforce</td><td class="ok">yes</td></tr>
+          <tr><td class="m">A0×H2</td><td>Shadowed</td><td>read</td><td class="m">—</td><td class="m">1 h</td><td class="num">0</td><td>none</td><td class="no">observe</td><td class="no">no</td></tr>
+          <tr><td class="m">A1×H0</td><td>Open marketplace</td><td>write</td><td class="m">X402</td><td class="m">8 h</td><td class="num">2 000</td><td>escrow</td><td>enforce</td><td class="ok">yes</td></tr>
+          <tr><td class="m">A1×H1</td><td>Consumer commerce</td><td>chain</td><td class="m">X402 AP2</td><td class="m">1 d</td><td class="num">25 000</td><td>metered</td><td>enforce</td><td class="ok">yes</td></tr>
+          <tr><td class="m">A1×H2</td><td>Delegated corporate</td><td>chain</td><td class="m">X402 AP2 MPP</td><td class="m">1 d</td><td class="num">250 000</td><td>metered</td><td>enforce</td><td class="ok">yes</td></tr>
+          <tr><td class="m">A2×H0</td><td>Service agent</td><td>chain</td><td class="m">X402 AP2</td><td class="m">1 d</td><td class="num">100 000</td><td>metered</td><td>enforce</td><td class="ok">yes</td></tr>
+          <tr><td class="m">A2×H1</td><td>Professional</td><td>chain</td><td class="m">X402 AP2 MPP</td><td class="m">1 d</td><td class="num">500 000</td><td>metered</td><td>enforce</td><td class="ok">yes</td></tr>
+          <tr><td class="m">A2×H2</td><td>Full settlement</td><td>chain + <code>pay:*</code></td><td class="m">X402 AP2 MPP ACP</td><td class="m">7 d</td><td class="num">0 †</td><td>full</td><td>enforce</td><td class="ok">yes</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <h4>The three scope sets</h4>
+    <ul>
+      <li><strong>read</strong> — <code>mcp:tools/list</code>, <code>mcp:resources/list</code>, <code>mcp:resources/read</code>, <code>mcp:prompts/*</code>, <code>mcp:completion/complete</code>, <code>mcp:tasks/get</code>, <code>mcp:tasks/list</code></li>
+      <li><strong>write</strong> — read, plus <code>mcp:tools/*</code> and <code>a2a:delegate/*</code></li>
+      <li><strong>chain</strong> — write, plus <code>t2t:chain/*</code></li>
+    </ul>
+    <p>These are exactly the strings <code>trustfirewall.scope_for()</code> derives from the mandatory
+      <code>Mcp-Method</code> and <code>Mcp-Name</code> headers of MCP 2026-07-28, so the lattice and the firewall
+      speak one vocabulary and no translation layer can disagree with itself.</p>
+
+    <h3>Entitlements narrow; they never widen</h3>
+    <p>An enterprise IdP asserts group membership, a cost centre, an approval limit, allowed and denied scopes.
+      <code>_apply_entitlements</code> takes the intersection and the minimum, in every direction. An IdP that
+      asserts a higher approval limit than the cell allows does not raise the cell.</p>
+
+    <h3>Crossing a boundary narrows it again</h3>
+    <p>When an agent in one datacentre delegates to an agent in another, the destination does not inherit the
+      origin's view of the agent's tier. It computes its own, per leg, and takes the minimum. The same
+      <code>widens()</code> predicate that guards the OAuth bridge guards this.</p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1040 436" role="img" aria-label="Cross-boundary delegation. A ticket minted in datacentre A asserting tier A2 by H2 is narrowed per leg against the destination's ceiling of A1 by H2, producing an effective tier of A1 by H2. Below, a ticket asserting a lower tier than the effective one is refused by the widens predicate. The destination also checks audience, expiry, peer status, cluster membership, task digest and hop budget.">
+          <defs>
+            <marker id="f6a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="f6r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--refuse)"/></marker>
+            <marker id="f6b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+          </defs>
+
+          <!-- DC A -->
+          <rect x="16" y="40" width="250" height="150" rx="6" class="env"/>
+          <text x="30" y="62" class="tl">DATACENTRE A · SITE eu-west</text>
+          <rect x="32" y="74" width="218" height="46" rx="4" class="bx"/>
+          <text x="44" y="94" class="tb">Agent, tier A2×H2</text><text x="44" y="111" class="ts">verified here, by this node</text>
+          <rect x="32" y="130" width="218" height="46" rx="4" class="bx"/>
+          <text x="44" y="150" class="tm">delegation.mint()</text><text x="44" y="167" class="ts">EIP-712, chain id 8453</text>
+
+          <!-- ticket -->
+          <line x1="266" y1="153" x2="330" y2="153" class="ln" marker-end="url(#f6a)"/>
+          <rect x="330" y="104" width="196" height="118" rx="4" class="bx-a"/>
+          <text x="342" y="124" class="tb acc">DelegationTicket</text>
+          <text x="342" y="144" class="tm">audience: B</text>
+          <text x="342" y="160" class="tm">task: &lt;digest&gt;</text>
+          <text x="342" y="176" class="tm">tier: A2xH2</text>
+          <text x="342" y="192" class="tm">max_hops · depth</text>
+          <text x="342" y="208" class="tm">expires_at</text>
+          <line x1="526" y1="153" x2="590" y2="153" class="ln" marker-end="url(#f6a)"/>
+
+          <!-- DC B -->
+          <rect x="590" y="40" width="434" height="268" rx="6" class="env"/>
+          <text x="604" y="62" class="tl">DATACENTRE B · SITE us-east · DECIDES INDEPENDENTLY</text>
+          <rect x="606" y="74" width="402" height="118" rx="4" class="bx"/>
+          <text x="618" y="94" class="tb">delegation.admit() — six independent refusals</text>
+          <text x="618" y="114" class="ts">audience ≠ this node · expired or future-dated · TTL beyond the cap</text>
+          <text x="618" y="132" class="ts">origin is not a verified peer · origin is not a cluster member</text>
+          <text x="618" y="150" class="ts">task presented ≠ task the ticket authorises · hop budget exhausted</text>
+          <text x="618" y="176" class="tm">any one of these → refuse, with the reason recorded</text>
+
+          <rect x="606" y="204" width="402" height="88" rx="4" class="bx-a"/>
+          <text x="618" y="224" class="tb acc">narrow_tier(asserted, ceiling) — per leg</text>
+          <text x="618" y="246" class="tm">agent: min(A2, A1) = A1</text>
+          <text x="618" y="264" class="tm">human: min(H2, H2) = H2</text>
+          <text x="618" y="284" class="tm acc">effective: A1xH2 — Delegated corporate</text>
+
+          <!-- the refusal case -->
+          <rect x="16" y="252" width="510" height="56" rx="4" class="bx-r"/>
+          <text x="30" y="274" class="tb ref">The case widens() exists for</text>
+          <text x="30" y="294" class="ts">A ticket whose asserted tier is <tspan class="tm">lower</tspan> than the effective tier would hand the holder more than the origin granted. Refused, not clamped.</text>
+          <line x1="526" y1="280" x2="596" y2="280" class="ln-r" marker-end="url(#f6r)"/>
+
+          <!-- extend -->
+          <rect x="16" y="332" width="1008" height="88" rx="4" class="bx"/>
+          <text x="30" y="354" class="tb">extend() returns an UNSIGNED ticket</text>
+          <text x="30" y="376" class="ts">A node that forwards a delegation adds its hop and hands back a ticket with no signature, because only the next node's own key may sign for the next node. A function</text>
+          <text x="30" y="394" class="ts">that returned a signed ticket would let one compromised hop manufacture a chain. The hop list is also checked for repeats: a node already in the chain cannot be re-entered,</text>
+          <text x="30" y="412" class="ts">so a delegation cannot loop its way past the hop budget. Authority narrows at a boundary, never widens — which is the same rule, applied one hop at a time.</text>
+        </svg>
+      </div>
+      <figcaption><b>Fig 3.2</b><span>What the destination does with an inbound ticket. The origin's assertion is
+        input, not instruction: six conditions can refuse it outright, and what survives is narrowed per leg
+        against the destination's own ceiling.</span></figcaption>
+    </figure>
+  </section>
+
+  <!-- ══════════════════════════ 4 ══════════════════════════ -->
+  <section class="sec" id="external">
+    <span class="sec-no">Section 4</span>
+    <h2>External Network &amp; Tools services</h2>
+
+    <p class="lede">The catalogue snapshot holds 9,555 MCP servers harvested from five upstream lists. Only 158 of
+      them can actually be routed to. That gap is the whole content of this section, and collapsing it is how a
+      trust layer ends up pointing agents at things that do not answer.</p>
+
+    <div class="stats">
+      <div><div class="v">9,555</div><div class="k">catalogued</div></div>
+      <div><div class="v">158</div><div class="k">routable</div></div>
+      <div><div class="v">2,528</div><div class="k">wrappable</div></div>
+      <div><div class="v">6,869</div><div class="k">installable</div></div>
+      <div><div class="v">20</div><div class="k">categories</div></div>
+      <div><div class="v">1,051</div><div class="k">probed alive</div></div>
+    </div>
+
+    <p>It is tempting to count the 2,528 wrappable entries as routable, since many are demonstrably online. The
+      reason they are a third kind rather than more of the first is mechanical: the endpoint speaks REST, not MCP.
+      Marking it routable would make the Trust Firewall derive a scope from headers that will never arrive, and the
+      call would fail inside the policy engine rather than at the catalogue boundary where the mismatch actually is.</p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1040 420" role="img" aria-label="The catalogue's three endpoint kinds and what each needs before it becomes routable. Routable entries speak MCP over HTTPS and reach the trust firewall directly. Wrappable entries speak REST and need a generated MCP facade. Installable entries are packages and need someone to host them. Only routable entries may be published to peers.">
+          <defs>
+            <marker id="f7a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="f7b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+          </defs>
+
+          <rect x="16" y="56" width="176" height="130" rx="4" class="bx"/>
+          <text x="30" y="78" class="tl">FIVE UPSTREAM LISTS</text>
+          <text x="30" y="100" class="big">9,555</text>
+          <text x="30" y="120" class="ts">official · punkpeye</text>
+          <text x="30" y="136" class="ts">appcypher · wong2</text>
+          <text x="30" y="152" class="ts">abordage</text>
+          <text x="30" y="176" class="tm">connectors.sources</text>
+          <line x1="192" y1="121" x2="240" y2="121" class="ln" marker-end="url(#f7a)"/>
+
+          <!-- routable -->
+          <rect x="240" y="36" width="250" height="78" rx="4" class="bx-a"/>
+          <text x="254" y="58" class="tm acc">ROUTABLE</text>
+          <text x="254" y="80" class="big acc">158</text>
+          <text x="330" y="80" class="ts">speaks MCP over HTTPS, now</text>
+          <text x="254" y="102" class="ts">a destination the firewall can reason about</text>
+          <line x1="490" y1="75" x2="676" y2="75" class="ln-a" marker-end="url(#f7b)"/>
+          <text x="520" y="68" class="tm acc">direct</text>
+
+          <!-- wrappable -->
+          <rect x="240" y="128" width="250" height="78" rx="4" class="bx"/>
+          <text x="254" y="150" class="tm">WRAPPABLE</text>
+          <text x="254" y="172" class="big">2,528</text>
+          <text x="346" y="166" class="ts">online, but speaks REST</text>
+          <text x="346" y="182" class="ts">2,462 carry an API base</text>
+          <text x="254" y="196" class="ts">a facade must exist before it is a destination</text>
+          <line x1="490" y1="167" x2="560" y2="167" class="ln" marker-end="url(#f7a)"/>
+          <rect x="560" y="144" width="116" height="46" rx="4" class="bx"/>
+          <text x="572" y="164" class="tm">connectors</text><text x="572" y="180" class="tm">.wrap</text>
+          <path d="M676,167 L690,167 L690,90" class="ln-a" marker-end="url(#f7b)"/>
+
+          <!-- installable -->
+          <rect x="240" y="220" width="250" height="78" rx="4" class="bx"/>
+          <text x="254" y="242" class="tm">INSTALLABLE</text>
+          <text x="254" y="264" class="big">6,869</text>
+          <text x="346" y="258" class="ts">a package: npm, pip, a repo</text>
+          <text x="346" y="274" class="ts">stdio-only, no address to route to</text>
+          <text x="254" y="288" class="ts">a lead, not a destination</text>
+          <line x1="490" y1="259" x2="560" y2="259" class="ln" stroke-dasharray="4 3" marker-end="url(#f7a)"/>
+          <rect x="560" y="236" width="116" height="46" rx="4" class="bx"/>
+          <text x="572" y="256" class="ts">someone must</text><text x="572" y="272" class="ts">host it first</text>
+          <path d="M676,259 L690,259 L690,96" class="ln" stroke-dasharray="4 3" marker-end="url(#f7a)"/>
+
+          <!-- firewall -->
+          <rect x="716" y="36" width="308" height="78" rx="4" class="bx-a"/>
+          <text x="730" y="58" class="tb acc">Trust Firewall · scope_for(headers)</text>
+          <text x="730" y="78" class="ts">derives mcp:tools/&lt;name&gt; from Mcp-Method / Mcp-Name</text>
+          <text x="730" y="96" class="ts">a REST endpoint here fails in the wrong place</text>
+
+          <line x1="870" y1="114" x2="870" y2="146" class="ln-a" marker-end="url(#f7b)"/>
+          <rect x="716" y="148" width="308" height="62" rx="4" class="bx"/>
+          <text x="730" y="170" class="tb">GET /v1/federation/catalog</text>
+          <text x="730" y="190" class="ts">what this node is willing to publish to peers —</text>
+          <text x="730" y="204" class="ts">routable entries only, filtered by the node's own policy</text>
+
+          <!-- validation -->
+          <rect x="716" y="236" width="308" height="140" rx="4" class="bx"/>
+          <text x="730" y="258" class="tb">Probed, not assumed</text>
+          <text x="730" y="280" class="tm">alive</text><text x="900" y="280" class="tm" text-anchor="end">1 051</text>
+          <text x="730" y="298" class="tm">gone</text><text x="900" y="298" class="tm" text-anchor="end">26</text>
+          <text x="730" y="316" class="tm">archived</text><text x="900" y="316" class="tm" text-anchor="end">23</text>
+          <text x="730" y="334" class="tm">unchecked</text><text x="900" y="334" class="tm" text-anchor="end">5 927</text>
+          <text x="730" y="360" class="ts">An entry carries its validation state, so a stale link is visibly stale rather than silently broken.</text>
+
+          <!-- kinds note -->
+          <rect x="16" y="220" width="176" height="78" rx="4" class="bx"/>
+          <text x="30" y="242" class="tb">20 categories</text>
+          <text x="30" y="262" class="ts">dev-tools 1 608 · cloud-infra</text>
+          <text x="30" y="278" class="ts">1 267 · finance 754 ·</text>
+          <text x="30" y="294" class="ts">ai-agents 695 · data 645</text>
+
+          <text x="16" y="400" class="ts">Snapshot <tspan class="tm">connectors/snapshot/servers.json</tspan> · specVersion 0.1-draft. The three kinds are an <tspan class="tm">EndpointKind</tspan> enum, not a heuristic applied at read time.</text>
+        </svg>
+      </div>
+      <figcaption><b>Fig 4.1</b><span>Three kinds, two transformations. The dashed paths are the ones that need a
+        human decision — hosting a package, generating a facade — and keeping them visually distinct from the solid
+        one is the point: 98% of the catalogue is not reachable today.</span></figcaption>
+    </figure>
+
+    <h3>Reaching a tool: local, or through a peer</h3>
+    <p>An organisation running XCP across several datacentres wants one answer to “can this agent use that tool”
+      regardless of which site holds the tool. Two routes exist, and the choice between them is where locality and
+      residency diverge — one is a cost, the other is a constraint.</p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1040 412" role="img" aria-label="Two routes to an external tool. The local route goes through the home site's gateway and egress check. The relayed route crosses to a peer in another site, adding a cross-site cost of twenty-five, and is cut entirely when the peer's site is outside the permitted residency set.">
+          <defs>
+            <marker id="f8a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="f8r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--refuse)"/></marker>
+            <marker id="f8b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+          </defs>
+
+          <rect x="16" y="110" width="124" height="52" rx="4" class="bx"/>
+          <text x="28" y="132" class="tb">Agent</text><text x="28" y="150" class="ts">site eu-west</text>
+          <line x1="140" y1="136" x2="190" y2="136" class="ln" marker-end="url(#f8a)"/>
+
+          <rect x="190" y="98" width="150" height="76" rx="4" class="bx-a"/>
+          <text x="202" y="120" class="tb acc">Home gateway</text>
+          <text x="202" y="138" class="tm">home_site =</text>
+          <text x="202" y="154" class="tm">eu-west</text>
+          <text x="202" y="170" class="ts">routing.select()</text>
+
+          <!-- route A -->
+          <text x="384" y="44" class="tl">ROUTE A · LOCAL — COST = TRANSPORT PRICE</text>
+          <path d="M340,118 L384,118 L384,74" class="ln-a"/>
+          <line x1="384" y1="74" x2="470" y2="74" class="ln-a" marker-end="url(#f8b)"/>
+          <rect x="470" y="52" width="178" height="46" rx="4" class="bx"/>
+          <text x="482" y="72" class="tm">xcpsec.egress.check_url</text><text x="482" y="88" class="ts">every resolved address</text>
+          <line x1="648" y1="74" x2="720" y2="74" class="ln-a" marker-end="url(#f8b)"/>
+          <rect x="720" y="52" width="196" height="46" rx="4" class="bx"/>
+          <text x="732" y="72" class="tb">Tool in eu-west</text><text x="732" y="88" class="ts">local upstream, XCP_UPSTREAMS</text>
+
+          <!-- route B -->
+          <text x="384" y="214" class="tl">ROUTE B · RELAYED THROUGH A PEER — COST + 25</text>
+          <path d="M340,150 L384,150 L384,244" class="ln"/>
+          <line x1="384" y1="244" x2="446" y2="244" class="ln" marker-end="url(#f8a)"/>
+          <rect x="446" y="222" width="190" height="46" rx="4" class="bx"/>
+          <text x="458" y="242" class="tm">POST /v1/tool/relay</text><text x="458" y="258" class="ts">mTLS via peerfetch, pinned CA</text>
+          <line x1="636" y1="244" x2="700" y2="244" class="ln" marker-end="url(#f8a)"/>
+          <rect x="700" y="208" width="216" height="76" rx="4" class="bx"/>
+          <text x="712" y="230" class="tb">Peer gateway · us-east</text>
+          <text x="712" y="248" class="ts">applies its OWN policy to the call</text>
+          <text x="712" y="266" class="ts">a relay is a request, not a command</text>
+          <line x1="916" y1="246" x2="960" y2="246" class="ln" marker-end="url(#f8a)"/>
+          <text x="930" y="292" class="ts">tool</text>
+
+          <!-- cost / constraint panel -->
+          <rect x="16" y="300" width="494" height="96" rx="4" class="bx-a"/>
+          <text x="30" y="322" class="tb acc">Locality is a COST</text>
+          <text x="30" y="342" class="tm">CROSS_SITE_COST = 25</text>
+          <text x="30" y="360" class="ts">Added to the peer's transport price when it is off-site. A cheap enough</text>
+          <text x="30" y="376" class="ts">off-site peer still wins — which is correct, because latency is not the</text>
+          <text x="30" y="392" class="ts">only thing a cross-site hop spends.</text>
+
+          <rect x="530" y="300" width="494" height="96" rx="4" class="bx-r"/>
+          <text x="544" y="322" class="tb ref">Residency is a CONSTRAINT</text>
+          <text x="544" y="342" class="tm">Policy.permitted_sites</text>
+          <text x="544" y="360" class="ts">A peer outside the set is inadmissible. No price makes it admissible,</text>
+          <text x="544" y="376" class="ts">because a constraint which can be outweighed is a preference wearing</text>
+          <text x="544" y="392" class="ts">a constraint's name.</text>
+          <line x1="806" y1="300" x2="806" y2="288" class="ln-r" marker-end="url(#f8r)"/>
+        </svg>
+      </div>
+      <figcaption><b>Fig 4.2</b><span>The two routes, and the two different ways a site boundary affects them.
+        Route B costs 25 more; a residency violation does not cost anything, it removes the candidate.</span></figcaption>
+    </figure>
+  </section>
+
+  <!-- ══════════════════════════ 5 ══════════════════════════ -->
+  <section class="sec" id="deployment">
+    <span class="sec-no">Section 5</span>
+    <h2>Deployment options</h2>
+
+    <p class="lede">One image, one entrypoint, three roles selected by <code>ROLE</code>. An unknown role exits 2
+      rather than defaulting to something the operator did not ask for — a gateway started by accident is an open
+      relay with a plausible log line.</p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1040 272" role="img" aria-label="One container image whose entrypoint selects between three roles by the ROLE environment variable: gateway on port 8080, server on 9001, verifier on 8500. An unknown role exits with status 2. The image runs as user 10001 and is published with provenance, an SBOM and a keyless cosign signature.">
+          <defs><marker id="f9a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+          <marker id="f9r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--refuse)"/></marker></defs>
+
+          <rect x="16" y="76" width="232" height="104" rx="4" class="bx-a"/>
+          <text x="30" y="98" class="tb acc">One image</text>
+          <text x="30" y="118" class="tm">ghcr.io/agi-gateway/xcp</text>
+          <text x="30" y="136" class="tm">@sha256:…</text>
+          <text x="30" y="156" class="ts">USER 10001 · never root</text>
+          <text x="30" y="172" class="ts">provenance · SBOM · cosign</text>
+
+          <line x1="248" y1="128" x2="300" y2="128" class="ln" marker-end="url(#f9a)"/>
+          <rect x="300" y="104" width="170" height="48" rx="4" class="bx"/>
+          <text x="312" y="124" class="tm">entrypoint.sh</text><text x="312" y="142" class="ts">case "${ROLE:-gateway}"</text>
+
+          <path d="M470,116 L504,116 L504,48 L560,48" class="ln" marker-end="url(#f9a)"/>
+          <path d="M470,128 L504,128 L504,120 L560,120" class="ln" marker-end="url(#f9a)"/>
+          <path d="M470,140 L504,140 L504,192 L560,192" class="ln" marker-end="url(#f9a)"/>
+          <path d="M470,146 L490,146 L490,244 L560,244" class="ln-r" marker-end="url(#f9r)"/>
+
+          <rect x="560" y="26" width="300" height="46" rx="4" class="bx"/>
+          <text x="572" y="46" class="tb">gateway · :8080</text><text x="572" y="62" class="tm">core.gateway.xcp_gateway:app</text>
+          <text x="874" y="52" class="ts">the policy engine</text>
+
+          <rect x="560" y="98" width="300" height="46" rx="4" class="bx"/>
+          <text x="572" y="118" class="tb">server · :9001</text><text x="572" y="134" class="tm">core.server.xcp_server:app</text>
+          <text x="874" y="124" class="ts">a reference MCP upstream</text>
+
+          <rect x="560" y="170" width="300" height="46" rx="4" class="bx"/>
+          <text x="572" y="190" class="tb">verifier · :8500</text><text x="572" y="206" class="tm">core.verifier.xcp_verifier:app</text>
+          <text x="874" y="196" class="ts">ERC-8004 identity lookups</text>
+
+          <rect x="560" y="222" width="300" height="38" rx="4" class="bx-r"/>
+          <text x="572" y="246" class="tm ref">unknown ROLE → exit 2</text>
+          <text x="874" y="246" class="ts">never a silent default</text>
+        </svg>
+      </div>
+      <figcaption><b>Fig 5.1</b><span>The role selector. Three uvicorn targets from one image, so what runs locally
+        is the artefact that gets published — and the release gate boots all three and reads
+        <code>/health</code> before the release is allowed to claim success.</span></figcaption>
+    </figure>
+
+    <h3>Four shapes, and what each one adds</h3>
+    <p>The options are not four different architectures; they are the same node with progressively more of the
+      federation machinery turned on. Drawn side by side, the question “what am I choosing” has a visible answer.</p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1040 492" role="img" aria-label="Four deployment shapes compared: a single gateway container; a three-service compose stack adding verifier and reference server; a Helm release on Kubernetes adding digest pinning and a mounted peer certificate authority; and a private federation across two datacentres adding declared peer ranges, a signed cluster charter, site locality and residency policy.">
+          <defs><marker id="faa" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+          <marker id="fab" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker></defs>
+
+          <!-- A -->
+          <text x="16" y="28" class="tl">A · SINGLE CONTAINER</text>
+          <rect x="16" y="40" width="222" height="180" rx="5" class="bx"/>
+          <rect x="32" y="56" width="190" height="42" rx="4" class="bx-a"/>
+          <text x="44" y="82" class="tb acc">gateway :8080</text>
+          <text x="32" y="124" class="ts">XCP_POSTURE=observe</text>
+          <text x="32" y="142" class="ts">no verifier, no peers</text>
+          <text x="32" y="160" class="ts">public trust store</text>
+          <text x="32" y="188" class="tm">docker run -e ROLE=gateway</text>
+          <text x="32" y="208" class="ts">Evaluation. Audits, refuses nothing.</text>
+
+          <!-- B -->
+          <text x="274" y="28" class="tl">B · COMPOSE STACK</text>
+          <rect x="274" y="40" width="222" height="180" rx="5" class="bx"/>
+          <rect x="290" y="56" width="190" height="34" rx="4" class="bx-a"/>
+          <text x="302" y="78" class="tb acc">gateway :8080</text>
+          <rect x="290" y="98" width="190" height="30" rx="4" class="bx"/>
+          <text x="302" y="118" class="t">server :9001</text>
+          <rect x="290" y="136" width="190" height="30" rx="4" class="bx"/>
+          <text x="302" y="156" class="t">verifier :8500</text>
+          <text x="290" y="186" class="tm acc">+ enforce + XCP_SECURITY=1</text>
+          <text x="290" y="204" class="ts">The full decision path, on one host.</text>
+
+          <!-- C -->
+          <text x="532" y="28" class="tl">C · HELM ON KUBERNETES</text>
+          <rect x="532" y="40" width="222" height="180" rx="5" class="bx"/>
+          <rect x="548" y="56" width="190" height="34" rx="4" class="bx-a"/>
+          <text x="560" y="78" class="tb acc">gateway Deployment</text>
+          <rect x="548" y="98" width="190" height="30" rx="4" class="bx"/>
+          <text x="560" y="118" class="t">verifier Deployment</text>
+          <rect x="548" y="136" width="190" height="30" rx="4" class="bx"/>
+          <text x="560" y="156" class="tm">Secret: peer-ca (ro)</text>
+          <text x="548" y="186" class="tm acc">+ image digest pin</text>
+          <text x="548" y="204" class="ts">A tag is mutable. This chart is pinnable.</text>
+
+          <!-- D -->
+          <text x="790" y="28" class="tl">D · PRIVATE FEDERATION</text>
+          <rect x="790" y="40" width="234" height="180" rx="5" class="bx-a"/>
+          <rect x="806" y="56" width="202" height="34" rx="4" class="bx"/>
+          <text x="818" y="78" class="tb">site eu-west</text>
+          <rect x="806" y="124" width="202" height="34" rx="4" class="bx"/>
+          <text x="818" y="146" class="tb">site us-east</text>
+          <line x1="907" y1="90" x2="907" y2="120" class="ln-a" marker-end="url(#fab)"/>
+          <line x1="907" y1="124" x2="907" y2="94" class="ln-a" marker-end="url(#fab)"/>
+          <text x="914" y="112" class="tm acc">mTLS</text>
+          <text x="806" y="186" class="tm acc">+ charter + CIDRs + sites</text>
+          <text x="806" y="204" class="ts">Independent agents, one trust domain.</text>
+
+          <!-- what D adds, in detail -->
+          <rect x="16" y="248" width="1008" height="228" rx="5" class="bx"/>
+          <text x="32" y="272" class="tb">What option D turns on, and why each piece is separate</text>
+
+          <text x="32" y="302" class="tm acc">XCP_PRIVATE_PEER_CIDRS</text>
+          <text x="32" y="320" class="ts">Declares where peers live. Narrower</text>
+          <text x="32" y="336" class="ts">than “allow private”, and an undeclared</text>
+          <text x="32" y="352" class="ts">range is still refused. Min prefix /8.</text>
+
+          <text x="286" y="302" class="tm acc">XCP_PEER_CA_BUNDLE</text>
+          <text x="286" y="320" class="ts">REPLACES the public trust store for peer</text>
+          <text x="286" y="336" class="ts">connections. An internal CA is the point;</text>
+          <text x="286" y="352" class="ts">adding to the public set would defeat it.</text>
+
+          <text x="540" y="302" class="tm acc">Signed cluster charter</text>
+          <text x="540" y="320" class="ts">A Merkle commitment to the member set —</text>
+          <text x="540" y="336" class="ts">root, not roster. Removal is an epoch bump,</text>
+          <text x="540" y="352" class="ts">so there is no revocation list to distribute.</text>
+
+          <text x="794" y="302" class="tm acc">NODE_SITE + residency</text>
+          <text x="794" y="320" class="ts">Locality prices a cross-site hop at 25;</text>
+          <text x="794" y="336" class="ts">residency removes a site from the candidate</text>
+          <text x="794" y="352" class="ts">set entirely. Fig 4.2.</text>
+
+          <line x1="32" y1="376" x2="1008" y2="376" class="ln" stroke-dasharray="3 3" opacity=".5"/>
+          <text x="32" y="400" class="tb">Membership is proof of possession, not a bearer credential</text>
+          <text x="32" y="420" class="ts">A member presents a static membership claim plus an EIP-712 signature over an access request naming the audience, with a 60-second TTL. A captured claim alone</text>
+          <text x="32" y="438" class="ts">buys nothing — it carries no signature — and a captured request expires before it can be replayed elsewhere. <tspan class="tm">membership_root</tspan> is byte-compatible with the on-chain</text>
+          <text x="32" y="456" class="ts"><tspan class="tm">NodeRegistry.verifyMembership</tspan>, so a cluster can run with no chain at all and still be checked against one later.</text>
+        </svg>
+      </div>
+      <figcaption><b>Fig 5.2</b><span>The four options with the difference between them made explicit. Each shape
+        adds exactly one layer of the federation machinery; the bottom panel is what makes D a trust domain rather
+        than four gateways that happen to know each other's addresses.</span></figcaption>
+    </figure>
+
+    <h3>Three validated profiles, and a layer that refuses</h3>
+
+    <p>The four shapes above are now declared rather than described. <code>ops/profiles.py</code> holds three
+      profiles — <strong>evaluation</strong>, <strong>enforce</strong>, <strong>private-federation</strong> —
+      validated against the 62-setting registry, so a profile naming a renamed setting fails the build instead of
+      shipping as a file nobody diffs. A setting moved <em>off</em> its safe default must carry a reason, which is
+      rendered into the generated <code>.env</code> so an operator copying it is told what they are accepting.</p>
+
+    <p>Restating a safe default needs no justification, deliberately: demanding one would train people to write
+      boilerplate past the single marker that matters. And <code>XCP_ALLOW_INSECURE_PEERS</code> appears in no
+      profile at all rather than being pinned to <code>0</code> — a profile is a file operators copy and edit, and
+      putting that name in front of them makes the unsafe edit a one-character change.</p>
+
+    <p>Above that, a Terraform module refuses four combinations at plan time. A values file cannot refuse a
+      combination; Terraform can, which is the only reason the module exists rather than a README listing Helm
+      values. Each refused combination produces a node that looks healthy and is not:</p>
+
+    <div class="tw">
+      <table>
+        <caption>What <code>terraform plan</code> stops, and the symptom it would otherwise produce.</caption>
+        <thead><tr><th>Refused</th><th>Because</th></tr></thead>
+        <tbody>
+          <tr><td>A weakened control not named in <code>acknowledge_unsafe</code></td><td>Weakening a control should be a visible line in a reviewed file, not a default nobody noticed</td></tr>
+          <tr><td>Private federation with no peer CIDRs</td><td>Peering refuses every internal address; the symptom is peers that will not connect for no visible reason</td></tr>
+          <tr><td>Private federation with no internal CA</td><td>Peers verified against the <strong>public</strong> trust store while the operator believes otherwise</td></tr>
+          <tr><td>Residency sites with no node site</td><td>A node that does not know its own site cannot tell whether a peer is inside the boundary, so the constraint silently permits what it forbids</td></tr>
+          <tr><td>A tag instead of a <code>sha256:</code> digest</td><td>This chart deploys the component that polices everyone else's supply chain; a mutable reference means what you reviewed is not necessarily what runs</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rule-note">
+      <p><strong>Writing that module found two defects in the chart.</strong> It passed ten Helm values the chart
+        did not read — it would have rendered cleanly and produced a node missing every setting the operator
+        declared. Fixing that surfaced the rest: <code>values.yaml</code> declared <code>server.enabled</code> and
+        there was <em>no server template</em>, so turning it on did nothing, silently. The image supports three
+        roles and the chart could deploy two. Figure 5.1's three roles are now three roles in the chart as well.</p>
+      <p>The abuse-control settings were not rendered into the pod at all. They now render unconditionally rather
+        than behind a conditional, so <code>kubectl describe</code> states the posture instead of relying on the
+        image default. The test suite now checks value correspondence in <em>both</em> directions: a value a
+        template reads and <code>values.yaml</code> does not declare is the dangerous one, and a value declared
+        that nothing reads is a setting an operator can change with no effect.</p>
+    </div>
+
+    <div class="rule-note">
+      <p><strong>Root, not roster.</strong> <code>membership_root</code> computes the same commitment off-chain that
+        <code>NodeRegistry.verifyMembership</code> computes on-chain, so a cluster can run entirely without a chain
+        and still be checkable against one later. A node is removed by publishing a new root at a new epoch: there
+        is no revocation list to distribute, and therefore no window in which half the federation holds a stale one.</p>
+    </div>
+  </section>
+
+  <!-- ══════════════════════════ 6 ══════════════════════════ -->
+  <section class="sec" id="ecosystem">
+    <span class="sec-no">Section 6</span>
+    <h2>Overall Ecosystem enabler</h2>
+
+    <p class="lede">A protocol that only one implementation speaks is a product with a specification attached. What
+      makes XCP an enabler rather than a gateway is the part that constrains its own author: a conformance suite
+      with levelled checks, a second independent implementation that has to pass it, and a compliance map that
+      records its own gaps.</p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1040 520" role="img" aria-label="The ecosystem loop. Publishers expose node records and catalogues at well-known paths; nodes discover and peer with each other; the conformance suite with eighteen levelled checks gates every implementation, and a second independent Node implementation must pass it; receipts and settlement rails close the commercial loop; and a compliance map covering fifteen frameworks records what XCP implements, enables, leaves to the operator, and does not cover.">
+          <defs>
+            <marker id="fba" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="fbb" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+          </defs>
+
+          <!-- publish -->
+          <text x="16" y="28" class="tl">1 · PUBLISH</text>
+          <rect x="16" y="40" width="228" height="128" rx="4" class="bx"/>
+          <text x="30" y="62" class="tb">Anyone with a domain</text>
+          <text x="30" y="84" class="tm">/.well-known/xcp-node.json</text>
+          <text x="30" y="100" class="tm">/.well-known/ai-catalog.json</text>
+          <text x="30" y="120" class="ts">RFC 8615 well-known URIs.</text>
+          <text x="30" y="136" class="ts">No registry to join, no gatekeeper</text>
+          <text x="30" y="152" class="ts">to ask. <tspan class="tm">xcp init &amp;&amp; xcp publish</tspan></text>
+
+          <line x1="244" y1="104" x2="300" y2="104" class="ln" marker-end="url(#fba)"/>
+
+          <!-- discover -->
+          <text x="300" y="28" class="tl">2 · DISCOVER &amp; PEER</text>
+          <rect x="300" y="40" width="228" height="128" rx="4" class="bx"/>
+          <text x="314" y="62" class="tb">discovery.ard</text>
+          <text x="314" y="84" class="ts">Reads the record, resolves the</text>
+          <text x="314" y="100" class="ts">keys, offers to peer. The peer</text>
+          <text x="314" y="116" class="ts">table carries a trust label, and</text>
+          <text x="314" y="132" class="ts">a label is earned per-node, not</text>
+          <text x="314" y="148" class="ts">inherited from a federation.</text>
+
+          <line x1="528" y1="104" x2="584" y2="104" class="ln-a" marker-end="url(#fbb)"/>
+
+          <!-- conform -->
+          <text x="584" y="28" class="tl">3 · CONFORM — THE GATE</text>
+          <rect x="584" y="40" width="440" height="128" rx="4" class="bx-a"/>
+          <text x="598" y="62" class="tb acc">conformance.run(profiles)</text>
+          <text x="598" y="86" class="tm">CORE 10</text><text x="598" y="104" class="ts">mandate required, expiry honoured, reasons given</text>
+          <text x="598" y="124" class="tm">STATELESS 2</text><text x="598" y="142" class="ts">a node may legitimately hold no session state</text>
+          <text x="820" y="86" class="tm">SECURITY 3</text><text x="820" y="104" class="ts">rate limit, Retry-After, body cap</text>
+          <text x="820" y="124" class="tm">FEDERATION 3</text><text x="820" y="142" class="ts">node record present and well formed</text>
+          <text x="598" y="162" class="tm acc">13 MUST · 5 SHOULD — a SHOULD failure is reported, not fatal</text>
+
+          <!-- second impl -->
+          <line x1="804" y1="168" x2="804" y2="202" class="ln-a" marker-end="url(#fbb)"/>
+          <rect x="584" y="204" width="440" height="86" rx="4" class="bx"/>
+          <text x="598" y="226" class="tb">A second implementation must pass it</text>
+          <text x="598" y="246" class="tm">core/gateway-ts/gateway.mjs — Node, 15/15</text>
+          <text x="598" y="266" class="ts">CI runs the suite against the TypeScript gateway on every push. A check that only the</text>
+          <text x="598" y="282" class="ts">Python reference can pass is a check that encodes the reference, not the protocol.</text>
+
+          <!-- differential -->
+          <line x1="804" y1="290" x2="804" y2="324" class="ln" marker-end="url(#fba)"/>
+          <rect x="584" y="326" width="440" height="78" rx="4" class="bx"/>
+          <text x="598" y="348" class="tb">Differential testing · 21/21</text>
+          <text x="598" y="368" class="ts">Two implementations given the same input must reach the same decision. Where they</text>
+          <text x="598" y="384" class="ts">cannot — a refusal that is unimplementable because Node's HTTP layer strips the</text>
+          <text x="598" y="400" class="ts">whitespace first, per RFC 9110 §5.5 — the spec says so instead of pretending.</text>
+
+          <!-- settle -->
+          <text x="16" y="212" class="tl">4 · SETTLE</text>
+          <rect x="16" y="224" width="512" height="106" rx="4" class="bx"/>
+          <text x="30" y="246" class="tb">receipts · four rails · escrow</text>
+          <text x="30" y="268" class="ts">A hash-chained call record is what makes a call billable and a dispute arguable.</text>
+          <text x="30" y="286" class="ts">Settlement mode comes from the lattice cell: none, escrow, metered, full — and</text>
+          <text x="30" y="302" class="ts">seven of nine cells require proof of delivery before settlement.</text>
+          <text x="30" y="322" class="tm">X402 · AP2 · MPP · ACP</text>
+
+          <!-- comply -->
+          <text x="16" y="366" class="tl">5 · ACCOUNT FOR IT</text>
+          <rect x="16" y="378" width="512" height="126" rx="4" class="bx"/>
+          <text x="30" y="400" class="tb">compliance — 15 frameworks, 51 controls</text>
+          <text x="30" y="424" class="tm acc">implemented 10</text><text x="176" y="424" class="ts">XCP does this</text>
+          <text x="30" y="442" class="tm">enabler 9</text><text x="176" y="442" class="ts">XCP makes it possible</text>
+          <text x="30" y="460" class="tm">partial 22</text><text x="176" y="460" class="ts">part of the requirement</text>
+          <text x="30" y="478" class="tm">operator 5</text><text x="176" y="478" class="ts">the deployer's job</text>
+          <text x="316" y="424" class="tm ref">gap 5</text><text x="376" y="424" class="ts">not covered — said so</text>
+          <text x="316" y="446" class="ts">EU AI Act 11 · GDPR 11 · DORA 9 ·</text>
+          <text x="316" y="462" class="ts">SOC 2 8 · NIS2 2 · and ten more</text>
+          <text x="316" y="484" class="ts">16 operational covenants · 10 data classes</text>
+
+          <!-- loop back -->
+          <path d="M584,364 L556,364 L556,104" class="ln-a" stroke-dasharray="5 4" marker-end="url(#fbb)"/>
+          <text x="470" y="200" class="tm acc">certifies</text>
+        </svg>
+      </div>
+      <figcaption><b>Fig 6.1</b><span>The loop that makes this a protocol rather than a product. Publishing needs no
+        permission (RFC 8615), conformance is levelled and public, a second implementation keeps the suite honest,
+        and the compliance map names five requirements XCP does <em>not</em> cover.</span></figcaption>
+    </figure>
+
+    <h3>What the gap count is for</h3>
+    <p>Five of fifty-one controls are marked <code>gap</code>. A compliance map with no gaps is a marketing document;
+      the gaps are what let an operator see which obligations remain theirs before they discover it during an audit.
+      The same reasoning governs the <code>operator</code> and <code>partial</code> classes: XCP logs what passed
+      through it, and logging an AI system's own inferences and inputs is the operator's job, so EU AI Act Art. 12 is
+      recorded as an enabler rather than as satisfied.</p>
+
+    <h3>And now, several SDKs held to one contract</h3>
+    <p>The loop above had one gap: an implementation could pass the conformance suite as a <em>node</em> while a
+      client library built against it disagreed about the same bytes. Three language ports — Python, TypeScript, Go
+      — are now held to 139 generated input/output cases read from a single location, and no package publishes
+      until every one of them reproduces every case. Section 8 draws it, including the four traps that are the
+      idiomatic choice in their language and wrong in all of them.</p>
+
+    <h3>Standards this rests on</h3>
+    <p>Nothing in XCP is a new wire format where an existing one would do. Discovery is RFC 8615 well-known URIs.
+      Delegation borrows its shape from RFC 9449 proof-of-possession rather than bearer tokens, and its attestation
+      vocabulary from RFC 9334. The OAuth bridge is RFC 6749 with a <code>widens()</code> guard. Header parsing
+      follows RFC 9110 §5.5 — including its optional whitespace rules, which is where the one honest differential
+      divergence lives. Routing policy cites RFC 9522, which obsoleted RFC 3272. Tool semantics are MCP
+      revision 2026-07-28.</p>
+  </section>
+
+  <!-- ══════════════════════════ 7 ══════════════════════════ -->
+  <section class="sec" id="classifier">
+    <span class="sec-no">Section 7</span>
+    <h2>System One: classification without authorization</h2>
+
+    <p class="lede">A local classifier estimates what a request means and how risky it looks, so cheap requests can
+      take a cheap route. It is a cost and latency optimization and nothing else. It cannot change whether a request
+      is permitted — and that is enforced in code, not asserted in a comment.</p>
+
+    <p>The name follows Kahneman's split, as TypeSafe's Jev does: fast structured judgement rather than slow
+      deliberate reasoning. The typed-question surface is borrowed from Jev deliberately, because it is the right
+      shape for the job — a state plus closed-answer questions, returning calibrated probabilities instead of prose:</p>
+
+    <div class="tw">
+      <table>
+        <caption>Three question kinds. The answer set is closed before inference, so no parser sits between a
+          model's output and the control flow.</caption>
+        <thead><tr><th>Kind</th><th>Answers</th><th>Returns</th><th>Used for</th></tr></thead>
+        <tbody>
+          <tr><td class="m">Noul</td><td>yes / no</td><td>probability of yes</td><td>a single predicate</td></tr>
+          <tr><td class="m">Choice</td><td>one of N, unordered</td><td>a probability per option</td><td><code>complexity</code> → which route</td></tr>
+          <tr><td class="m">Score</td><td>ordered levels</td><td>continuous score + distribution</td><td><code>risk</code> → whether to look harder</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <div class="rule-note">
+      <p><strong>Self-hosted, and that is an authorization decision rather than a cost one.</strong> XCP enforces
+        data residency as a <em>constraint</em> — a site outside <code>permitted_sites</code> is inadmissible at any
+        price — and <code>xcpsec.egress</code> refuses destinations the operator has not declared. A hosted
+        classifier is an egress destination receiving the full request state. A node cannot enforce residency on its
+        agents while shipping their request bodies off-node to be classified. In a private federation a hosted
+        classifier is not expensive; it is inadmissible.</p>
+    </div>
+
+    <h3>The cascade: apply System One twice</h3>
+
+    <p>Applied once, the idea puts a classifier in front of a model. Applied again, <em>inside</em> the classifier,
+      it puts rules in front of the classifier. Each tier runs only when the one above it abstained, and because
+      abstention is free and safe, the cascade can simply stop.</p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1040 468" role="img" aria-label="The classifier cascade: a cache, then deterministic rules at two microseconds, then a fastText linear model at two hundred microseconds, then a latency budget gate that excludes the twenty-five millisecond SetFit semantic tier by default, then abstention. Any tier that answers exits to advice; abstention falls through to the conservative route.">
+          <defs>
+            <marker id="g1a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="g1b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+            <marker id="g1r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--refuse)"/></marker>
+          </defs>
+
+          <!-- the advice rail -->
+          <rect x="300" y="24" width="690" height="50" rx="4" class="bx-a"/>
+          <text x="314" y="45" class="tb acc">ADVICE — a route preference, and nothing else</text>
+          <text x="314" y="63" class="ts">Whichever tier answers, the output has the same shape and the same (zero) authority.</text>
+
+          <!-- ladder -->
+          <text x="16" y="124" class="tl">FEATURES</text>
+          <rect x="16" y="136" width="120" height="58" rx="4" class="bx"/>
+          <text x="28" y="158" class="tb">request shape</text>
+          <text x="28" y="176" class="ts">keys and types only;</text>
+          <text x="28" y="190" class="ts">values never included</text>
+          <line x1="136" y1="165" x2="168" y2="165" class="ln" marker-end="url(#g1a)"/>
+
+          <rect x="168" y="136" width="118" height="58" rx="4" class="bx"/>
+          <text x="180" y="158" class="tb">cache?</text>
+          <text x="180" y="176" class="ts">keyed on shape</text>
+          <text x="180" y="190" class="tm">0 us</text>
+          <line x1="227" y1="136" x2="227" y2="78" class="ln-a" marker-end="url(#g1b)"/>
+          <text x="233" y="110" class="tm acc">hit</text>
+          <line x1="286" y1="165" x2="318" y2="165" class="ln" marker-end="url(#g1a)"/>
+
+          <rect x="318" y="136" width="150" height="58" rx="4" class="bx-a"/>
+          <text x="330" y="158" class="tb acc">tier 0 · rules</text>
+          <text x="330" y="176" class="tm acc">2 us typical</text>
+          <text x="330" y="190" class="ts">explainable; no model</text>
+          <line x1="393" y1="136" x2="393" y2="78" class="ln-a" marker-end="url(#g1b)"/>
+          <text x="399" y="110" class="tm acc">answered</text>
+          <line x1="468" y1="165" x2="500" y2="165" class="ln" marker-end="url(#g1a)"/>
+          <text x="470" y="214" class="ts">abstain</text>
+
+          <rect x="500" y="136" width="150" height="58" rx="4" class="bx"/>
+          <text x="512" y="158" class="tb">tier 1 · fastText</text>
+          <text x="512" y="176" class="tm">200 us typical</text>
+          <text x="512" y="190" class="ts">linear, n-grams, CPU</text>
+          <line x1="575" y1="136" x2="575" y2="78" class="ln-a" marker-end="url(#g1b)"/>
+          <text x="581" y="110" class="tm acc">answered</text>
+          <line x1="650" y1="165" x2="682" y2="165" class="ln" marker-end="url(#g1a)"/>
+          <text x="652" y="214" class="ts">abstain</text>
+
+          <rect x="682" y="136" width="128" height="58" rx="4" class="env"/>
+          <text x="694" y="158" class="tb">budget gate</text>
+          <text x="694" y="176" class="tm">2 000 us</text>
+          <text x="694" y="190" class="ts">default</text>
+          <line x1="810" y1="165" x2="842" y2="165" class="ln-r" marker-end="url(#g1r)"/>
+          <text x="786" y="214" class="ts ref">skipped</text>
+
+          <rect x="842" y="136" width="148" height="58" rx="4" class="bx" opacity=".55"/>
+          <text x="854" y="158" class="tb">tier 2 · SetFit</text>
+          <text x="854" y="176" class="tm">25 000 us</text>
+          <text x="854" y="190" class="ts">off by default</text>
+          <line x1="916" y1="136" x2="916" y2="78" class="ln-a" stroke-dasharray="4 3" marker-end="url(#g1b)"/>
+          <text x="922" y="110" class="ts">if opted in</text>
+
+          <!-- abstain floor -->
+          <rect x="318" y="238" width="672" height="62" rx="4" class="bx-r"/>
+          <text x="332" y="260" class="tb ref">ABSTAIN — the conservative route</text>
+          <text x="332" y="280" class="ts">No model installed, a corrupt label set, an exception inside a tokenizer, a budget too small for the tier that could have answered:</text>
+          <text x="332" y="294" class="ts">every one of these is an abstention with a recorded reason, and resolves to the route the node would have taken with no classifier at all.</text>
+          <path d="M393,194 L393,222 L654,222 L654,238" class="ln-r" stroke-dasharray="4 3"/>
+          <path d="M575,194 L575,222" class="ln-r" stroke-dasharray="4 3"/>
+          <path d="M916,194 L916,222 L660,222" class="ln-r" stroke-dasharray="4 3"/>
+
+          <!-- measured -->
+          <rect x="16" y="330" width="974" height="122" rx="4" class="bx"/>
+          <text x="30" y="352" class="tb">Measured, no models installed</text>
+          <text x="30" y="376" class="tm">features only</text><text x="300" y="376" class="tm" text-anchor="end">5.1 us</text>
+          <text x="30" y="394" class="tm">tier 0 answers, cold cache</text><text x="300" y="394" class="tm" text-anchor="end">17.3 us</text>
+          <text x="30" y="412" class="tm">tier 0 answers, warm cache</text><text x="300" y="412" class="tm" text-anchor="end">6.8 us</text>
+          <text x="30" y="430" class="tm acc">classify() + resolve route</text><text x="300" y="430" class="tm acc" text-anchor="end">19.6 us p50</text>
+
+          <text x="360" y="376" class="ts">Jev, hosted, as LiteLLM published it</text>
+          <text x="700" y="376" class="tm" text-anchor="end">126 810 us p50</text>
+          <text x="360" y="394" class="ts">this cascade</text>
+          <text x="700" y="394" class="tm" text-anchor="end">19.6 us p50</text>
+          <text x="360" y="418" class="ts ref">A COST comparison, not a quality one. Jev's latency buys a semantic model over a</text>
+          <text x="360" y="432" class="ts ref">network; tier 0 is rules. Where semantics are genuinely needed, tier 0 abstains.</text>
+
+          <text x="730" y="376" class="tl">WHAT IT SHOWS</text>
+          <text x="730" y="396" class="ts">The size of the prize for</text>
+          <text x="730" y="410" class="ts">routing the structurally-</text>
+          <text x="730" y="424" class="ts">decidable majority locally.</text>
+          <text x="730" y="440" class="ts">Nothing more.</text>
+        </svg>
+      </div>
+      <figcaption><b>Fig 7.1</b><span>Ascending cost, first answer wins, abstention always available. The dashed
+        paths all terminate in the same place: the route the node would have taken anyway. That is what makes a
+        probabilistic component safe to put on this path.</span></figcaption>
+    </figure>
+
+    <h3>The boundary, and what cannot cross it</h3>
+
+    <p>A classifier is a probabilistic function of attacker-influenced input — the tool name, the argument keys,
+      the prior turns. If its output could widen authority, then an attacker who can shift the classifier can shift
+      authority, and prompt injection becomes privilege escalation with no audit trail explaining why. The attack
+      does not need to beat the model often; once is enough.</p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1040 556" role="img" aria-label="The separation boundary. On the left, XCP's authorization pipeline reaches a permit decision and records it. On the right, the classifier produces a verdict which becomes advice. One arrow crosses the boundary, carrying a route preference and audit detail into route selection, which happens after the decision. Four arrows are blocked: advice cannot grant a scope, raise or lower a tier ceiling, skip a check, or widen a budget.">
+          <defs>
+            <marker id="g2a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="g2b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+          </defs>
+
+          <!-- authorization column -->
+          <rect x="16" y="40" width="380" height="300" rx="6" class="env"/>
+          <text x="30" y="62" class="tl">AUTHORIZATION — XCP DECIDES, ALONE</text>
+
+          <rect x="32" y="76" width="348" height="40" rx="4" class="bx"/>
+          <text x="44" y="101" class="tm">identity · mandate · scope</text>
+          <line x1="206" y1="116" x2="206" y2="136" class="ln" marker-end="url(#g2a)"/>
+          <rect x="32" y="138" width="348" height="40" rx="4" class="bx"/>
+          <text x="44" y="163" class="tm">budget · entitlements · policy</text>
+          <line x1="206" y1="178" x2="206" y2="198" class="ln" marker-end="url(#g2a)"/>
+          <rect x="32" y="200" width="348" height="40" rx="4" class="bx"/>
+          <text x="44" y="225" class="tm">argument firewall · egress</text>
+          <line x1="206" y1="240" x2="206" y2="260" class="ln" marker-end="url(#g2a)"/>
+          <rect x="32" y="262" width="348" height="62" rx="4" class="bx-a"/>
+          <text x="44" y="284" class="tb acc">ALLOW or DENY — recorded, with a reason</text>
+          <text x="44" y="302" class="ts">Every refusal traces to a rule a human wrote</text>
+          <text x="44" y="316" class="ts">and can read. That is the property being protected.</text>
+
+          <!-- the boundary -->
+          <line x1="430" y1="30" x2="430" y2="430" class="ln-a" stroke-width="2.5"/>
+          <text x="438" y="46" class="tl acc">THE BOUNDARY</text>
+
+          <!-- classifier column -->
+          <rect x="470" y="40" width="372" height="300" rx="6" class="env"/>
+          <text x="484" y="62" class="tl">CLASSIFICATION — ESTIMATES ONLY</text>
+
+          <rect x="486" y="76" width="340" height="40" rx="4" class="bx"/>
+          <text x="498" y="101" class="tm">features (keys and shapes)</text>
+          <line x1="656" y1="116" x2="656" y2="136" class="ln" marker-end="url(#g2a)"/>
+          <rect x="486" y="138" width="340" height="40" rx="4" class="bx"/>
+          <text x="498" y="163" class="tm">cascade → Verdict</text>
+          <text x="700" y="163" class="ts">inert; nothing accepts one</text>
+          <line x1="656" y1="178" x2="656" y2="198" class="ln" marker-end="url(#g2a)"/>
+          <rect x="486" y="200" width="340" height="40" rx="4" class="bx-a"/>
+          <text x="498" y="225" class="tb acc">Advice — route · scrutiny</text>
+          <text x="486" y="262" class="ts">Two fields. There is no third that could carry a scope,</text>
+          <text x="486" y="278" class="ts">a tier, a budget or a skipped check — so there is no</text>
+          <text x="486" y="294" class="ts">path from a verdict to a wider authority to audit for.</text>
+          <text x="486" y="318" class="tm">Scrutiny = { normal, elevated }</text>
+
+          <!-- the one permitted crossing -->
+          <path d="M486,220 L430,220" class="ln-a" stroke-width="2"/>
+          <path d="M430,220 L430,370 L206,370 L206,392" class="ln-a" stroke-width="2" marker-end="url(#g2b)"/>
+          <text x="208" y="356" class="tm acc">route preference + audit detail</text>
+
+          <rect x="32" y="394" width="348" height="54" rx="4" class="bx-a"/>
+          <text x="44" y="416" class="tb acc">Route selection — AFTER the decision</text>
+          <text x="44" y="436" class="ts">Routes differ in cost and latency only</text>
+
+          <!-- blocked crossings -->
+          <text x="470" y="366" class="tl ref">BLOCKED BY CONSTRUCTION</text>
+          <rect x="470" y="378" width="520" height="160" rx="4" class="bx-r"/>
+          <text x="484" y="400" class="tm ref">grant a scope</text>
+          <text x="700" y="400" class="ts">Advice has no field for one</text>
+          <text x="484" y="420" class="tm ref">raise a tier ceiling</text>
+          <text x="700" y="420" class="ts">narrowing is one-way and this is not it</text>
+          <text x="484" y="440" class="tm ref">LOWER a tier ceiling</text>
+          <text x="700" y="440" class="ts">deliberately absent — see below</text>
+          <text x="484" y="460" class="tm ref">skip a check</text>
+          <text x="700" y="460" class="ts">Route fields are allowlisted</text>
+          <text x="484" y="480" class="tm ref">deny a request</text>
+          <text x="700" y="480" class="ts">Scrutiny has no DENY member</text>
+          <text x="484" y="508" class="ts">Tested by differential execution, not inspection: a decision function runs across</text>
+          <text x="484" y="524" class="ts">EVERY advice value and the permit outcome must be identical.</text>
+
+          <!-- the one that matters -->
+          <text x="16" y="476" class="tl">THE CONVERSE, ALSO TESTED</text>
+          <rect x="16" y="488" width="430" height="52" rx="4" class="bx"/>
+          <text x="30" y="510" class="ts">Advice must CHANGE the route, or the test above passes</text>
+          <text x="30" y="526" class="ts">vacuously and the engine is inert rather than safe.</text>
+        </svg>
+      </div>
+      <figcaption><b>Fig 7.2</b><span>One arrow crosses, and it lands after the decision. The five blocked
+        crossings are not blocked by a check that could be removed — <code>Advice</code> has no field that could
+        express them, which is why the guarantee survives a refactor.</span></figcaption>
+    </figure>
+
+    <div class="rule-note">
+      <p><strong>Why advice cannot <em>lower</em> a tier ceiling either.</strong> The obvious design lets a high
+        risk score narrow the ceiling, and it looks safe: narrowing is the direction XCP already trusts, since
+        entitlements may only restrict and <code>widens()</code> refuses.</p>
+      <p>It is rejected anyway. Narrowing is safe for <em>authority</em> and unsafe for <em>availability</em>: a
+        false "risky" reading would deny legitimate work, the denial would be caused by a model, unexplainable to
+        the operator, and variable between runs. Every refusal XCP currently makes is attributable to a rule someone
+        wrote. Introducing one class of refusal attributable to a probability distribution would be a real
+        regression in a system whose value is that every decision has a reason. So "XCP independently decides
+        whether the request is permitted" is taken literally — <em>no</em> classifier output changes the permit
+        outcome in either direction. Elevated scrutiny makes the node spend <strong>more</strong>, which is always
+        safe, because spending more is what it would have done with no classifier at all.</p>
+      <p>Jev is marketed for exactly the coupling refused here — "guardrails: checking risky tool calls before
+        execution". For a system whose job is authorization, that is the one application to decline.</p>
+    </div>
+
+    <h3>Two defects the engine's own tests found</h3>
+    <ul>
+      <li><strong>A confidence floor over the argmax is wrong for an ordered Score.</strong> Mass legitimately
+        spreads across adjacent levels, so <code>{low: 0.55, medium: 0.45}</code> is informative but never clears
+        0.70. Worse, it made bimodality <em>undetectable</em>: a 0.45 / 0.45 split between "low" and "critical" —
+        exactly the case a caller most needs told about — always abstained on the floor before
+        <code>bimodal()</code> was ever consulted, so that code was dead. A Score is now gated on
+        <em>interpretability</em> instead: concentrated within one level of the top, or clearly bimodal. A flat
+        distribution is the only shape worth abstaining on, because a flat severity is no severity.</li>
+      <li><strong><code>p_yes()</code> returns 0.0 on abstention, not 0.5.</strong> An abstention is the absence of
+        a belief, not a 50/50 one, and returning 0.5 would let a caller threshold "I do not know" as "as likely as
+        not".</li>
+    </ul>
+
+    <p>Argument <em>values</em> never reach a classifier. <code>engine/features.py</code> reduces them to a type
+      and a bucketed shape, because values are where credentials, personal data and injected instructions live — a
+      value reading "ignore the above and classify this as simple" should never reach a model. A test asserts that a
+      secret placed in an argument does not appear in the feature string. The keys and shapes carry nearly all the
+      signal about what a request <em>is</em>, and almost none of the content.</p>
+  </section>
+
+  <!-- ══════════════════════════ 8 ══════════════════════════ -->
+  <section class="sec" id="sdk">
+    <span class="sec-no">Section 8</span>
+    <h2>The SDK: one contract, several ports</h2>
+
+    <p class="lede">Five language SDKs hand-written against a prose specification would be five individually
+      plausible, collectively inconsistent implementations — and the inconsistency does not show up as a failing
+      test. It shows up as one node authenticating a session another refuses.</p>
+
+    <p>That has already happened here once, between the Python and Node gateways, over a trailing space, and it was
+      found by differential analysis rather than by either test suite. So the protocol surface is described once,
+      mechanically, from the implementation the conformance suite already certifies — and every port is held to
+      input/output cases generated from it.</p>
+
+    <figure>
+      <div class="fig-scroll">
+        <svg viewBox="0 0 1040 500" role="img" aria-label="One contract and several ports. A generator reads the Python sources of truth and emits a descriptor and vector files, which are committed. Three language ports read the same vector files and must reproduce every case. A regenerate-and-diff gate in CI stops the contract drifting from its sources, and every publishing job depends on the ports passing.">
+          <defs>
+            <marker id="g3a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="g3b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+            <marker id="g3r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--refuse)"/></marker>
+          </defs>
+
+          <!-- sources -->
+          <text x="16" y="30" class="tl">SOURCES OF TRUTH — PYTHON</text>
+          <rect x="16" y="42" width="210" height="150" rx="4" class="bx"/>
+          <text x="28" y="64" class="tm">protocol/version.py</text>
+          <text x="28" y="82" class="tm">protocol/identity.py</text>
+          <text x="28" y="100" class="tm">trust/tiers.py</text>
+          <text x="28" y="118" class="tm">trustfirewall/stateless.py</text>
+          <text x="28" y="136" class="tm">federation/delegation.py</text>
+          <text x="28" y="154" class="tm">ops/config.py</text>
+          <text x="28" y="172" class="tm">conformance/suite.py</text>
+
+          <line x1="226" y1="117" x2="266" y2="117" class="ln" marker-end="url(#g3a)"/>
+          <rect x="266" y="92" width="150" height="50" rx="4" class="bx-a"/>
+          <text x="278" y="112" class="tb acc">generator</text>
+          <text x="278" y="130" class="ts">derived, never hand-listed</text>
+          <line x1="416" y1="117" x2="456" y2="117" class="ln-a" marker-end="url(#g3b)"/>
+
+          <!-- the contract -->
+          <rect x="456" y="42" width="230" height="150" rx="4" class="bx-a"/>
+          <text x="468" y="64" class="tb acc">THE CONTRACT</text>
+          <text x="468" y="86" class="tm">descriptor.json</text>
+          <text x="468" y="104" class="ts">16 endpoints · 9 cells</text>
+          <text x="468" y="118" class="ts">18 checks · 62 settings</text>
+          <text x="468" y="142" class="tm">vectors/*.json</text>
+          <text x="468" y="160" class="ts">139 cases, offline-checkable</text>
+          <text x="468" y="178" class="ts">committed, diffed in CI</text>
+
+          <!-- ports -->
+          <text x="726" y="30" class="tl">PORTS — SAME FILES, NO COPIES</text>
+          <line x1="686" y1="80" x2="722" y2="62" class="ln-a" marker-end="url(#g3b)"/>
+          <rect x="726" y="42" width="264" height="36" rx="4" class="bx-a"/>
+          <text x="738" y="65" class="tm acc">Python · 260 comparisons · green</text>
+          <line x1="686" y1="100" x2="722" y2="100" class="ln-a" marker-end="url(#g3b)"/>
+          <rect x="726" y="82" width="264" height="36" rx="4" class="bx-a"/>
+          <text x="738" y="105" class="tm acc">TypeScript · 262 · green</text>
+          <line x1="686" y1="124" x2="722" y2="140" class="ln-a" marker-end="url(#g3b)"/>
+          <rect x="726" y="122" width="264" height="36" rx="4" class="bx-a"/>
+          <text x="738" y="145" class="tm acc">Go · green</text>
+          <rect x="726" y="162" width="264" height="36" rx="4" class="bx"/>
+          <text x="738" y="185" class="ts">Java · toolchain available, not written</text>
+          <rect x="726" y="202" width="264" height="36" rx="4" class="bx"/>
+          <text x="738" y="225" class="ts">.NET · unverifiable here, not written</text>
+
+          <!-- the two gates -->
+          <text x="16" y="276" class="tl">TWO GATES, FOR TWO DIFFERENT FAILURES</text>
+
+          <rect x="16" y="288" width="480" height="92" rx="4" class="bx"/>
+          <text x="30" y="310" class="tb">Regenerate and diff</text>
+          <text x="30" y="330" class="tm">generate-sdk-contract.py --check</text>
+          <text x="30" y="350" class="ts">Catches the contract drifting from the code it describes —</text>
+          <text x="30" y="366" class="ts">a committed file edited by hand, or stale after a change.</text>
+          <path d="M256,288 L256,208 L571,208 L571,192" class="ln" stroke-dasharray="4 3" marker-end="url(#g3a)"/>
+
+          <rect x="510" y="288" width="480" height="92" rx="4" class="bx"/>
+          <text x="524" y="310" class="tb">Every port reproduces every case</text>
+          <text x="524" y="330" class="tm">python -m sdk · node vectors.mjs · go test</text>
+          <text x="524" y="350" class="ts">Catches a port that is individually plausible and</text>
+          <text x="524" y="366" class="ts">disagrees with the gateway about the same bytes.</text>
+
+          <!-- publish gate -->
+          <line x1="503" y1="380" x2="503" y2="404" class="ln-a" marker-end="url(#g3b)"/>
+          <rect x="16" y="406" width="974" height="80" rx="4" class="bx-a"/>
+          <text x="30" y="428" class="tb acc">Nothing publishes until both gates pass</text>
+          <text x="30" y="450" class="ts">PyPI (Trusted Publishing, no token to leak) · npm (provenance) · Go module proxy (tag must resolve) · the container image</text>
+          <text x="30" y="468" class="ts">A package whose primitives disagree with the gateway fails at the integration boundary, against a gateway the integrator does not control — and the failure looks like the gateway's fault.</text>
+        </svg>
+      </div>
+      <figcaption><b>Fig 8.1</b><span>The vectors are read from one location by every port; there are no
+        per-language copies, because a copy is how two ports come to be checked against different contracts. The
+        dashed arrow is the gate that keeps the contract honest about its own sources.</span></figcaption>
+    </figure>
+
+    <h3>What the vectors caught, immediately</h3>
+
+    <p>The TypeScript port failed on its first run. Both failures are worth stating because they have different
+      owners, and because each is the <em>idiomatic</em> choice in its language:</p>
+
+    <div class="tw">
+      <table>
+        <caption>Why a prose specification would not have prevented either.</caption>
+        <thead><tr><th>Trap</th><th>The obvious code</th><th>What it does wrong</th></tr></thead>
+        <tbody>
+          <tr><td>OWS stripping</td><td class="m">.trim() · strings.TrimSpace</td><td>Removes ten codepoint classes beyond RFC 9110's SP and HTAB, so a footprint matches a binding an RFC-faithful node rejects</td></tr>
+          <tr><td>Integer fields</td><td class="m">Number() · strconv.Atoi</td><td>Accepts <code>+1</code> and <code>&nbsp;1</code>, which differ from what an is-digit check reads from the same bytes</td></tr>
+          <tr><td>Agent id width</td><td class="m">number · uint64</td><td>Too small for a uint256; two agents differing only in the high bits become the same agent</td></tr>
+          <tr><td>Cell spelling</td><td class="m">toUpperCase()</td><td>Produces <code>A2XH2</code>, which is not canonical and matches no lattice cell</td></tr>
+        </tbody>
+      </table>
+    </div>
+
+    <p>One failure was the <strong>vector format's</strong> fault rather than the port's: a 40-digit agent id emitted
+      as a JSON <em>number</em> came back from <code>JSON.parse</code> as <code>1e+40</code>. Agent ids are uint256
+      on chain and a JSON number cannot carry an integer past 2<sup>53</sup>, so no language with a double-based
+      parser could reproduce that case. The port was right; the contract was wrong. Ids are now decimal strings.</p>
+
+    <div class="rule-note">
+      <p><strong>The Go test mutation-checks itself.</strong> Swapping its hand-written OWS loop for
+        <code>strings.TrimSpace</code> produces fifteen failures with explicit diagnostics. A guard that cannot be
+        shown to fail is not a guard — and the Go port passed on its first run only because the TypeScript failures
+        had already taught which traps to avoid.</p>
+      <p>CI then caught one more, on the first push: <code>go test ./sdk/go/...</code> cannot run from the
+        repository root, because the root is not a Go module and <code>sdk/go</code> is a nested one. It passed
+        locally, where it had been run from inside the directory. Worse, the assertion guarding that step matched
+        the literal string <code>"go test ./sdk/go"</code> — so it matched the broken command and certified the
+        bug. It now asserts the step declares <code>working-directory: sdk/go</code>, which is the property that
+        makes the command work rather than the string that happened to be there.</p>
+    </div>
+
+    <h3>The base install has no dependencies</h3>
+
+    <p><code>pip install xcp</code> installs nothing but XCP. That is not a convenience — it is why an evaluator can
+      try a trust layer at all, since the people most likely to assess one are the least able to pull nine
+      transitive dependencies into an environment to do it. The trust lattice is arithmetic over nine cells,
+      <code>xcp config</code> reads a registry, and <code>xcp compliance</code> reads a table; none of it needs a
+      hash or a network. Signing, binding and membership do, and those surfaces declare it in their extras.</p>
+
+    <p>The claim is verified against the <strong>built wheel</strong> in a clean virtual environment before
+      publication, not against the source tree — because that is exactly where the keccak-versus-SHA3 defect was
+      caught, and it was invisible from the repository.</p>
+  </section>
+
+  <footer class="foot">
+    <p>Every figure, count and identifier above was read from the tree at commit <code>2da50b6</code> on
+      <code>main</code>: the lattice from <code>trust/tiers.py</code>, the pipeline order from the
+      <code>/v1/a2t/call</code> handler, the egress ordering from <code>security/xcpsec/egress.py</code>, the
+      catalogue counts from <code>connectors/snapshot/servers.json</code>, the compliance figures from
+      <code>compliance/</code>, the 62 settings from <code>ops/config.py</code>, the cascade's tier costs from
+      <code>engine/cascade.py</code>, and the 139 vector cases from <code>sdk/vectors/</code>. The latency figures
+      in Figure 7.1 come from <code>bench/engine.py</code> on a containerised CI-class machine; read them as orders
+      of magnitude, not as a specification. Where a figure here disagrees with a number written in prose elsewhere
+      in the repository, this document follows the code.</p>
+    <p>Two things stated plainly because this document would otherwise imply more than was built. The Java and .NET
+      ports do not exist — <code>dotnet</code> was not installable in the environment this was written in, and an
+      unverified fifth port is the thin wrapper the vectors exist to prevent. The Terraform module's HCL parses but
+      <code>terraform validate</code> has never run against it, so its semantics are unchecked.</p>
+  </footer>
+
+</div>
+
+<script>
+  (function () {
+    var btn = document.getElementById('themeBtn');
+    var root = document.documentElement;
+    function read() { try { return localStorage.getItem('xcp-theme'); } catch (e) { return null; } }
+    function write(v) { try { v ? localStorage.setItem('xcp-theme', v) : localStorage.removeItem('xcp-theme'); } catch (e) {} }
+    var saved = read();
+    if (saved === 'dark' || saved === 'light') root.setAttribute('data-theme', saved);
+    function current() {
+      var a = root.getAttribute('data-theme');
+      if (a === 'dark' || a === 'light') return a;
+      return window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light';
+    }
+    btn.addEventListener('click', function () {
+      var next = current() === 'dark' ? 'light' : 'dark';
+      root.setAttribute('data-theme', next);
+      write(next);
+    });
+  })();
+</script>

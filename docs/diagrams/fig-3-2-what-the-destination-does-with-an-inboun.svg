@@ -1,0 +1,76 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1040" height="436" viewBox="0 0 1040 436" role="img" aria-label="Cross-boundary delegation. A ticket minted in datacentre A asserting tier A2 by H2 is narrowed per leg against the destination's ceiling of A1 by H2, producing an effective tier of A1 by H2. Below, a ticket asserting a lower tier than the effective one is refused by the widens predicate. The destination also checks audience, expiry, peer status, cluster membership, task digest and hop budget.">
+  <style>
+    :root { --bg:#f6f8f7; --surface:#ffffff; --surface-2:#edf2f0; --fg:#141d1c; --fg-2:#3b4a47; --muted:#5f6e6b; --rule:#d5deda; --rule-2:#bdc9c6; --accent:#0a6a62; --accent-wash:#e2efec; --refuse:#9a3326; --refuse-wash:#f8e9e6; color: var(--fg); }
+    @media (prefers-color-scheme: dark) {
+      :root { --bg:#0b1110; --surface:#121a18; --surface-2:#1a2422; --fg:#e6ecea; --fg-2:#c2cecb; --muted:#8b9a96; --rule:#233230; --rule-2:#2e403d; --accent:#49d0be; --accent-wash:#14302c; --refuse:#ef9079; --refuse-wash:#32201b; color: var(--fg); }
+    }
+    .t{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; fill:currentColor}
+    .tb{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:12.5px; font-weight:600; fill:currentColor}
+    .tm{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:11.5px; fill:currentColor}
+    .ts{font-family:ui-sans-serif,system-ui,-apple-system,'Segoe UI',Roboto,'Helvetica Neue',Arial,sans-serif; font-size:11px; fill:currentColor; opacity:.72}
+    .tl{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:10px; letter-spacing:.1em; fill:currentColor; opacity:.62}
+    .big{font-family:ui-monospace,'SF Mono',SFMono-Regular,Menlo,Consolas,'Liberation Mono',monospace; font-size:19px; font-weight:500; fill:currentColor}
+    .acc{fill:var(--accent)} .ref{fill:var(--refuse)}
+    .bx{fill:var(--surface-2); stroke:var(--rule-2); stroke-width:1}
+    .bx-a{fill:var(--accent-wash); stroke:var(--accent); stroke-width:1.4}
+    .bx-r{fill:var(--refuse-wash); stroke:var(--refuse); stroke-width:1.2}
+    .env{fill:none; stroke:var(--rule-2); stroke-width:1; stroke-dasharray:5 4}
+    .ln{stroke:currentColor; stroke-width:1.3; fill:none}
+    .ln-a{stroke:var(--accent); stroke-width:1.8; fill:none}
+    .ln-r{stroke:var(--refuse); stroke-width:1.3; fill:none; stroke-dasharray:5 3}
+  </style>
+  <rect width="100%" height="100%" fill="var(--bg)"/>
+          <defs>
+            <marker id="f6a" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="currentColor"/></marker>
+            <marker id="f6r" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--refuse)"/></marker>
+            <marker id="f6b" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse"><path d="M0,1 L9,5 L0,9 z" fill="var(--accent)"/></marker>
+          </defs>
+
+          <!-- DC A -->
+          <rect x="16" y="40" width="250" height="150" rx="6" class="env"/>
+          <text x="30" y="62" class="tl">DATACENTRE A · SITE eu-west</text>
+          <rect x="32" y="74" width="218" height="46" rx="4" class="bx"/>
+          <text x="44" y="94" class="tb">Agent, tier A2×H2</text><text x="44" y="111" class="ts">verified here, by this node</text>
+          <rect x="32" y="130" width="218" height="46" rx="4" class="bx"/>
+          <text x="44" y="150" class="tm">delegation.mint()</text><text x="44" y="167" class="ts">EIP-712, chain id 8453</text>
+
+          <!-- ticket -->
+          <line x1="266" y1="153" x2="330" y2="153" class="ln" marker-end="url(#f6a)"/>
+          <rect x="330" y="104" width="196" height="118" rx="4" class="bx-a"/>
+          <text x="342" y="124" class="tb acc">DelegationTicket</text>
+          <text x="342" y="144" class="tm">audience: B</text>
+          <text x="342" y="160" class="tm">task: &lt;digest&gt;</text>
+          <text x="342" y="176" class="tm">tier: A2xH2</text>
+          <text x="342" y="192" class="tm">max_hops · depth</text>
+          <text x="342" y="208" class="tm">expires_at</text>
+          <line x1="526" y1="153" x2="590" y2="153" class="ln" marker-end="url(#f6a)"/>
+
+          <!-- DC B -->
+          <rect x="590" y="40" width="434" height="268" rx="6" class="env"/>
+          <text x="604" y="62" class="tl">DATACENTRE B · SITE us-east · DECIDES INDEPENDENTLY</text>
+          <rect x="606" y="74" width="402" height="118" rx="4" class="bx"/>
+          <text x="618" y="94" class="tb">delegation.admit() — six independent refusals</text>
+          <text x="618" y="114" class="ts">audience ≠ this node · expired or future-dated · TTL beyond the cap</text>
+          <text x="618" y="132" class="ts">origin is not a verified peer · origin is not a cluster member</text>
+          <text x="618" y="150" class="ts">task presented ≠ task the ticket authorises · hop budget exhausted</text>
+          <text x="618" y="176" class="tm">any one of these → refuse, with the reason recorded</text>
+
+          <rect x="606" y="204" width="402" height="88" rx="4" class="bx-a"/>
+          <text x="618" y="224" class="tb acc">narrow_tier(asserted, ceiling) — per leg</text>
+          <text x="618" y="246" class="tm">agent: min(A2, A1) = A1</text>
+          <text x="618" y="264" class="tm">human: min(H2, H2) = H2</text>
+          <text x="618" y="284" class="tm acc">effective: A1xH2 — Delegated corporate</text>
+
+          <!-- the refusal case -->
+          <rect x="16" y="252" width="510" height="56" rx="4" class="bx-r"/>
+          <text x="30" y="274" class="tb ref">The case widens() exists for</text>
+          <text x="30" y="294" class="ts">A ticket whose asserted tier is <tspan class="tm">lower</tspan> than the effective tier would hand the holder more than the origin granted. Refused, not clamped.</text>
+          <line x1="526" y1="280" x2="596" y2="280" class="ln-r" marker-end="url(#f6r)"/>
+
+          <!-- extend -->
+          <rect x="16" y="332" width="1008" height="88" rx="4" class="bx"/>
+          <text x="30" y="354" class="tb">extend() returns an UNSIGNED ticket</text>
+          <text x="30" y="376" class="ts">A node that forwards a delegation adds its hop and hands back a ticket with no signature, because only the next node's own key may sign for the next node. A function</text>
+          <text x="30" y="394" class="ts">that returned a signed ticket would let one compromised hop manufacture a chain. The hop list is also checked for repeats: a node already in the chain cannot be re-entered,</text>
+          <text x="30" y="412" class="ts">so a delegation cannot loop its way past the hop budget. Authority narrows at a boundary, never widens — which is the same rule, applied one hop at a time.</text>
+        </svg>
