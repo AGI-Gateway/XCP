@@ -30,6 +30,22 @@ The denials are the product working. So is `delivered=False`: this gateway
 authorised the delegation, and with no peer gateway to deliver it to, nothing
 has been delivered. Those are separate claims and XCP reports them separately.
 
+### See how it works — [technical diagrams](https://github.com/AGI-Gateway/XCP/blob/main/docs/diagrams.md)
+
+Fourteen figures, readable in the browser with nothing to install: the request
+pipeline and the order its guardrails run in, the trust lattice, what narrows
+when a delegation crosses a datacentre boundary, the deployment shapes, the
+System One classifier and why it cannot affect authorization, and the contract
+every language SDK is held to. Each is traced from the code it describes rather
+than from the prose about it, and each renders in light or dark to match how you
+are reading.
+
+Start with
+**[Fig 2.1 — the guardrail pipeline](https://github.com/AGI-Gateway/XCP/blob/main/docs/diagrams.md#section-2-security-guardrails)**
+if you want to know what XCP actually does to a request, or
+**[Fig 3.1 — the trust lattice](https://github.com/AGI-Gateway/XCP/blob/main/docs/diagrams.md#section-3-capabilities-available)**
+if you want to know what an agent is allowed to do and why.
+
 ---
 
 ## What you get
@@ -321,14 +337,17 @@ repository (Settings → Pages → Source: GitHub Actions) — until then the de
 step fails and there is no site, so this list points at the files rather than
 at a URL that would not resolve.
 
-- **[Technical diagrams](docs/diagrams.md)** — fourteen figures covering the
-  architecture, the guardrail ordering, the trust lattice, the external tool
-  surface, deployment shapes, the ecosystem loop, the System One classifier and
-  the SDK contract. Each is traced from the code it describes rather than from
-  the prose about it, and each renders in light or dark to match how you are
-  reading. The same figures with their full narrative are in
-  [`docs/diagrams.html`](docs/diagrams.html) — open it from a clone, since
-  GitHub serves HTML as source rather than rendering it.
+- **[Technical diagrams](https://github.com/AGI-Gateway/XCP/blob/main/docs/diagrams.md)**
+  — fourteen figures covering the architecture, the guardrail ordering, the
+  trust lattice, the external tool surface, deployment shapes, the ecosystem
+  loop, the System One classifier and the SDK contract. Renders in the browser
+  with nothing installed. The individual
+  [SVGs](https://github.com/AGI-Gateway/XCP/tree/main/docs/diagrams) are
+  standalone and self-themed, so they can be dropped into a slide or an issue.
+  The same figures with their full narrative are in
+  [`docs/diagrams/full.html`](https://github.com/AGI-Gateway/XCP/blob/main/docs/diagrams/full.html)
+  — open that one from a clone, since GitHub serves HTML as source rather than
+  rendering it; the documentation site serves it properly once Pages is on.
 - [Operator runbook](docs/runbook.md) — day zero, private federation, the
   first five minutes of an incident
 - [Internet-Draft](rfc/draft-xcp-trust-envelope-00.txt) — XCP as a wire

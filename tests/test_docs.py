@@ -30,7 +30,7 @@ sys.path.insert(0, str(ROOT))
 
 README = ROOT / "README.md"
 SNAPSHOT = ROOT / "connectors" / "snapshot" / "servers.json"
-DIAGRAM_SRC = ROOT / "docs" / "diagrams.html"
+DIAGRAM_SRC = ROOT / "docs" / "diagrams" / "full.html"
 DIAGRAM_MD = ROOT / "docs" / "diagrams.md"
 DIAGRAM_DIR = ROOT / "docs" / "diagrams"
 
@@ -84,8 +84,54 @@ def test_the_readme_links_to_the_diagrams():
     text = README.read_text()
     assert "docs/diagrams.md" in text, (
         "the README does not link to the technical diagrams")
-    assert "docs/diagrams.html" in text, (
+    assert "docs/diagrams/full.html" in text, (
         "the README does not mention the full narrative version")
+
+
+def test_the_readme_uses_absolute_links_for_the_diagrams():
+    """
+    pyproject.toml uses this README as the PyPI long description, where a
+    relative link resolves against pypi.org and 404s. The diagrams are the
+    entry point a newcomer is most likely to follow, so those links in
+    particular must survive being rendered somewhere other than GitHub.
+    """
+    text = README.read_text()
+    assert "https://github.com/AGI-Gateway/XCP/blob/main/docs/diagrams.md" in text, (
+        "the README's diagram links are relative; they break wherever the "
+        "README is rendered outside the repository, PyPI included")
+
+
+def test_the_diagrams_are_linked_above_the_fold():
+    """
+    A document findable only in a list two hundred lines down is a document
+    most readers never reach.
+    """
+    text = README.read_text()
+    i = text.index("docs/diagrams.md")
+    assert text[:i].count("\n") < 60, (
+        f"the first diagram link is {text[:i].count(chr(10))} lines in; it "
+        f"should be near the top where a newcomer will see it")
+
+
+def test_the_site_serves_both_the_index_and_the_narrative():
+    """
+    These collided twice while being wired up. With mkdocs directory URLs on,
+    docs/diagrams.md is served at /diagrams/ and its relative image paths gain
+    a level, so every figure 404s on the site while rendering correctly on
+    GitHub -- the worse way round for a defect to be found. With them off,
+    diagrams.md renders to diagrams.html and collided with the narrative file
+    of the same name, which mkdocs silently excluded.
+    """
+    nav = (ROOT / "mkdocs.yml").read_text()
+    assert "use_directory_urls: false" in nav, (
+        "directory URLs shift every relative path in diagrams.md by one level, "
+        "breaking all fourteen figures on the site")
+    assert DIAGRAM_SRC.exists(), (
+        f"{DIAGRAM_SRC.relative_to(ROOT)} is missing; it must not share a name "
+        f"with the page diagrams.md renders to")
+    assert not (ROOT / "docs" / "diagrams.html").exists(), (
+        "docs/diagrams.html is back and will collide with the page rendered "
+        "from diagrams.md; mkdocs excludes one of them silently")
 
 
 def test_every_readme_relative_link_resolves():

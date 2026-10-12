@@ -25,6 +25,27 @@ jobs:
         run: pip install mkdocs-material
       - name: Build site
         run: mkdocs build --strict
+
+      - name: Every figure must resolve in the built site
+        # --strict catches mkdocs' own warnings; it does not open the HTML and
+        # check that an <img> points at a file that exists. Both ways of
+        # wiring these diagrams up produced a clean build and a broken page --
+        # once with every figure 404ing, once with the narrative silently
+        # excluded -- so the built output is checked rather than the config.
+        run: |
+          python - <<'PY'
+          import re, sys, pathlib
+          site = pathlib.Path("site")
+          page = site / "diagrams.html"
+          assert page.exists(), "diagrams.html was not built"
+          srcs = re.findall(r'<img src="([^"]+\.svg)"', page.read_text())
+          assert len(srcs) >= 14, f"only {len(srcs)} figures on the page"
+          missing = [s for s in srcs if not (site / s).exists()]
+          assert not missing, f"figures 404 on the site: {missing}"
+          full = site / "diagrams" / "full.html"
+          assert full.exists(), "the narrative document was excluded from the site"
+          print(f"{len(srcs)} figures resolve; narrative served")
+          PY
       - uses: actions/upload-pages-artifact@v3
         with: {path: site}
 

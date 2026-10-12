@@ -6,6 +6,21 @@ repo_name: AGI-Gateway/XCP
 edit_uri: edit/main/docs/
 copyright: MIT · XCP and ERC-8004x are draft proposals
 
+# Pages are served as /page.html rather than /page/.
+#
+# Not cosmetic. With directory URLs, docs/diagrams.md is served at /diagrams/,
+# and every relative path inside it gains a level: an image at
+# docs/diagrams/fig.svg referenced as "diagrams/fig.svg" resolves to
+# /diagrams/diagrams/fig.svg and 404s. The same reference is correct on GitHub,
+# where the page is a file in docs/ -- so with directory URLs on, the diagrams
+# render on GitHub and are broken on the site, which is the worse way round for
+# a defect to be discovered.
+#
+# Turning this off makes relative paths mean the same thing in both places.
+# Free to change now because the site has never been published; after it has,
+# this would break every existing URL.
+use_directory_urls: false
+
 theme:
   name: material
   language: en
@@ -54,6 +69,7 @@ nav:
       - Trust Firewall: trust-firewall.md
   - Build:
       - Technical diagrams: diagrams.md
+      - Configuration reference: configuration.md
       - Architecture: architecture.md
       - Protocol reference: protocol.md
       - Receipts & settlement: receipts.md
