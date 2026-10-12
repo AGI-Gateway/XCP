@@ -570,8 +570,11 @@ def main() -> int:
     total_cases = 0
     for name in VECTOR_FILES:
         d = json.loads((OUT_VECTORS / name).read_text())
-        n = sum(len(v) for k, v in d.items()
-                if isinstance(v, list) and k != "supported")
+        # Count CASES: lists of objects. A list of strings is metadata (the
+        # "functions" key names which functions a file covers), and counting
+        # it inflated the reported total by three.
+        n = sum(len(v) for v in d.values()
+                if isinstance(v, list) and v and isinstance(v[0], dict))
         total_cases += n
         print(f"  {name:24} {n:4} cases")
 
