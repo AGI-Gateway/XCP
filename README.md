@@ -383,6 +383,9 @@ at a URL that would not resolve.
   [`docs/diagrams/full.html`](https://github.com/AGI-Gateway/XCP/blob/main/docs/diagrams/full.html)
   — open that one from a clone, since GitHub serves HTML as source rather than
   rendering it; the documentation site serves it properly once Pages is on.
+- [Foundation readiness](https://github.com/AGI-Gateway/XCP/blob/main/docs/foundation-readiness.md)
+  — an honest self-assessment against the Agentic AI Foundation's criteria,
+  blockers first
 - [Operator runbook](docs/runbook.md) — day zero, private federation, the
   first five minutes of an incident
 - [Internet-Draft](rfc/draft-xcp-trust-envelope-00.txt) — XCP as a wire

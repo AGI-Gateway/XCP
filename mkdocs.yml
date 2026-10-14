@@ -70,6 +70,7 @@ nav:
   - Build:
       - Technical diagrams: diagrams.md
       - Configuration reference: configuration.md
+      - Foundation readiness: foundation-readiness.md
       - Architecture: architecture.md
       - Protocol reference: protocol.md
       - Receipts & settlement: receipts.md

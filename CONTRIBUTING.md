@@ -45,3 +45,27 @@ python core/contracts/deploy_mock_registry.py
 
 Report privately to the maintainers rather than in a public issue. See
 [docs/security.md](docs/security.md).
+
+## Signing off your work
+
+Every commit must carry a `Signed-off-by` line:
+
+```bash
+git commit -s -m "your message"
+```
+
+That line certifies the [Developer Certificate of Origin](DCO) — in short, that
+you wrote the contribution or otherwise have the right to submit it under this
+project's licence. It is the lightweight alternative to a contributor licence
+agreement: no paperwork, no account to create, and it records provenance in the
+history where it can be audited.
+
+It is also a prerequisite for contributing this project to a foundation. A
+foundation cannot accept code whose provenance is unrecorded, and sign-off
+cannot be applied retroactively by anyone other than the original author — so
+it is cheaper to start now than to reconstruct it later.
+
+**Note on the current state:** commits before this policy are unsigned, and the
+project's copyright is held by "Anonymous Contributors". Both are discussed in
+[`docs/foundation-readiness.md`](docs/foundation-readiness.md), which is honest
+about what that costs.
