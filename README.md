@@ -213,6 +213,41 @@ behind it — not a single flag.
 ./xcp tier --agent company --human enterprise   # what that grants
 ```
 
+### What vouches for the agent — and what that costs you
+
+A tier is a claim about **who vouched**, which never required a blockchain. The
+implementation used to disagree: the production profile refused to start without
+an ERC-8004 verifier, so the only chain-free path was a development profile that
+self-registers anything. That is fixed. `XCP_REGISTRAR` names what vouches, and
+each option justifies exactly what it establishes:
+
+| `XCP_REGISTRAR` | What it means | Highest agent tier | Production |
+|---|---|---|---|
+| `none` | self-asserted keypair | A0 | **no** — not a trust decision |
+| `mtls` | your own CA signed the agent's certificate | A1 | yes |
+| `oidc` | your own IdP will attest the workload | A1 | yes |
+| `chain` | an ERC-8004 registry a peer can check without trusting you | A2 | yes |
+
+**A1×H2 — an internal CA for the agent, enterprise SSO for the human — is
+"Delegated corporate": chain scopes, three payment rails, a 250,000 minor-unit
+ceiling, metered settlement with receipts, full enforcement.** That is a
+thoroughly capable production deployment on the PKI and identity provider you
+already run.
+
+So the chain buys exactly one thing: **A2, and cross-organisational
+verifiability.** Your own CA vouching for your own agents is your say-so, which
+is worth a great deal inside your estate and less to a peer who does not trust
+you — which is what A1 versus A2 has always meant. An operator who believes
+their PKI *is* a legal entity signing can raise the ceiling; it is published in
+the node record as `registrar.ceilingRaised`, so peers can price the claim.
+
+```bash
+# A real production node, no blockchain anywhere
+XCP_PROFILE=production XCP_POSTURE=enforce XCP_SECURITY=1 \
+XCP_REGISTRAR=mtls XCP_CLIENT_CA_BUNDLE=/etc/xcp/ca.pem \
+XCP_ADMIN_TOKEN=… ./xcp up
+```
+
 The ceiling is the weaker leg — a corporate human can't lift an unbacked agent.
 One deliberate exception: `A2×H0` isn't capped by the missing human, because a
 company-backed autonomous agent has the company as its principal.

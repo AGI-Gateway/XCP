@@ -169,6 +169,20 @@ jobs:
             curl -fsS "http://127.0.0.1:$port/health" | tee /dev/stderr | grep -q '"ok": *true'
             docker rm -f "xcp-$role"
           done
+      - name: The gateway must START with its security controls ON
+        # The mirror of the check below, and the one that was missing. Every
+        # role was smoke-tested with XCP_SECURITY unset, so an import failure
+        # under XCP_SECURITY=1 shipped: the production profile requires it, and
+        # the gateway could not start in the image with it set.
+        run: |
+          docker run -d --name xcp-sec -e ROLE=gateway -e XCP_SECURITY=1 -p 8080:8080 \
+            "${{ needs.image.outputs.image }}@${{ needs.image.outputs.digest }}"
+          for i in $(seq 1 30); do
+            curl -fsS "http://127.0.0.1:8080/health" && break || sleep 2
+          done
+          curl -fsS "http://127.0.0.1:8080/health" | tee /dev/stderr | grep -q '"ok": *true'
+          docker rm -f xcp-sec
+
       - name: The gateway must refuse to start without its abuse controls
         run: |
           if docker run --rm -e ROLE=gateway -e XCP_RATE_LIMIT=1 \

@@ -41,6 +41,7 @@ jobs:
           python tests/test_config_profiles.py
           python tests/test_engine.py
           python tests/test_docs.py
+          python tests/test_registrar.py
           python tests/test_security_audit.py
           python tests/test_version.py
           python tests/test_performance.py

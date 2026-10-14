@@ -191,6 +191,26 @@ before restarting.
 |---|---|---|
 | `XCP_OTEL` | `0` | Enable OpenTelemetry. |
 | `XCP_OTEL_DETAIL` **!** | `scrubbed` | scrubbed | hosts | full. `full` exports raw agent ids, scopes and hostnames — self-hosted collectors only. Sending it to a vendor is a new processor and usually an international transfer. |
+
+### `XCP_REGISTRAR_CEILING`
+
+Raises the highest agent tier this node's registrar is treated as justifying.
+
+Each registrar has a default ceiling it can honestly support: `none` reaches
+A0 (self-asserted), `mtls` and `oidc` reach A1 (your own CA or IdP issued the
+identity), and `chain` reaches A2 (a registry a peer who does not trust you can
+check independently). Raising the ceiling asserts more than the registrar
+actually establishes.
+
+It is permitted, because there are deployments where an internal CA genuinely
+is a legal entity signing — a bank's own PKI vouching for its own agents inside
+its own federation. It is not quiet: the raised ceiling is published in the
+node record as `registrar.ceilingRaised`, and peers are entitled to discount
+attestations from a node that asserted A2 on the strength of its own CA.
+
+Lowering it needs no justification and is not published. Trusting your own
+registrar less is not a claim anyone else has to evaluate.
+
 | `OTEL_EXPORTER_OTLP_ENDPOINT` | `—` | Collector endpoint. Enabled with no endpoint sends spans to the console, which is work nobody collects. |
 | `OTEL_SERVICE_NAME` | `xcp-gateway` | Service name on exported telemetry. |
 

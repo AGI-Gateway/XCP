@@ -26,6 +26,15 @@ SKIP_DIRS = {".git", "__pycache__", "site", "dist", "node_modules"}
 ENV_READ = re.compile(r'os\.(?:getenv|environ\.get)\(\s*["\']([A-Z][A-Z0-9_]*)["\']')
 #: A variable passed to getenv instead of a literal, e.g. os.getenv(CHARTER_ENV).
 ENV_READ_VIA = re.compile(r'os\.(?:getenv|environ\.get)\(\s*([A-Z][A-Z0-9_]*)\s*[,)]')
+#: `.get("NAME")` on an injected mapping, applied only to files that also
+#: touch os.environ. Modules that take `env: Optional[dict] = None` and fall
+#: back to os.environ -- a sound pattern, since it makes configuration testable
+#: without mutating the process -- were invisible to the two patterns above,
+#: which is the same blind spot that let XCP_PEER_CA_BUNDLE through until an
+#: unrelated literal happened to mention it. The os.environ requirement keeps
+#: this from matching every dictionary lookup in the codebase.
+ENV_READ_MAPPING = re.compile(r'\.get\(\s*["\']([A-Z][A-Z0-9_]*)["\']')
+
 #: A module-level constant holding an environment variable name.
 ENV_CONST = re.compile(r'^([A-Z][A-Z0-9_]*)\s*=\s*["\']([A-Z][A-Z0-9_]*)["\']',
                        re.M)
@@ -52,6 +61,8 @@ def _read_by_code() -> set[str]:
         except (UnicodeDecodeError, PermissionError):
             continue
         found |= set(ENV_READ.findall(src))
+        if "os.environ" in src:
+            found |= set(ENV_READ_MAPPING.findall(src))
         consts = dict(ENV_CONST.findall(src))
         for ident in ENV_READ_VIA.findall(src):
             if ident in consts:

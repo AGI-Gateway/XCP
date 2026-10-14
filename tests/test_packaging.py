@@ -14,6 +14,7 @@ check the packaging itself.
 """
 from __future__ import annotations
 
+import os
 import re
 import sys
 from pathlib import Path
@@ -437,6 +438,65 @@ def test_the_engine_is_off_by_default_in_the_chart():
     assert v["engine"]["enabled"] is False, "the decision engine must be opt-in"
     t = (ROOT / "deploy" / "helm" / "templates" / "gateway.yaml").read_text()
     assert "XCP_ENGINE" in t and ".Values.engine.enabled" in t
+
+
+def test_the_gateway_can_import_xcpsec_in_the_image_layout():
+    """
+    The published image sets PYTHONPATH=/app and copies security/ to
+    /app/security, so `import xcpsec` needs /app/security on the path. The
+    gateway adds it itself -- but added core/security for a long time, which
+    has never existed.
+
+    The consequence was not subtle. The production profile REQUIRES
+    XCP_SECURITY=1, and XCP_SECURITY=1 raises when xcpsec is unavailable, so
+    the production profile could not start in the container at all.
+    deploy/docker-compose.yml sets it too, so the documented
+    `docker compose up` was broken the same way.
+
+    It hid because every test that boots the gateway sets PYTHONPATH to include
+    the real security/ directory, and the release smoke test boots each role
+    with XCP_SECURITY unset. This reproduces the image's layout instead.
+    """
+    import shutil, subprocess, tempfile
+
+    src = (ROOT / "core" / "gateway" / "xcp_gateway.py").read_text()
+    assert '"..", "..", "security"' in src, (
+        "the xcpsec path insertion no longer reaches security/ from core/gateway/")
+
+    with tempfile.TemporaryDirectory() as tmp:
+        app = Path(tmp) / "app"
+        app.mkdir()
+        for d in _copied_dirs():
+            if (ROOT / d).is_dir():
+                shutil.copytree(ROOT / d, app / d,
+                                ignore=shutil.ignore_patterns("__pycache__"))
+        r = subprocess.run(
+            [sys.executable, "-c",
+             "import core.gateway.xcp_gateway as g; "
+             "assert g._SECURITY_OK, 'argument firewall not loaded'; print('ok')"],
+            cwd=str(app), capture_output=True, text=True,
+            env={"PATH": os.environ.get("PATH", ""),
+                 "PYTHONPATH": str(app),          # exactly what the image sets
+                 "XCP_SECURITY": "1"})
+        assert r.returncode == 0, (
+            "the gateway cannot start with XCP_SECURITY=1 in the image layout, "
+            "so the production profile cannot start in the container:\n"
+            + r.stderr[-1500:])
+
+
+def test_the_production_profile_does_not_require_a_chain():
+    """
+    A node must run the production profile on the CA or identity provider an
+    organisation already has. Requiring an ERC-8004 registry to reach any
+    production tier was an adoption wall out of proportion to the design: the
+    lattice only ever said who vouched, never that a chain did.
+    """
+    src = (ROOT / "core" / "gateway" / "xcp_gateway.py").read_text()
+    assert "XCP_VERIFY_URL must be set" not in src, (
+        "the production profile still demands a verifier specifically rather "
+        "than a registrar that vouches")
+    assert "permits_production()" in src, (
+        "the production guard no longer consults the registrar")
 
 
 if __name__ == "__main__":

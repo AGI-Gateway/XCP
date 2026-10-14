@@ -72,6 +72,28 @@ SETTINGS: tuple[Setting, ...] = (
             "Enable the xcpsec argument firewall. The gateway REFUSES TO START "
             "if this is 1 and xcpsec is unavailable, rather than running with a "
             "control you asked for silently absent."),
+    Setting("XCP_REGISTRAR", R.GATEWAY, "",
+            "What vouches for an agent when a session opens: none | mtls | "
+            "oidc | chain. Each justifies a different maximum agent tier — "
+            "none A0 (self-asserted, development only), mtls and oidc A1 (your "
+            "own CA or IdP issued it), chain A2 (a registry a peer who does "
+            "not trust you can check). Empty infers chain when XCP_VERIFY_URL "
+            "is set and none otherwise. The production profile refuses 'none'."),
+    Setting("XCP_REGISTRAR_CEILING", R.GATEWAY, "",
+            "Override the maximum agent tier this node's registrar justifies, "
+            "e.g. A2. Raising it above the registrar's default is permitted "
+            "and PUBLISHED in the node record, because a node asserting A2 on "
+            "the strength of its own CA is making a claim its peers are "
+            "entitled to discount. Lowering it needs no announcement.",
+            unsafe=True),
+    Setting("XCP_OIDC_ISSUER", R.GATEWAY, "",
+            "Issuer URL for the oidc registrar. Required when XCP_REGISTRAR="
+            "oidc; without it nothing would actually be checked."),
+    Setting("XCP_CLIENT_CA_BUNDLE", R.GATEWAY, "",
+            "CA bundle that must have signed an agent's client certificate for "
+            "the mtls registrar. Distinct from XCP_PEER_CA_BUNDLE, which "
+            "anchors PEER NODES rather than agents; a deployment may well use "
+            "one CA for both, and should have to say so."),
     Setting("XCP_ENGINE", R.GATEWAY, "0",
             "Enable the self-hosted decision engine: a local classifier that "
             "estimates a request's complexity and risk so cheap requests can "

@@ -169,6 +169,7 @@ EVALUATION = Profile(
              "state: a node left here refuses nothing."),
     settings={
         "XCP_POSTURE": "observe",
+        "XCP_REGISTRAR": "none",
         "XCP_SECURITY": "0",
         "XCP_RATE_LIMIT": "1",
         "XCP_GATEWAY_ID": "gw-eval",
@@ -199,8 +200,18 @@ ENFORCE = Profile(
         "REQUIRE_VERIFIED": "1",
         "XCP_SEAL_EPHEMERAL": "0",
         "XCP_OTEL_DETAIL": "scrubbed",
+        # Left at the registrar's own default. Raising it asserts more than
+        # the registrar establishes, and is published in the node record.
+        "XCP_REGISTRAR_CEILING": "",
     },
     operator_supplied={
+        "XCP_REGISTRAR": (
+            "what vouches for an agent: mtls (your own CA), oidc (your IdP) "
+            "or chain (an ERC-8004 registry). Required — the production "
+            "profile refuses 'none', because self-registration is not a trust "
+            "decision. mtls and oidc justify up to A1, which reaches A1xH2 "
+            "'Delegated corporate' with enterprise SSO: chain scopes, three "
+            "rails, metered settlement. Only chain justifies A2."),
         "XCP_UPSTREAMS": ('JSON map of server name to MCP URL, e.g. '
                           '{"research":"https://mcp.internal/mcp"}'),
         "XCP_VERIFY_URL": "URL of your verifier, e.g. http://verifier:8500",
@@ -229,8 +240,15 @@ PRIVATE_FEDERATION = Profile(
         "REQUIRE_VERIFIED": "1",
         "XCP_SEAL_EPHEMERAL": "0",
         "XCP_OTEL_DETAIL": "scrubbed",
+        "XCP_REGISTRAR_CEILING": "",
     },
     operator_supplied={
+        "XCP_REGISTRAR": (
+            "what vouches for an agent: mtls, oidc or chain. Across a "
+            "federation this matters more than on a single node — a peer "
+            "reads it from your node record and prices your attestations "
+            "accordingly. mtls and oidc are your own say-so and cap at A1; "
+            "only a registry a peer can check independently justifies A2."),
         "XCP_PRIVATE_PEER_CIDRS": (
             "comma-separated internal ranges that may hold peers, e.g. "
             "10.20.0.0/16,10.30.0.0/16. Narrower than allowing all private "

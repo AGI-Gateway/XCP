@@ -190,6 +190,15 @@
       },
       {
         "default": "",
+        "description": "CA bundle that must have signed an agent's client certificate for the mtls registrar. Distinct from XCP_PEER_CA_BUNDLE, which anchors PEER NODES rather than agents; a deployment may well use one CA for both, and should have to say so.",
+        "name": "XCP_CLIENT_CA_BUNDLE",
+        "required": false,
+        "role": "gateway",
+        "secret": false,
+        "unsafe": false
+      },
+      {
+        "default": "",
         "description": "Address of the key allowed to sign this cluster's charters. Without it a node accepts any correctly-signed charter naming its cluster id, so anyone could mint one. Set it on every node.",
         "name": "XCP_CLUSTER_AUTHORITY",
         "required": false,
@@ -378,6 +387,15 @@
         "unsafe": false
       },
       {
+        "default": "",
+        "description": "Issuer URL for the oidc registrar. Required when XCP_REGISTRAR=oidc; without it nothing would actually be checked.",
+        "name": "XCP_OIDC_ISSUER",
+        "required": false,
+        "role": "gateway",
+        "secret": false,
+        "unsafe": false
+      },
+      {
         "default": "0",
         "description": "Enable OpenTelemetry. Off by default; without it every instrumentation call is a no-op and the node behaves identically, so enabling it is a deliberate act rather than a default.",
         "name": "XCP_OTEL",
@@ -453,6 +471,24 @@
         "default": "1",
         "description": "Abuse controls. Setting 0 on a node reachable by strangers makes it an open relay.",
         "name": "XCP_RATE_LIMIT",
+        "required": false,
+        "role": "gateway",
+        "secret": false,
+        "unsafe": true
+      },
+      {
+        "default": "",
+        "description": "What vouches for an agent when a session opens: none | mtls | oidc | chain. Each justifies a different maximum agent tier \u2014 none A0 (self-asserted, development only), mtls and oidc A1 (your own CA or IdP issued it), chain A2 (a registry a peer who does not trust you can check). Empty infers chain when XCP_VERIFY_URL is set and none otherwise. The production profile refuses 'none'.",
+        "name": "XCP_REGISTRAR",
+        "required": false,
+        "role": "gateway",
+        "secret": false,
+        "unsafe": false
+      },
+      {
+        "default": "",
+        "description": "Override the maximum agent tier this node's registrar justifies, e.g. A2. Raising it above the registrar's default is permitted and PUBLISHED in the node record, because a node asserting A2 on the strength of its own CA is making a claim its peers are entitled to discount. Lowering it needs no announcement.",
+        "name": "XCP_REGISTRAR_CEILING",
         "required": false,
         "role": "gateway",
         "secret": false,

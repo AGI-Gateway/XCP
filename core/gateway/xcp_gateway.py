@@ -60,7 +60,18 @@ _guard = None
 if _SECURITY:
     try:
         import sys as _sys
-        _sys.path.insert(0, os.path.join(os.path.dirname(__file__), "..", "security"))
+        # Two levels up, not one. This file is core/gateway/xcp_gateway.py, so
+        # "../security" resolved to core/security, which has never existed.
+        #
+        # It went unnoticed because every test that boots the gateway sets
+        # PYTHONPATH to include the real security/ directory, and the release
+        # smoke test boots each role with XCP_SECURITY unset. The published
+        # image has PYTHONPATH=/app and no /app/security on it, so
+        # `import xcpsec` failed there -- and because the production profile
+        # REQUIRES XCP_SECURITY=1, the production profile could not start in
+        # the container at all. deploy/docker-compose.yml sets it too.
+        _sys.path.insert(0, os.path.abspath(
+            os.path.join(os.path.dirname(__file__), "..", "..", "security")))
         from xcpsec import Guard as _Guard, Trust as _Trust
         from xcpsec.argfirewall import ArgumentFirewall as _ArgFW, ArgSpec as _ArgSpec
         _guard = _Guard()
@@ -243,11 +254,22 @@ if _PROFILE == "production":
     _missing = []
     if POSTURE != "enforce":
         _missing.append("XCP_POSTURE must be 'enforce'")
-    if not os.getenv("XCP_VERIFY_URL", ""):
-        _missing.append(
-            "XCP_VERIFY_URL must be set: without an external verifier a caller "
-            "can create its own identity binding, so the trust layer becomes a "
-            "self-attestation mechanism")
+    # A registrar, not specifically a chain.
+    #
+    # This used to demand XCP_VERIFY_URL, which made an ERC-8004 registry the
+    # only way to reach any production tier. The requirement it was protecting
+    # is narrower than that: SOMETHING other than the caller must vouch for the
+    # caller, or the trust layer is a self-attestation mechanism. An internal
+    # CA or an identity provider satisfies that, and every organisation already
+    # has one -- see trust/registrar.py for what each can honestly justify.
+    try:
+        from trust.registrar import from_env as _registrar_from_env
+        _REGISTRAR_CFG = _registrar_from_env()
+        _ok, _why = _REGISTRAR_CFG.permits_production()
+        if not _ok:
+            _missing.append(_why)
+    except Exception as _re:
+        _missing.append(f"the registrar could not be resolved: {_re}")
     if os.getenv("XCP_SECURITY", "0") != "1":
         _missing.append("XCP_SECURITY must be 1")
     if os.getenv("XCP_RATE_LIMIT", "1") == "0":
@@ -277,6 +299,18 @@ else:
           "and hardening is optional. NOT for production.", flush=True)
 
 PRODUCTION = _PROFILE == "production"
+
+# Resolved once, for every profile, so the posture is a value the code reads
+# rather than a set of environment lookups scattered through request handlers.
+# The production branch above resolves it too; this is the single binding both
+# paths end up using.
+try:
+    from trust.registrar import (Registrar, from_env as _registrar_from_env,
+                                 describe as _describe_registrar)
+    REGISTRAR = _registrar_from_env()
+except Exception as _e:                       # pragma: no cover - config error
+    raise RuntimeError(f"XCP_REGISTRAR is unusable: {_e}\nRefusing to start.")
+print(f"[gateway] {_describe_registrar(REGISTRAR)}", flush=True)
 
 
 # ── private federation ─────────────────────────────────────────────────────
@@ -772,10 +806,13 @@ async def session_open(request: Request) -> JSONResponse:
     self-asserted identity, which is why the production profile refuses to
     start without one.
     """
-    if _PROFILE == "production" and not VERIFY_URL:
+    if PRODUCTION and REGISTRAR.kind is Registrar.NONE:
+        # Unreachable: the startup guard refuses this combination. Kept because
+        # this is the path that turns a trust layer into a self-attestation
+        # mechanism, and a second check costs nothing.
         return JSONResponse(
             {"error": "self-registration is not available in the production "
-                      "profile"}, status_code=403)
+                      "profile; configure XCP_REGISTRAR"}, status_code=403)
     if _LIMITS is not None:
         _d = _LIMITS.check(
             agent_key=getattr(getattr(request, "client", None), "host", "") or "anon",
@@ -787,9 +824,20 @@ async def session_open(request: Request) -> JSONResponse:
     body = await request.json()
     footprint = body.get("footprint", "")
     agent_id = int(body.get("agentId", 0))
-    if not footprint or not agent_id:
+
+    # The footprint is the identity at every tier. The agentId is an ERC-8004
+    # registry index, so it is required only when a registry is what vouches --
+    # demanding it under an mTLS or OIDC registrar asked operators for a number
+    # from a system they had deliberately chosen not to run.
+    if not footprint:
         _m(M_SESS, result="reject")
-        return JSONResponse({"error": "footprint and agentId required"}, 400)
+        return JSONResponse({"error": "footprint required"}, 400)
+    if REGISTRAR.kind is Registrar.CHAIN and not agent_id:
+        _m(M_SESS, result="reject")
+        return JSONResponse(
+            {"error": "agentId required: this node's registrar is an ERC-8004 "
+                      "registry, so a session must name the registry entry it "
+                      "is claiming"}, 400)
     # In production the binding is created on-chain by the agent's controller;
     # here the gateway's local registry records it for standalone operation.
     if not VERIFY_URL:
@@ -801,10 +849,27 @@ async def session_open(request: Request) -> JSONResponse:
                 {"error": "self-registration is not available in the production "
                           "profile; obtain a binding from the configured "
                           "verifier"}, status_code=403)
+        # The registrar's ceiling caps the AGENT leg and leaves the human leg
+        # alone, because they are vouched for by different parties: the
+        # registrar says what backs the agent, and the IdP says what backs the
+        # human. Capping both would make an internal CA silently downgrade an
+        # enterprise SSO session, which is the opposite of what the lattice
+        # says. Per-leg min, the same arithmetic a delegation boundary uses.
+        from federation.delegation import narrow_tier as _narrow
+        claimed = str(body.get("tier", "A0xH0"))
+        try:
+            granted = _narrow(claimed, f"A{int(REGISTRAR.ceiling)}xH2")
+        except Exception:
+            granted = "A0xH0"
+        if granted != claimed:
+            audit(Ctx(), "session/open",
+                  f"tier {claimed} -> {granted} (registrar "
+                  f"{REGISTRAR.kind.value} justifies at most "
+                  f"A{int(REGISTRAR.ceiling)})")
         b = registry.bind(agent_id, footprint,
                           mandate_root=body.get("mandateRoot", ""),
                           rails=int(body.get("rails", 0b0011)),
-                          tier=str(body.get("tier", "A0xH0")))
+                          tier=granted)
         _m(M_SESS, result="ok")
         return JSONResponse({"sessionId": f"sess-{footprint[:10]}",
                             "mandateRoot": b.mandate_root, "rails": b.rails,
@@ -1994,6 +2059,12 @@ async def health() -> dict:
             "telemetry": _otel_status(),
             "policy": _POLICY_ATTEST or "none configured",
             "rateLimit": _LIMITS.stats() if _LIMITS else "disabled",
+            # What vouches for an agent here, and the highest agent tier that
+            # justifies. Published rather than kept internal because it is the
+            # one thing a peer most needs in order to price what this node's
+            # attestations are worth -- particularly `ceilingRaised`, which
+            # says the operator asserted more than the registrar's default.
+            "registrar": REGISTRAR.to_dict(),
             "verifier": "external" if VERIFY_URL else "local",
             "upstreams": list(UPSTREAMS.keys()),
             # What this node will accept as a peer, so an operator can confirm
